@@ -46,8 +46,6 @@ gboolean pv_wrap_use_host_os (FlatpakExports *exports,
 
 void pv_wrap_move_into_scope (const char *steam_app_id);
 
-const char *pv_wrap_get_steam_app_id (const char *from_command_line);
-
 /**
  * PvAppendPreloadFlags:
  * @PV_APPEND_PRELOAD_FLAGS_FLATPAK_SUBSANDBOX: The game will be run in

@@ -97,6 +97,7 @@ static const Api subsandbox_api =
 };
 
 static const Api *api = NULL;
+static const char *service_bus_name = NULL;
 
 typedef GUnixFDList AutoUnixFDList;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoUnixFDList, g_object_unref)
@@ -205,7 +206,7 @@ forward_signal (int sig)
     to_process_group = TRUE;
 
   reply = g_dbus_connection_call_sync (bus_or_peer_connection,
-                                       api->service_bus_name,   /* NULL if p2p */
+                                       service_bus_name,        /* NULL if p2p */
                                        api->service_obj_path,
                                        api->service_iface,
                                        api->send_signal_method,
@@ -311,11 +312,12 @@ name_owner_changed (G_GNUC_UNUSED GDBusConnection *connection,
   const char *name, *from, *to;
 
   g_return_if_fail (api != NULL);
+  g_return_if_fail (service_bus_name != NULL);
 
-  g_variant_get (parameters, "(sss)", &name, &from, &to);
+  g_variant_get (parameters, "(&s&s&s)", &name, &from, &to);
 
   /* Check if the service dies, then we exit, because we can't track it anymore */
-  if (strcmp (name, api->service_bus_name) == 0 &&
+  if (strcmp (name, service_bus_name) == 0 &&
       strcmp (to, "") == 0)
     {
       g_debug ("portal exited");
@@ -358,7 +360,7 @@ get_portal_version (void)
       g_autoptr(GError) error = NULL;
       g_autoptr(GVariant) reply =
         g_dbus_connection_call_sync (bus_or_peer_connection,
-                                     api->service_bus_name,
+                                     service_bus_name,
                                      api->service_obj_path,
                                      "org.freedesktop.DBus.Properties",
                                      "Get",
@@ -412,7 +414,7 @@ get_portal_supports (void)
       if (get_portal_version () >= 3)
         {
           reply = g_dbus_connection_call_sync (bus_or_peer_connection,
-                                               api->service_bus_name,
+                                               service_bus_name,
                                                api->service_obj_path,
                                                "org.freedesktop.DBus.Properties",
                                                "Get",
@@ -730,6 +732,7 @@ main (int argc,
   GHashTableIter iter;
   gpointer key, value;
   g_autofree char *home_realpath = NULL;
+  g_autofree char *service_unique_name = NULL;
   const char *flatpak_id = NULL;
 
   setlocale (LC_ALL, "");
@@ -814,6 +817,8 @@ main (int argc,
   else
     api = &launcher_api;
 
+  service_bus_name = api->service_bus_name;
+
   if (api != &launcher_api && opt_terminate)
     {
       glnx_throw (error,
@@ -861,7 +866,7 @@ main (int argc,
   loop = g_main_loop_new (NULL, FALSE);
 
   g_assert (api != NULL);
-  if (api->service_bus_name != NULL)
+  if (service_bus_name != NULL)
     {
       if (opt_dbus_address != NULL || opt_socket != NULL)
         {
@@ -953,7 +958,7 @@ main (int argc,
       g_assert (opt_terminate);   /* already checked */
 
       reply = g_dbus_connection_call_sync (bus_or_peer_connection,
-                                           api->service_bus_name,
+                                           service_bus_name,
                                            api->service_obj_path,
                                            api->service_iface,
                                            "Terminate",
@@ -966,12 +971,53 @@ main (int argc,
       if (local_error != NULL)
         g_dbus_error_strip_remote_error (local_error);
 
+      if (reply != NULL)
+        launch_exit_status = 0;
+
       goto out;
+    }
+
+  if (api == &launcher_api
+      && service_bus_name != NULL
+      && service_bus_name[0] != ':')
+    {
+      g_autoptr(GVariant) owner_reply = NULL;
+
+      /* steam-runtime-launcher-service is stateful, so we want to bind
+       * to a specific unique bus name (specific instance) and expect signals
+       * from there.
+       *
+       * It also isn't service-activatable, so we don't need to worry about
+       * whether it is already running or whether it needs to be
+       * service-activated: we know that service activation is going to fail
+       * in any case.
+       *
+       * We don't need to do this if we were given a unique name already,
+       * like steam-runtime-launch-client --bus-name=:1.42 -- ... */
+      owner_reply = g_dbus_connection_call_sync (bus_or_peer_connection,
+                                                 DBUS_NAME_DBUS,
+                                                 DBUS_PATH_DBUS,
+                                                 DBUS_INTERFACE_DBUS,
+                                                 "GetNameOwner",
+                                                 g_variant_new ("(s)",
+                                                                service_bus_name),
+                                                 G_VARIANT_TYPE ("(s)"),
+                                                 G_DBUS_CALL_FLAGS_NONE,
+                                                 -1, NULL, error);
+
+      if (owner_reply == NULL)
+        {
+          g_dbus_error_strip_remote_error (local_error);
+          goto out;
+        }
+
+      g_variant_get (owner_reply, "(s)", &service_unique_name);
+      service_bus_name = service_unique_name;
     }
 
   g_assert (command_and_args != NULL);
   g_dbus_connection_signal_subscribe (bus_or_peer_connection,
-                                      api->service_bus_name,    /* NULL if p2p */
+                                      service_bus_name,         /* NULL if p2p */
                                       api->service_iface,
                                       api->exit_signal,
                                       api->service_obj_path,
@@ -1214,7 +1260,7 @@ main (int argc,
       }
 
     reply = g_dbus_connection_call_with_unix_fd_list_sync (bus_or_peer_connection,
-                                                           api->service_bus_name,
+                                                           service_bus_name,
                                                            api->service_obj_path,
                                                            api->service_iface,
                                                            api->launch_method,

@@ -1636,3 +1636,47 @@ _srt_get_random_uuid (GError **error)
 
   return g_steal_pointer (&contents);
 }
+
+/**
+ * _srt_get_steam_app_id:
+ *
+ * Attempt to determine the Steam app-ID of the current process.
+ *
+ * Returns: either @cli_override or a global environment variable
+ */
+const char *
+_srt_get_steam_app_id (void)
+{
+  const char *value;
+
+  if ((value = g_getenv ("STEAM_COMPAT_APP_ID")) != NULL)
+    return value;
+
+  if ((value = g_getenv ("SteamAppId")) != NULL)
+    return value;
+
+  return NULL;
+}
+
+gboolean
+_srt_fd_set_close_on_exec (int fd,
+                           gboolean close_on_exec,
+                           GError **error)
+{
+  int old_flags = fcntl (fd, F_GETFD);
+  int new_flags;
+
+  if (old_flags < 0)
+    return glnx_throw_errno_prefix (error, "Cannot get file descriptor %d flags", fd);
+
+  if (close_on_exec)
+    new_flags = old_flags | FD_CLOEXEC;
+  else
+    new_flags = old_flags & ~FD_CLOEXEC;
+
+  if (old_flags != new_flags
+      && fcntl (fd, F_SETFD, new_flags) < 0)
+    return glnx_throw_errno_prefix (error, "Cannot set file descriptor %d flags", fd);
+
+  return TRUE;
+}

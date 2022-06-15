@@ -22,6 +22,7 @@ steam-runtime-launch-client - client to launch processes in a container
 [**--pass-env** *VAR*]
 [**--pass-env-matching** *WILDCARD*]
 [**--unset-env** *VAR*]
+[**--terminate**]
 [**--verbose**]
 {**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
 [**--**]
@@ -88,7 +89,9 @@ as a subprocess of **steam-runtime-launcher-service**.
 
 **--clear-env**
 :   The *COMMAND* runs in an empty environment, apart from any environment
-    variables set by **--env** and similar options.
+    variables set by **--env** and similar options, and environment
+    variables such as `PWD` that are set programmatically (see
+    **ENVIRONMENT** section, below).
     By default, it inherits environment variables from
     **steam-runtime-launcher-service**, with **--env** and
     similar options overriding or unsetting individual variables.
@@ -164,11 +167,29 @@ it set, and pass through **FONTS** from the caller.
 
 # ENVIRONMENT
 
+## Variables set for the command
+
+Some variables will be set programmatically by
+**steam-runtime-launcher-service** when the *COMMAND* is launched:
+
+`MAINPID`
+:   If **steam-runtime-launcher-service**(1) was run as a wrapper around a
+    command (for example as
+    **steam-runtime-launcher-service --bus-name=... -- my-game**),
+    and the initial process of the wrapped command is still running,
+    then this variable is set to its process ID (for example, the process
+    ID of **my-game**). Otherwise, this variable is cleared.
+    The environment options shown above will override this behaviour.
+
 `PWD`
 :   **steam-runtime-launcher-service**(1) sets this to the current working
     directory (as specified by **--directory**, or inherited from the
     launcher) for each command executed inside the container,
     overriding the environment options shown above.
+
+## Variables read by steam-runtime-launch-client
+
+Some variables affect the behaviour of **steam-runtime-launch-client**:
 
 `PRESSURE_VESSEL_LOG_INFO` (boolean)
 :   If set to `1`, increase the log verbosity up to the info level.
@@ -192,7 +213,7 @@ The exit status is similar to **env**(1):
 
 0
 :   The *COMMAND* exited successfully with status 0,
-    or **--terminate** succeeded.
+    or there was no *COMMAND* and **--terminate** succeeded.
 
 125
 :   Invalid arguments were given, or **steam-runtime-launch-client** failed

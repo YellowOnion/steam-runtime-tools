@@ -33,6 +33,10 @@ logger = logging.getLogger('test-launcher')
 LAUNCHER_IFACE = "com.steampowered.PressureVessel.Launcher1"
 LAUNCHER_PATH = "/com/steampowered/PressureVessel/Launcher1"
 
+DBUS_NAME_DBUS = "org.freedesktop.DBus"
+DBUS_INTERFACE_DBUS = DBUS_NAME_DBUS
+DBUS_PATH_DBUS = "/org/freedesktop/DBus"
+
 
 @contextlib.contextmanager
 def ensure_terminated(proc):
@@ -65,6 +69,7 @@ class TestLauncher(BaseTest):
 
         if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
             self.launcher = self.command_prefix + [
+                'env', '-u', 'SRT_LAUNCHER_SERVICE_STOP_ON_EXIT',
                 os.path.join(
                     self.top_builddir,
                     'bin',
@@ -544,16 +549,29 @@ class TestLauncher(BaseTest):
                 proc.wait(timeout=10)
                 self.assertEqual(proc.returncode, 0)
 
-    def test_wrap(self) -> None:
+    def test_wrap_stop_on_exit(self) -> None:
+        self.test_wrap(stop_on_exit=True)
+
+    def test_wrap(self, stop_on_exit=False) -> None:
         with contextlib.ExitStack() as stack:
-            stack.enter_context(self.show_location('test_wrap'))
+            stack.enter_context(
+                self.show_location('test_wrap(stop_on_exit=%r)' % stop_on_exit)
+            )
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
+            socket = os.path.join(temp, 'socket')
+
+            if stop_on_exit:
+                stop_on_exit_arg = '--stop-on-exit'
+            else:
+                stop_on_exit_arg = '--no-stop-on-exit'
+
             logger.debug('Running launcher wrapping short-lived command')
             proc = subprocess.Popen(
                 self.launcher + [
-                    '--socket', os.path.join(temp, 'socket'),
+                    '--socket', socket,
+                    stop_on_exit_arg,
                     '--',
                     'printf', 'wrapped printf',
                 ],
@@ -563,14 +581,45 @@ class TestLauncher(BaseTest):
             )
             stack.enter_context(ensure_terminated(proc))
 
-            # The process exits as soon as printf does, which is
+            stdout = proc.stdout
+            assert stdout is not None
+            # Wait for the wrapped process to have started, which only happens
+            # when the launcher is also open for business
+            output = stdout.read()
+
+            if not stop_on_exit:
+                # Check that the server did not stop
+                logger.debug('Launcher should still be alive')
+                run_subprocess(
+                    self.launch + [
+                        '--socket', socket,
+                        '--',
+                        'true',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+                logger.debug('Launcher should exit after this')
+                run_subprocess(
+                    self.launch + [
+                        '--socket', socket,
+                        '--terminate',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+            # else the process exits as soon as printf does, which is
             # almost immediately
-            output, errors = proc.communicate(timeout=10)
+
+            more_output, errors = proc.communicate(timeout=10)
             self.assertEqual(proc.returncode, 0)
 
             # With a wrapped command but no --info-fd, there is no
             # extraneous output on stdout
             self.assertEqual('wrapped printf', output)
+            self.assertEqual('', more_output)
 
     def test_wrap_info_fd(self) -> None:
         with contextlib.ExitStack() as stack:
@@ -632,23 +681,133 @@ class TestLauncher(BaseTest):
             # The wrapped process's stdout has ended up in stderr
             self.assertIn('this goes to stderr', errors)
 
+    def test_wrap_mainpid(self) -> None:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap_mainpid'))
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
+            socket = os.path.join(temp, 'socket')
+            logger.debug('Starting launcher to test MAINPID')
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--socket', socket,
+                    '--',
+                    'sh', '-euc', 'printf "%s" "$$"; exec cat >&2',
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
+            stdout = proc.stdout
+            assert stdout is not None
+
+            # Wait long enough for it to be listening: the wrapped command
+            # runs after the socket is already up, and prints $$ first
+            shell_pid = stdout.readline().rstrip('\n')
+
+            # We can run commands
+            logger.debug('Retrieving MAINPID')
+            get_mainpid = run_subprocess(
+                self.launch + [
+                    '--socket', socket,
+                    '--',
+                    'sh', '-euc', 'printf "%s" "$MAINPID"',
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+
+            output, errors = proc.communicate(input='', timeout=10)
+            self.assertEqual(proc.returncode, 0)
+            self.assertEqual(shell_pid, get_mainpid.stdout)
+            self.assertEqual(output, '')
+
+    def test_wrap_exec_fallback(self) -> None:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(self.show_location('test_wrap_exec_fallback'))
+            temp = stack.enter_context(
+                tempfile.TemporaryDirectory(prefix='test-'),
+            )
+            socket = os.path.join(temp, 'nope', 'socket')
+
+            logger.debug('Running a server that will fail fast')
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--socket', socket,
+                    '--',
+                    'printf', 'this never happens',
+                ],
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
+            output, errors = proc.communicate(timeout=10)
+            self.assertEqual(output, '')
+
+            logger.debug('Running a server that will fail but continue')
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--info-fd=0',
+                    '--socket', socket,
+                    '--exec-fallback',
+                    '--',
+                    'printf', 'ran this anyway',
+                ],
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
+            output, errors = proc.communicate(timeout=10)
+            self.assertEqual(output, 'ran this anyway')
+
+            logger.debug('Different info fd')
+            read_end, write_end = os.pipe2(os.O_CLOEXEC)
+            proc = subprocess.Popen(
+                self.launcher + [
+                    '--info-fd=%d' % write_end,
+                    '--socket', socket,
+                    '--exec-fallback',
+                    '--',
+                    'printf', 'ran this anyway',
+                ],
+                pass_fds=[write_end],
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(proc))
+            os.close(write_end)
+
+            with open(read_end, 'r') as reader:
+                output = reader.read()
+                self.assertEqual(output, '')
+
+            output, errors = proc.communicate(timeout=10)
+            self.assertEqual(output, 'ran this anyway')
+
     def test_wrap_wait(self) -> None:
         with contextlib.ExitStack() as stack:
             stack.enter_context(self.show_location('test_wrap_wait'))
             temp = stack.enter_context(
                 tempfile.TemporaryDirectory(prefix='test-'),
             )
+            socket = os.path.join(temp, 'socket')
             need_terminate = True
             logger.debug('Starting launcher to wait for a main command')
             proc = subprocess.Popen(
-                [
-                    'sh', '-euc', 'exec "$@" 3>&1 >&2', 'sh',
-                ] + self.launcher + [
-                    '--info-fd=3',
-                    '--socket', os.path.join(temp, 'socket'),
+                self.launcher + [
+                    '--socket', socket,
                     '--',
-                    'sleep', '600',
+                    'cat',
                 ],
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
@@ -656,31 +815,19 @@ class TestLauncher(BaseTest):
             stack.enter_context(ensure_terminated(proc))
 
             try:
-                socket = ''
-                dbus_address = ''
-
-                # stdout is the launcher's fd 3, which is the info-fd
+                stdin = proc.stdin
+                assert stdin is not None
                 stdout = proc.stdout
                 assert stdout is not None
-                for line in stdout:
-                    line = line.rstrip('\n')
-                    logger.debug('%s', line)
 
-                    if line.startswith('socket='):
-                        socket = line[len('socket='):]
-                    elif line.startswith('dbus_address='):
-                        dbus_address = line[len('dbus_address='):]
-
-                self.assertTrue(socket)
-                self.assertTrue(dbus_address)
-
-                # The path has been canonicalized, so it might not
-                # be equal to the input, but the basename will be the same
-                self.assertEqual(os.path.basename(socket), 'socket')
-                left = os.stat(socket)
-                right = os.stat(os.path.join(temp, 'socket'))
-                self.assertEqual(left.st_dev, right.st_dev)
-                self.assertEqual(left.st_ino, right.st_ino)
+                # Wait for cat(1) to have started, which only happens
+                # when the launcher is also open for business
+                logger.debug(
+                    'Waiting to be able to get a newline back from cat(1)',
+                )
+                stdin.write('\n')
+                stdin.flush()
+                self.assertEqual(stdout.read(1), '\n')
 
                 # We can run commands
                 logger.debug('Sending command')
@@ -696,7 +843,7 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'hello')
 
-                # We can terminate the `sleep` command
+                # We can terminate the `cat` command
                 logger.debug('Terminating main command')
                 completed = run_subprocess(
                     self.launch + [
@@ -711,6 +858,11 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'world')
                 need_terminate = False
+
+                # The `cat` command terminates promptly, even though it has
+                # not seen EOF on its stdin
+                logger.debug('Waiting for EOF on stdout...')
+                stdout.read()
             finally:
                 if need_terminate:
                     proc.terminate()
@@ -749,16 +901,33 @@ class TestLauncher(BaseTest):
         except Exception:
             self.skipTest('D-Bus session bus not available')
 
-    def test_session_bus(self) -> None:
+    def test_session_bus_invalid_name(self) -> None:
+        self.test_session_bus(invalid_name=True)
+
+    def test_session_bus(self, invalid_name=False) -> None:
         with contextlib.ExitStack() as stack:
-            stack.enter_context(self.show_location('test_session_bus'))
+            stack.enter_context(
+                self.show_location(
+                    'test_session_bus(invalid_name=%r)' % invalid_name
+                )
+            )
             self.needs_dbus()
-            unique = '_' + uuid.uuid4().hex
-            well_known_name = 'com.steampowered.PressureVessel.Test.' + unique
+            unique = str(uuid.uuid4())
+
+            if invalid_name:
+                unique = unique.replace('-', '.')
+                well_known_name = 'com.steampowered.App' + unique.replace(
+                    '.', '_',
+                )
+            else:
+                well_known_name = 'com.steampowered.App' + unique
+
             logger.debug('Starting launcher on D-Bus name %s', well_known_name)
             proc = subprocess.Popen(
-                self.launcher + [
-                    '--bus-name', well_known_name,
+                [
+                    'env', 'STEAM_COMPAT_APP_ID=' + unique,
+                ] + self.launcher + [
+                    '--session',
                 ],
                 stdout=subprocess.PIPE,
                 stderr=2,
@@ -777,10 +946,11 @@ class TestLauncher(BaseTest):
                 if line.startswith('bus_name='):
                     bus_name = line[len('bus_name='):]
 
-            self.assertEqual(
-                bus_name,
-                'com.steampowered.PressureVessel.Test.' + unique,
-            )
+            # With neither --stop-on-name-loss nor --no-stop-on-name-loss,
+            # it is unspecified which behaviour we have
+            # (implementation detail: there's an environment variable)
+            if not bus_name.startswith(':'):
+                self.assertEqual(bus_name, well_known_name)
 
             logger.debug('Should be able to ping %s', bus_name)
             run_subprocess(
@@ -813,6 +983,267 @@ class TestLauncher(BaseTest):
             proc.terminate()
             proc.wait(timeout=10)
             self.assertEqual(proc.returncode, 0)
+
+    def test_session_bus_replace_stop(self) -> None:
+        self.test_session_bus_replace(stop_on_name_loss=True)
+
+    def test_session_bus_replace(self, stop_on_name_loss=False) -> None:
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(
+                self.show_location(
+                    'test_session_bus_replace(stop_on_name_loss=%r)'
+                    % stop_on_name_loss
+                )
+            )
+            self.needs_dbus()
+            unique = '_' + uuid.uuid4().hex
+            well_known_name = 'com.steampowered.PressureVessel.Test.' + unique
+            only_first_well_known_name = well_known_name + '.First'
+            only_second_well_known_name = well_known_name + '.Second'
+
+            try:
+                from gi.repository import GLib, Gio
+            except ImportError as e:
+                self.skipTest(str(e))
+
+            if stop_on_name_loss:
+                stop_on_name_loss_arg = '--stop-on-name-loss'
+            else:
+                stop_on_name_loss_arg = '--no-stop-on-name-loss'
+
+            logger.debug('Starting first server on %s', well_known_name)
+            first_server = subprocess.Popen(
+                self.launcher + [
+                    '--bus-name', well_known_name,
+                    '--bus-name', only_first_well_known_name,
+                    '--exit-on-readable=0',
+                    stop_on_name_loss_arg,
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(first_server))
+
+            logger.debug('Waiting for its bus name')
+            stdout = first_server.stdout
+            assert stdout is not None
+            for line in stdout:
+                line = line.rstrip('\n')
+                logger.debug('%s', line)
+
+                if line.startswith('bus_name='):
+                    bus_name = line[len('bus_name='):]
+
+                    if stop_on_name_loss:
+                        if not bus_name.startswith(':'):
+                            self.assertEqual(bus_name, well_known_name)
+
+                        session_bus = Gio.bus_get_sync(
+                            Gio.BusType.SESSION, None,
+                        )
+                        reply = session_bus.call_sync(
+                            DBUS_NAME_DBUS,
+                            DBUS_PATH_DBUS,
+                            DBUS_INTERFACE_DBUS,
+                            'GetNameOwner',
+                            GLib.Variant('(s)', (bus_name,)),
+                            GLib.VariantType('(s)'),
+                            Gio.DBusCallFlags.NONE,
+                            -1,
+                            None,
+                        )
+                        self.assertEqual(len(reply), 1)
+                        first_unique_name = str(reply[0])
+                    else:
+                        self.assertTrue(bus_name.startswith(':'), bus_name)
+                        first_unique_name = bus_name
+
+            logger.debug('Starting cat(1) subprocess')
+            cat = subprocess.Popen(
+                self.launch + [
+                    '--bus-name', bus_name,
+                    '--',
+                    'cat',
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(cat))
+
+            logger.debug('Secondary bus name should also work')
+            run_subprocess(
+                self.launch + [
+                    '--bus-name', only_first_well_known_name,
+                    '--',
+                    'true',
+                ],
+                check=True,
+                stdout=2,
+                stderr=2,
+            )
+
+            logger.debug('Starting second server to --replace the first')
+            second_server = subprocess.Popen(
+                self.launcher + [
+                    '--bus-name', well_known_name,
+                    '--bus-name', only_second_well_known_name,
+                    '--exit-on-readable=0',
+                    '--replace',
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=2,
+                universal_newlines=True,
+            )
+            stack.enter_context(ensure_terminated(second_server))
+
+            logger.debug('Waiting for second server to be ready')
+            stdout = second_server.stdout
+            assert stdout is not None
+            # Read until EOF
+            stdout.read()
+
+            logger.debug('Checking all three processes are running')
+            first_server.send_signal(0)
+            second_server.send_signal(0)
+            cat.send_signal(0)
+
+            logger.debug('Secondary bus name should also work')
+            run_subprocess(
+                self.launch + [
+                    '--bus-name', only_second_well_known_name,
+                    '--',
+                    'true',
+                ],
+                check=True,
+                stdout=2,
+                stderr=2,
+            )
+
+            if not stop_on_name_loss:
+                logger.debug(
+                    'First server secondary bus name should also work',
+                )
+                run_subprocess(
+                    self.launch + [
+                        '--bus-name', only_first_well_known_name,
+                        '--',
+                        'true',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+                # else: because the cat(1) subprocess is still running, the
+                # first server is still running, but it has released its
+                # well-known names so we can no longer talk to it that way
+
+            # We can still communicate with a subprocess of the
+            # first, even after it has lost its name
+            logger.debug('Checking cat(1) is still responding')
+            output, _ = cat.communicate(input='nyan', timeout=10)
+            self.assertEqual(output, 'nyan')
+            self.assertEqual(cat.returncode, 0)
+
+            if stop_on_name_loss:
+                logger.debug('Waiting for first server to exit')
+                first_server.wait(timeout=10)
+                self.assertEqual(first_server.returncode, 0)
+            else:
+                logger.debug('Checking that first server did not stop')
+                run_subprocess(
+                    self.launch + [
+                        '--bus-name', first_unique_name,
+                        '--',
+                        'true',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+                run_subprocess(
+                    self.launch + [
+                        '--bus-name', only_first_well_known_name,
+                        '--',
+                        'true',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+
+            # The second server shuts down on --exit-on-readable
+            logger.debug('Stopping second server')
+            second_server.communicate(input='', timeout=10)
+            self.assertEqual(second_server.returncode, 0)
+
+            if not stop_on_name_loss:
+                # The first server is still in the queue for the name,
+                # so it gets the well-known name back (atomically)
+                # after the dbus-daemon has detected the change in
+                # status.
+                session_bus = Gio.bus_get_sync(
+                    Gio.BusType.SESSION, None,
+                )
+                reply = None
+
+                # It might take a short time for the dbus-daemon to
+                # detect that the second service's connection has closed.
+                # Until then, it will think the second service still
+                # has the name.
+                for attempt in range(50):
+                    logger.debug(
+                        'Waiting for first server to get name back',
+                    )
+                    reply = session_bus.call_sync(
+                        DBUS_NAME_DBUS,
+                        DBUS_PATH_DBUS,
+                        DBUS_INTERFACE_DBUS,
+                        'GetNameOwner',
+                        GLib.Variant('(s)', (bus_name,)),
+                        GLib.VariantType('(s)'),
+                        Gio.DBusCallFlags.NONE,
+                        -1,
+                        None,
+                    )
+                    assert reply is not None
+                    self.assertEqual(len(reply), 1)
+                    owner = str(reply[0])
+
+                    if owner == first_unique_name:
+                        logger.debug(
+                            'First server %s got its name back',
+                            first_unique_name,
+                        )
+                        break
+                    else:
+                        logger.debug('Name owned by %s', owner)
+
+                    time.sleep(0.1)
+                else:
+                    raise AssertionError(
+                        'Timed out waiting for name to go back to '
+                        'first service'
+                    )
+
+                logger.debug('Asking first server to exit')
+                run_subprocess(
+                    self.launch + [
+                        '--bus-name', first_unique_name,
+                        '--terminate',
+                    ],
+                    check=True,
+                    stdout=2,
+                    stderr=2,
+                )
+                # The first server terminates when asked
+                logger.debug('Waiting for it')
+                first_server.communicate(input='', timeout=10)
+                self.assertEqual(first_server.returncode, 0)
 
     def test_exit_on_readable(self, use_stdin=False) -> None:
         with contextlib.ExitStack() as stack:

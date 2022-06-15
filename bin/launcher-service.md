@@ -15,11 +15,13 @@ steam-runtime-launcher-service - server to launch processes in a container
 # SYNOPSIS
 
 **steam-runtime-launcher-service**
+[**--exec-fallback**]
 [**--exit-on-readable**] *FD*
 [**--info-fd**] *N*
 [**--replace**]
+[**--[no-]stop-on-name-loss**]
 [**--verbose**]
-{**--bus-name** *NAME*|**--socket** *SOCKET*|**--socket-directory** *PATH*}
+{**--session**|**--bus-name** *NAME*...|**--socket** *SOCKET*|**--socket-directory** *PATH*}
 [**--** *COMMAND* *ARGUMENTS*]
 
 # DESCRIPTION
@@ -61,6 +63,20 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
 **--bus-name** *NAME*
 :   Connect to the well-known D-Bus session bus, request the given name
     and listen for commands there.
+    This option may be used more than once.
+    If it is, each of the names will be requested in the order given.
+    If at least one name cannot be acquired or is subsequently lost,
+    **steam-runtime-launcher-service** will behave according to the
+    **--[no-]stop-on-exit** options.
+
+**--exec-fallback**
+:   If unable to set up the **--socket**, **--socket-directory**,
+    **--bus-name** or **--session**, fall back to executing the
+    *COMMAND* directly (replacing the **steam-runtime-launcher-service**
+    process, similar to **env**(1)).
+    This option is only allowed if a *COMMAND* is specified.
+    It is useful if running the *COMMAND* is more important than the ability
+    to insert additional commands into its execution environment.
 
 **--exit-on-readable** *FD*
 :   Exit when file descriptor *FD* (typically 0, for **stdin**) becomes
@@ -75,19 +91,80 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
     If a *COMMAND* is specified, there is no default.
 
 **--replace**
-:   When used with **--bus-name**, allow other
-    **steam-runtime-launcher-service** processes to take over the bus name,
-    and exit with status 0 if that happens. This option is ignored
-    if **--bus-name** is not used.
+:   When used with **--bus-name**, take over the bus name from
+    another **steam-runtime-launcher-service** process if any.
+    The other **steam-runtime-launcher-service** will either exit
+    or continue to run, depending on whether the **--[no-]stop-on-name-loss**
+    options were used.
+    This option is ignored if **--bus-name** is not used.
+
+**--session**
+:   Equivalent to **--bus-name** *NAME*, but *NAME* is chosen automatically.
+    The current implementation is that if a Steam app ID (game ID) can
+    be discovered from the environment, then the *NAME* is
+    **com.steampowered.App** followed by the app ID.
+    Otherwise, **com.steampowered.App0** is used.
+
+    If both **--session** and **--bus-name** are used, then **--session**
+    has no effect.
+
+**--[no-]stop-on-exit**
+:   With **--stop-on-exit** and a *COMMAND*, the server will terminate
+    other launched processes and prepare to exit when the *COMMAND* exits.
+    If other launched processes continue to run after receiving the
+    **SIGTERM** signal, the server will still wait for them to exit
+    before terminating.
+    This is the default.
+
+    With **--no-stop-on-name-loss** and a *COMMAND*, do not do this:
+    the server will still be contactable via D-Bus using its unique bus name
+    until it is terminated, for example with **SIGTERM** or
+    **steam-runtime-launch-client --bus-name=:1.xx --terminate**.
+    Note that if the wrapped *COMMAND* is a Steam game, then Steam will
+    still consider the game to be running until the
+    **steam-runtime-launcher-service** is terminated.
+
+**--[no-]stop-on-name-loss**
+:   With **--bus-name** and **--stop-on-name-loss**, the server will
+    prepare to exit when any of the well-known bus names *NAME* used with
+    **--bus-name** is lost, most likely because another server was
+    run with **--replace** and took over ownership.
+    If other launched processes are active, it will wait for them to exit
+    before terminating.
+    This is the default.
+
+    With **--bus-name** and **--no-stop-on-name-loss**, do not do this:
+    the server will still be contactable via D-Bus using its unique bus name.
+
+    These parameters have no effect if **--bus-name** is not used.
 
 **--verbose**
 :   Be more verbose.
 
 # ENVIRONMENT
 
+## Variables set for the command
+
+Some variables will be set programmatically in the subprocesses started
+by **steam-runtime-launcher-service** when a command is sent to it by
+**steam-runtime-launch-client**:
+
+`MAINPID`
+:   If **steam-runtime-launcher-service** was run as a wrapper around a
+    *COMMAND* (for example as
+    **steam-runtime-launcher-service --bus-name=... -- my-game**),
+    and the initial process of the wrapped *COMMAND* is still running,
+    then this variable is set to its process ID (for example, the process
+    ID of **my-game**). Otherwise, this variable is cleared.
+
 `PWD`
 :   Set to the current working directory for each command executed
     inside the container.
+
+Additionally, **steam-runtime-launch-client** has several options that
+manipulate environment variables on a per-command basis.
+
+## Variables read by steam-runtime-launcher-service
 
 `PRESSURE_VESSEL_LOG_INFO` (boolean)
 :   If set to `1`, increase the log verbosity up to the info level.
@@ -96,6 +173,23 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
 `PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
 :   If set to `1`, prepend the log entries with a timestamp.
     If set to `0`, no effect.
+
+`SRT_LAUNCHER_SERVICE_STOP_ON_EXIT` (boolean)
+:   If set to `0`, the default behaviour changes to be equivalent to
+    **--no-stop-on-exit**, unless overridden by **--stop-on-exit**.
+    If set to `1`, no effect.
+
+`SRT_LAUNCHER_SERVICE_STOP_ON_NAME_LOSS` (boolean)
+:   If set to `0`, the default behaviour changes to be equivalent to
+    **--no-stop-on-name-loss**, unless overridden by **--stop-on-name-loss**.
+    If set to `1`, no effect.
+
+`STEAM_COMPAT_APP_ID` (integer)
+:   Used by **--session** to identify the Steam app ID (game ID).
+
+`SteamAppId` (integer)
+:   Used by **--session** to identify the Steam app ID (game ID),
+    if `STEAM_COMPAT_APP_ID` is not also set.
 
 # OUTPUT
 

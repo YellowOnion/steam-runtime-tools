@@ -53,6 +53,19 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusAuthObserver, g_object_unref)
 typedef GDBusServer AutoDBusServer;
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(AutoDBusServer, g_object_unref)
 
+static void
+bus_name_clear (gpointer p)
+{
+  SrtPortalListenerBusName *self = p;
+
+  if (self->name_owner_id)
+    g_bus_unown_name (self->name_owner_id);
+
+  self->name_owner_id = 0;
+  self->status = SRT_PORTAL_LISTENER_BUS_NAME_STATUS_UNOWNED;
+  g_clear_pointer (&self->name, g_free);
+}
+
 struct _SrtPortalListenerClass
 {
   GObjectClass parent;
@@ -67,6 +80,7 @@ G_DEFINE_TYPE (SrtPortalListener, _srt_portal_listener, G_TYPE_OBJECT)
 enum
 {
   NEW_PEER_CONNECTION,
+  READY,
   SESSION_BUS_CONNECTED,
   SESSION_BUS_NAME_ACQUIRED,
   SESSION_BUS_NAME_LOST,
@@ -118,14 +132,14 @@ _srt_portal_listener_set_up_info_fd (SrtPortalListener *self,
 
 gboolean
 _srt_portal_listener_check_socket_arguments (SrtPortalListener *listener,
-                                             const char *opt_bus_name,
+                                             const char * const *opt_bus_names,
                                              const char *opt_socket,
                                              const char *opt_socket_directory,
                                              GError **error)
 {
   gsize i;
 
-  if ((opt_socket != NULL) + (opt_socket_directory != NULL) + (opt_bus_name != NULL) != 1)
+  if ((opt_socket != NULL) + (opt_socket_directory != NULL) + (opt_bus_names != NULL) != 1)
     {
       g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_FAILED,
                    "Exactly one of --bus-name, --socket, --socket-directory"
@@ -161,13 +175,34 @@ _srt_portal_listener_check_socket_arguments (SrtPortalListener *listener,
 }
 
 static void
-on_bus_acquired (GDBusConnection *connection,
-                 const gchar *name,
-                 gpointer user_data)
+srt_portal_listener_check_ready (SrtPortalListener *self)
 {
-  SrtPortalListener *self = user_data;
+  const SrtPortalListenerBusName *record;
+  guint i;
+  gboolean handled = FALSE;
 
-  g_signal_emit (self, signal_ids[SESSION_BUS_CONNECTED], 0, connection);
+  if (self->flags & SRT_PORTAL_LISTENER_FLAGS_READY)
+    return;
+
+  if (self->bus_names != NULL)
+    {
+      for (i = 0; i < self->bus_names->len; i++)
+        {
+          record = &g_array_index (self->bus_names, SrtPortalListenerBusName, i);
+
+          if (record->status == SRT_PORTAL_LISTENER_BUS_NAME_STATUS_WAITING)
+            {
+              g_debug ("Still waiting for bus name %d \"%s\" to be acquired or lost",
+                       i, record->name);
+              return;
+            }
+        }
+    }
+
+  g_debug ("All bus names ready");
+  self->flags |= SRT_PORTAL_LISTENER_FLAGS_READY;
+  g_signal_emit (self, signal_ids[READY], 0, &handled);
+  g_return_if_fail (handled);
 }
 
 static void
@@ -176,9 +211,31 @@ on_name_acquired (GDBusConnection *connection,
                   gpointer user_data)
 {
   SrtPortalListener *self = user_data;
+  SrtPortalListenerBusName *record = NULL;
+  guint i;
 
+  g_return_if_fail (self->bus_names != NULL);
+  g_return_if_fail (self->bus_names->len > 0);
+
+  for (i = 0; i < self->bus_names->len; i++)
+    {
+      record = &g_array_index (self->bus_names, SrtPortalListenerBusName, i);
+
+      if (strcmp (name, record->name) == 0)
+        break;
+    }
+
+  g_return_if_fail (record != NULL);
+
+  if (record->status == SRT_PORTAL_LISTENER_BUS_NAME_STATUS_WAITING)
+    g_debug ("Name %d \"%s\" acquired for the first time", i, record->name);
+  else
+    g_debug ("Name %d \"%s\" acquired", i, record->name);
+
+  record->status = SRT_PORTAL_LISTENER_BUS_NAME_STATUS_OWNED;
   g_signal_emit (self, signal_ids[SESSION_BUS_NAME_ACQUIRED], 0,
                  connection, name);
+  srt_portal_listener_check_ready (self);
 }
 
 static void
@@ -187,9 +244,31 @@ on_name_lost (GDBusConnection *connection,
               gpointer user_data)
 {
   SrtPortalListener *self = user_data;
+  SrtPortalListenerBusName *record = NULL;
+  guint i;
 
+  g_return_if_fail (self->bus_names != NULL);
+  g_return_if_fail (self->bus_names->len > 0);
+
+  for (i = 0; i < self->bus_names->len; i++)
+    {
+      record = &g_array_index (self->bus_names, SrtPortalListenerBusName, i);
+
+      if (strcmp (name, record->name) == 0)
+        break;
+    }
+
+  g_return_if_fail (record != NULL);
+
+  if (record->status == SRT_PORTAL_LISTENER_BUS_NAME_STATUS_WAITING)
+    g_debug ("Name %d \"%s\" could not be acquired", i, record->name);
+  else
+    g_debug ("Name %d \"%s\" lost", i, record->name);
+
+  record->status = SRT_PORTAL_LISTENER_BUS_NAME_STATUS_UNOWNED;
   g_signal_emit (self, signal_ids[SESSION_BUS_NAME_LOST], 0,
                  connection, name);
+  srt_portal_listener_check_ready (self);
 }
 
 #if GLIB_CHECK_VERSION(2, 34, 0)
@@ -402,18 +481,23 @@ listen_on_socket (SrtPortalListener *self,
 
 gboolean
 _srt_portal_listener_listen (SrtPortalListener *self,
-                             const char *opt_bus_name,
+                             const char * const *opt_bus_names,
                              GBusNameOwnerFlags flags,
                              const char *opt_socket,
                              const char *opt_socket_directory,
                              GError **error)
 {
-  g_return_val_if_fail ((opt_bus_name != NULL)
+  g_return_val_if_fail ((opt_bus_names != NULL)
                         + (opt_socket != NULL)
                         + (opt_socket_directory != NULL) == 1, FALSE);
+  /* Can only be called once */
+  g_return_val_if_fail (self->bus_names == NULL, FALSE);
 
-  if (opt_bus_name != NULL)
+  if (opt_bus_names != NULL)
     {
+      guint n = g_strv_length ((gchar **) opt_bus_names);
+      guint i;
+
       g_debug ("Connecting to D-Bus session bus...");
 
       self->session_bus = g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, error);
@@ -421,15 +505,29 @@ _srt_portal_listener_listen (SrtPortalListener *self,
       if (self->session_bus == NULL)
         return glnx_prefix_error (error, "Can't find session bus");
 
-      g_debug ("Claiming bus name %s...", opt_bus_name);
-      self->name_owner_id = g_bus_own_name (G_BUS_TYPE_SESSION,
-                                            opt_bus_name,
-                                            flags,
-                                            on_bus_acquired,
-                                            on_name_acquired,
-                                            on_name_lost,
-                                            self,
-                                            NULL);
+      g_signal_emit (self, signal_ids[SESSION_BUS_CONNECTED], 0,
+                     self->session_bus);
+      self->bus_names = g_array_sized_new (FALSE, TRUE,
+                                           sizeof (SrtPortalListenerBusName),
+                                           n);
+      g_array_set_clear_func (self->bus_names, bus_name_clear);
+
+      for (i = 0; i < n; i++)
+        {
+          SrtPortalListenerBusName record = {};
+
+          g_debug ("Claiming bus name %d \"%s\"...", i, opt_bus_names[i]);
+          record.name = g_strdup (opt_bus_names[i]);
+          record.name_owner_id = g_bus_own_name (G_BUS_TYPE_SESSION,
+                                                 record.name,
+                                                 flags,
+                                                 NULL,
+                                                 on_name_acquired,
+                                                 on_name_lost,
+                                                 self,
+                                                 NULL);
+          g_array_append_val (self->bus_names, record);
+        }
     }
   else if (opt_socket != NULL)
     {
@@ -483,32 +581,57 @@ _srt_portal_listener_listen (SrtPortalListener *self,
       g_return_val_if_reached (FALSE);
     }
 
-  if (self->info_fh == NULL)
-    return TRUE;
+  if (self->info_fh != NULL)
+    {
+      if (self->server_socket != NULL)
+        fprintf (self->info_fh, "socket=%s\n", self->server_socket);
 
-  if (self->server_socket != NULL)
-    fprintf (self->info_fh, "socket=%s\n", self->server_socket);
+      if (self->server != NULL)
+        fprintf (self->info_fh, "dbus_address=%s\n",
+                 g_dbus_server_get_client_address (self->server));
+    }
 
-  if (self->server != NULL)
-    fprintf (self->info_fh, "dbus_address=%s\n",
-             g_dbus_server_get_client_address (self->server));
-
+  srt_portal_listener_check_ready (self);
   return TRUE;
 }
 
 
 /*
- * If @bus_name is non-NULL, print it to the info fd. Then
- * close the --info-fd, and also close standard output (if different).
+ * If @success is true and we are connected to the session bus, then
+ * print one of our bus names to the --info-fd.
+ *
+ * Next, close the --info-fd, and also close standard output (if different).
  */
 void
 _srt_portal_listener_close_info_fh (SrtPortalListener *self,
-                                    const char *bus_name)
+                                    gboolean success)
 {
   if (self->info_fh != NULL)
     {
-      if (bus_name != NULL)
-        fprintf (self->info_fh, "bus_name=%s\n", bus_name);
+      if (self->session_bus != NULL && success)
+        {
+          const char *bus_name = g_dbus_connection_get_unique_name (self->session_bus);
+
+          if (self->bus_names != NULL
+              && !(self->flags & SRT_PORTAL_LISTENER_FLAGS_PREFER_UNIQUE_NAME))
+            {
+              const SrtPortalListenerBusName *record;
+              guint i;
+
+              for (i = 0; i < self->bus_names->len; i++)
+                {
+                  record = &g_array_index (self->bus_names, SrtPortalListenerBusName, i);
+
+                  if (record->status == SRT_PORTAL_LISTENER_BUS_NAME_STATUS_OWNED)
+                    {
+                      bus_name = record->name;
+                      break;
+                    }
+                }
+            }
+
+          fprintf (self->info_fh, "bus_name=%s\n", bus_name);
+        }
 
       fflush (self->info_fh);
     }
@@ -524,13 +647,7 @@ _srt_portal_listener_close_info_fh (SrtPortalListener *self,
 void
 _srt_portal_listener_stop_listening (SrtPortalListener *self)
 {
-  if (self->name_owner_id)
-    {
-      g_debug ("Releasing bus name");
-      g_bus_unown_name (self->name_owner_id);
-    }
-
-  self->name_owner_id = 0;
+  g_clear_pointer (&self->bus_names, g_array_unref);
 
   if (self->server != NULL && self->server_socket != NULL)
     unlink (self->server_socket);
@@ -544,7 +661,7 @@ _srt_portal_listener_dispose (GObject *object)
 {
   SrtPortalListener *self = _SRT_PORTAL_LISTENER (object);
 
-  _srt_portal_listener_close_info_fh (self, NULL);
+  _srt_portal_listener_close_info_fh (self, FALSE);
   _srt_portal_listener_stop_listening (self);
 
   G_OBJECT_CLASS (_srt_portal_listener_parent_class)->dispose (object);
@@ -583,6 +700,24 @@ _srt_portal_listener_class_init (SrtPortalListenerClass *cls)
                   G_TYPE_BOOLEAN,
                   1,
                   G_TYPE_DBUS_CONNECTION);
+
+  /*
+   * SrtPortalListener::ready:
+   *
+   * Emitted when each D-Bus name has either been acquired successfully
+   * or signalled as lost for the first time (meaning it could not be
+   * acquired), and each non-session-bus socket has been listened on.
+   *
+   * Returns: %TRUE if handled
+   */
+  signal_ids[READY] =
+    g_signal_new ("ready",
+                  _SRT_TYPE_PORTAL_LISTENER,
+                  G_SIGNAL_RUN_LAST,
+                  0, g_signal_accumulator_true_handled, NULL,
+                  NULL,
+                  G_TYPE_BOOLEAN,
+                  0);
 
   signal_ids[SESSION_BUS_CONNECTED] =
     g_signal_new ("session-bus-connected",

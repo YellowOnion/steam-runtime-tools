@@ -48,6 +48,27 @@ typedef struct _SrtPortalListenerClass SrtPortalListenerClass;
 #define _SRT_PORTAL_LISTENER_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), _SRT_TYPE_PORTAL_LISTENER, SrtPortalListenerClass)
 GType _srt_portal_listener_get_type (void);
 
+typedef enum
+{
+  SRT_PORTAL_LISTENER_FLAGS_PREFER_UNIQUE_NAME = (1 << 0),
+  SRT_PORTAL_LISTENER_FLAGS_READY = (1 << 1),
+  SRT_PORTAL_LISTENER_FLAGS_NONE = 0,
+} SrtPortalListenerFlags;
+
+typedef enum
+{
+  SRT_PORTAL_LISTENER_BUS_NAME_STATUS_WAITING = 0,
+  SRT_PORTAL_LISTENER_BUS_NAME_STATUS_OWNED,
+  SRT_PORTAL_LISTENER_BUS_NAME_STATUS_UNOWNED
+} SrtPortalListenerBusNameStatus;
+
+typedef struct
+{
+  gchar *name;
+  guint name_owner_id;
+  SrtPortalListenerBusNameStatus status;
+} SrtPortalListenerBusName;
+
 struct _SrtPortalListener
 {
   GObject parent;
@@ -58,7 +79,8 @@ struct _SrtPortalListener
   GDBusServer *server;
   gchar *original_cwd_l;
   gchar *server_socket;
-  guint name_owner_id;
+  GArray *bus_names;
+  SrtPortalListenerFlags flags;
 };
 
 SrtPortalListener *_srt_portal_listener_new (void);
@@ -68,20 +90,20 @@ gboolean _srt_portal_listener_set_up_info_fd (SrtPortalListener *self,
                                               GError **error);
 
 gboolean _srt_portal_listener_check_socket_arguments (SrtPortalListener *self,
-                                                      const char *opt_bus_name,
+                                                      const char * const *opt_bus_names,
                                                       const char *opt_socket,
                                                       const char *opt_socket_directory,
                                                       GError **error);
 
 gboolean _srt_portal_listener_listen (SrtPortalListener *self,
-                                      const char *opt_bus_name,
+                                      const char * const *opt_bus_names,
                                       GBusNameOwnerFlags flags,
                                       const char *opt_socket,
                                       const char *opt_socket_directory,
                                       GError **error);
 
 void _srt_portal_listener_close_info_fh (SrtPortalListener *self,
-                                         const char *bus_name);
+                                         gboolean success);
 
 void _srt_portal_listener_stop_listening (SrtPortalListener *self);
 

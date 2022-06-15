@@ -33,6 +33,10 @@ steam-runtime-launch-client - client to launch processes in a container
 {**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
 **--terminate**
 
+**steam-runtime-launch-client**
+[**--verbose**]
+**--list**
+
 # DESCRIPTION
 
 **steam-runtime-launch-client** connects to an `AF_UNIX` socket established
@@ -106,6 +110,16 @@ as a subprocess of **steam-runtime-launcher-service**.
     from outside the container. File descriptors 0, 1 and 2
     (standard input, standard output and standard error) are always
     forwarded.
+
+**--list**
+:   Instead of running a *COMMAND*, list the services that
+    **steam-runtime-launch-client** could connect to.
+    Each line of output is an option that could be passed to
+    **steam-runtime-launch-client** to select a service.
+    This uses a heuristic to identify possible targets from their bus
+    names, so it is possible that not all possible targets are listed.
+    In the current implementation, it lists bus names starting with
+    **com.steampowered.App**, plus Flatpak if available.
 
 **--share-pids**
 :   If used with **--bus-name=org.freedesktop.portal.Flatpak**, use the

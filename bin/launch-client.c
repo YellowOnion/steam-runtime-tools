@@ -29,6 +29,7 @@
 
 #include <fnmatch.h>
 #include <locale.h>
+#include <stdlib.h>
 #include <sysexits.h>
 #include <sys/signalfd.h>
 
@@ -539,11 +540,84 @@ path_to_handle (GUnixFDList *fd_list,
   return handle;
 }
 
+static int
+list_servers (GError **error)
+{
+  static const char * const flatpak_names[] =
+  {
+    FLATPAK_PORTAL_BUS_NAME,
+    FLATPAK_SESSION_HELPER_BUS_NAME,
+  };
+  g_autoptr(GDBusConnection) session_bus = NULL;
+  g_autoptr(GVariant) reply = NULL;
+  g_auto(GStrv) running = NULL;
+  g_auto(GStrv) activatable = NULL;
+  gsize i;
+
+  session_bus = g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, error);
+
+  if (session_bus == NULL)
+    {
+      glnx_prefix_error (error, "Can't find session bus");
+      return LAUNCH_EX_FAILED;
+    }
+
+  reply = g_dbus_connection_call_sync (session_bus,
+                                       DBUS_NAME_DBUS,
+                                       DBUS_PATH_DBUS,
+                                       DBUS_INTERFACE_DBUS,
+                                       "ListNames",
+                                       NULL,
+                                       G_VARIANT_TYPE ("(as)"),
+                                       G_DBUS_CALL_FLAGS_NONE,
+                                       -1, NULL, error);
+
+  if (reply == NULL)
+    return LAUNCH_EX_FAILED;
+
+  g_variant_get (reply, "(^as)", &running);
+
+  g_clear_pointer (&reply, g_variant_unref);
+  reply = g_dbus_connection_call_sync (session_bus,
+                                       DBUS_NAME_DBUS,
+                                       DBUS_PATH_DBUS,
+                                       DBUS_INTERFACE_DBUS,
+                                       "ListActivatableNames",
+                                       NULL,
+                                       G_VARIANT_TYPE ("(as)"),
+                                       G_DBUS_CALL_FLAGS_NONE,
+                                       -1, NULL, error);
+
+  if (reply == NULL)
+    return LAUNCH_EX_FAILED;
+
+  g_variant_get (reply, "(^as)", &activatable);
+
+  qsort (running, g_strv_length (running), sizeof (char *),
+         _srt_indirect_strcmp0);
+
+  for (i = 0; running[i] != NULL; i++)
+    {
+      if (g_str_has_prefix (running[i], "com.steampowered.App"))
+        g_print ("--bus-name=%s\n", running[i]);
+    }
+
+  for (i = 0; i < G_N_ELEMENTS (flatpak_names); i++)
+    {
+      if (g_strv_contains ((const char * const *) running, flatpak_names[i])
+          || g_strv_contains ((const char * const *) activatable, flatpak_names[i]))
+        g_print ("--bus-name=%s\n", flatpak_names[i]);
+    }
+
+  return 0;
+}
+
 static gchar **forward_fds = NULL;
 static gchar *opt_app_path = NULL;
 static gboolean opt_clear_env = FALSE;
 static gchar *opt_dbus_address = NULL;
 static gchar *opt_directory = NULL;
+static gboolean opt_list = FALSE;
 static gchar *opt_socket = NULL;
 static GHashTable *opt_env = NULL;
 static GHashTable *opt_unsetenv = NULL;
@@ -669,6 +743,10 @@ static const GOptionEntry options[] =
     "Connect a file descriptor to the launched process. "
     "fds 0, 1 and 2 are automatically forwarded.",
     "FD" },
+  { "list", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_list,
+    "List some of the available servers and then exit.",
+    NULL },
   { "pass-env", '\0',
     G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
     "Pass environment variable through, or unset if set.", "VAR" },
@@ -770,6 +848,12 @@ main (int argc,
 
   if (opt_verbose)
     _srt_util_set_glib_log_handler (opt_verbose);
+
+  if (opt_list)
+    {
+      launch_exit_status = list_servers (error);
+      goto out;
+    }
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 

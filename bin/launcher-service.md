@@ -174,12 +174,12 @@ manipulate environment variables on a per-command basis.
 :   If set to `1`, prepend the log entries with a timestamp.
     If set to `0`, no effect.
 
-`SRT_LAUNCH_SERVER_STOP_ON_EXIT` (boolean)
+`SRT_LAUNCHER_SERVICE_STOP_ON_EXIT` (boolean)
 :   If set to `0`, the default behaviour changes to be equivalent to
     **--no-stop-on-exit**, unless overridden by **--stop-on-exit**.
     If set to `1`, no effect.
 
-`SRT_LAUNCH_SERVER_STOP_ON_NAME_LOSS` (boolean)
+`SRT_LAUNCHER_SERVICE_STOP_ON_NAME_LOSS` (boolean)
 :   If set to `0`, the default behaviour changes to be equivalent to
     **--no-stop-on-name-loss**, unless overridden by **--stop-on-name-loss**.
     If set to `1`, no effect.

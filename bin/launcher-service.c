@@ -1254,8 +1254,8 @@ main (int argc,
                                 "processes.");
 
   g_option_context_add_main_entries (context, options, NULL);
-  opt_stop_on_exit = _srt_boolean_environment ("SRT_LAUNCH_SERVER_STOP_ON_EXIT", TRUE);
-  opt_stop_on_name_loss = _srt_boolean_environment ("SRT_LAUNCH_SERVER_STOP_ON_NAME_LOSS", TRUE);
+  opt_stop_on_exit = _srt_boolean_environment ("SRT_LAUNCHER_SERVICE_STOP_ON_EXIT", TRUE);
+  opt_stop_on_name_loss = _srt_boolean_environment ("SRT_LAUNCHER_SERVICE_STOP_ON_NAME_LOSS", TRUE);
   opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
   g_return_val_if_fail (argc >= 1, EX_USAGE);

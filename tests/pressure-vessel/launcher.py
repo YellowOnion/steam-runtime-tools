@@ -69,7 +69,7 @@ class TestLauncher(BaseTest):
 
         if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
             self.launcher = self.command_prefix + [
-                'env', '-u', 'SRT_LAUNCH_SERVER_STOP_ON_EXIT',
+                'env', '-u', 'SRT_LAUNCHER_SERVICE_STOP_ON_EXIT',
                 os.path.join(
                     self.top_builddir,
                     'bin',

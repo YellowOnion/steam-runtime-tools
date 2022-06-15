@@ -131,7 +131,10 @@ as a subprocess of **steam-runtime-launcher-service**.
     When communicating with a different API, this option is ignored.
 
 **--terminate**
-:   Instead of running a *COMMAND*, terminate the Launcher server.
+:   Terminate the **steam-runtime-launcher-service** server after the
+    *COMMAND* finishes running.
+    If no *COMMAND* is specified, terminate the server immediately.
+    This option is not available when communicating with Flatpak.
 
 **--usr-path** *PATH*
 :   When creating a Flatpak subsandbox, mount *PATH* as the `/usr` in

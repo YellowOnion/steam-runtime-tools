@@ -10,7 +10,7 @@ if [ -n "${TESTS_ONLY-}" ]; then
     exit 0
 fi
 
-populate_depot_args=()
+populate_depot_args=("--steam-app-id=1070560")
 
 if [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
     populate_depot_args=( \
@@ -66,6 +66,12 @@ python3 ./populate-depot.py \
     scout \
     ${NULL+}
 find depots/test-scout-archives -ls > depots/test-scout-archives.txt
+
+if ! grep '^this_compat_tool_appid=1070560' depots/test-scout-archives/_v2-entry-point >/dev/null; then
+    echo "Bail out! App ID not found in _v2-entry-point"
+    exit 1
+fi
+
 echo "ok 1 - scout, deploying from archive"
 
 rm -fr depots/test-scout-unpacked
@@ -81,6 +87,12 @@ python3 ./populate-depot.py \
     scout \
     ${NULL+}
 find depots/test-scout-unpacked -ls > depots/test-scout-unpacked.txt
+
+if ! grep '^this_compat_tool_appid=1070560' depots/test-scout-unpacked/_v2-entry-point >/dev/null; then
+    echo "Bail out! App ID not found in _v2-entry-point"
+    exit 1
+fi
+
 echo "ok 2 - scout, running from unpacked directory"
 
 rm -fr depots/test-scout-layered
@@ -103,6 +115,11 @@ test ! -e depots/test-scout-layered/steam-runtime
 
 if ! grep $'^LD_LIBRARY_PATH\t-\tscout\t-\t#' depots/test-scout-layered/VERSIONS.txt >/dev/null; then
     echo "Bail out! LD_LIBRARY_PATH runtime's (lack of) version number not found"
+    exit 1
+fi
+
+if ! grep '^this_compat_tool_appid=1070560' depots/test-scout-layered/scout-on-soldier-entry-point-v2 >/dev/null; then
+    echo "Bail out! App ID not found in scout-on-soldier-entry-point-v2"
     exit 1
 fi
 

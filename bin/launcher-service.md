@@ -104,6 +104,9 @@ If the *COMMAND* exits, then the launcher will also exit (as though the
     be discovered from the environment, then the *NAME* is
     **com.steampowered.App** followed by the app ID.
     Otherwise, **com.steampowered.App0** is used.
+    Additionally, a second name of the form
+    **com.steampowered.AppX.InstanceY** is generated, to allow multiple
+    instances of the same app with **--no-stop-on-name-loss**.
 
     If both **--session** and **--bus-name** are used, then **--session**
     has no effect.

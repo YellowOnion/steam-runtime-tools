@@ -76,6 +76,7 @@ typedef enum
 {
   PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS = (1 << 0),
   PV_LAUNCHER_SERVER_FLAGS_STOP_ON_EXIT = (1 << 1),
+  PV_LAUNCHER_SERVER_FLAGS_STARTED = (1 << 2),
   PV_LAUNCHER_SERVER_FLAGS_NONE = 0,
 } PvLauncherServerFlags;
 
@@ -881,9 +882,12 @@ portal_listener_ready_cb (SrtPortalListener *listener,
                         G_DBUS_METHOD_INVOCATION_UNHANDLED);
 
   /* If exporting the launcher didn't fail, then we are now happy */
-  if (server->exit_status == EX_UNAVAILABLE)
+  if (server->exit_status == EX_UNAVAILABLE
+      && server->export_state != EXPORT_STATE_GONE)
     {
       g_autoptr(GError) error = NULL;
+
+      server->flags |= PV_LAUNCHER_SERVER_FLAGS_STARTED;
 
       if (!pv_launcher_server_finish_startup (server, &error))
         {
@@ -911,8 +915,17 @@ on_name_lost (SrtPortalListener *listener,
            server->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS ? 'y' : 'n');
   /* We don't terminate child processes in this case, which means we
    * won't *actually* stop until they have all exited. */
+
   if (server->flags & PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS)
-    pv_launcher_server_stop (server, 0);
+    {
+      pv_launcher_server_stop (server, 0);
+
+      if (!(server->flags & PV_LAUNCHER_SERVER_FLAGS_STARTED))
+        {
+          _srt_log_failure ("Unable to acquire bus name \"%s\"", name);
+          server->export_state = EXPORT_STATE_GONE;
+        }
+    }
 }
 
 /*
@@ -1150,9 +1163,10 @@ opt_session_cb (const gchar *option_name G_GNUC_UNUSED,
   /* We use opt_bus_names != NULL as the signal that we will be connecting
    * to the session bus, so we can allocate an empty array here.
    * Allocate it with space for the automatically-chosen bus name,
-   * plus NULL, so that the g_realloc_n() later will be a no-op. */
+   * a unique per-app-instance bus name and NULL, so that the
+   * g_realloc_n() later will be a no-op. */
   if (opt_bus_names == NULL)
-    opt_bus_names = g_new0 (gchar *, 2);
+    opt_bus_names = g_new0 (gchar *, 3);
 
   return TRUE;
 }
@@ -1378,9 +1392,10 @@ main (int argc,
   /* Choose a bus name automatically for --session */
   if (opt_bus_names != NULL && opt_bus_names[0] == NULL)
     {
+      g_autofree gchar *instance_name = NULL;
       const char *steam_appid = _srt_get_steam_app_id ();
 
-      opt_bus_names = g_realloc_n (opt_bus_names, 2, sizeof (gchar *));
+      opt_bus_names = g_realloc_n (opt_bus_names, 3, sizeof (gchar *));
 
       if (steam_appid == NULL)
         steam_appid = "0";
@@ -1406,6 +1421,13 @@ main (int argc,
                 }
             }
         }
+
+      instance_name = g_strdup_printf ("%s.Instance%u",
+                                       opt_bus_names[0],
+                                       (unsigned int) getpid ());
+
+      if (G_LIKELY (g_dbus_is_name (instance_name)))
+        opt_bus_names[1] = g_steal_pointer (&instance_name);
     }
 
   if (!_srt_portal_listener_check_socket_arguments (server->listener,

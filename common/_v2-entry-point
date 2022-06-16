@@ -11,7 +11,6 @@ me="${me##*/}"
 # Don't rely on it.
 
 is_main=yes
-launcher_service=
 suite=
 verbose=
 log_to_file=
@@ -21,13 +20,6 @@ use_timestamp=
 ld_preload=
 # Arguments for pressure-vessel-wrap
 declare -a container_args=()
-
-# Will be edited by a script, be careful
-this_compat_tool_appid=
-
-if [ -f "${here}/steam_appid.txt" ]; then
-    this_compat_tool_appid="$(< "${here}/steam_appid.txt")"
-fi
 
 if [ -n "${LD_PRELOAD-}" ]; then
     container_args+=("--env-if-host=LD_PRELOAD=$LD_PRELOAD")
@@ -258,7 +250,7 @@ case "${STEAM_RUNTIME-}" in
             if [ "${path}" == "${STEAM_RUNTIME}" ]; then
                 # path is exactly the ${STEAM_RUNTIME}; ignore
                 continue
-            elif [ "${path#"${STEAM_RUNTIME}/"}" != "${path}" ]; then
+            elif [ "${path#${STEAM_RUNTIME}/}" != "${path}" ]; then
                 # path is ${STEAM_RUNTIME}/...; ignore
                 continue
             else
@@ -284,40 +276,6 @@ for word in $ld_preload; do
     fi
 done
 IFS="$old_IFS"
-
-case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
-    ("")
-        ;;
-
-    ("$this_compat_tool_appid" | container-runtime)
-        launcher_service=yes
-        ;;
-esac
-
-if [ -n "$launcher_service" ]; then
-    unset STEAM_COMPAT_LAUNCHER_SERVICE
-    appid="${STEAM_COMPAT_APP_ID-"${SteamAppId-0}"}"
-    launch_client="$here/pressure-vessel/bin/steam-runtime-launch-client"
-    launcher_service_address="--bus-name=com.steampowered.App${appid}"
-
-    container_args+=("--launcher")
-    # In this mode, arguments after "pressure-vessel-wrap --" go to
-    # s-r-launcher-service, and arguments after "s-r-launcher-service --"
-    # are in turn the actual command to run.
-    set -- "$launcher_service_address" --replace -- "$@"
-
-    echo "Starting program with command-launcher service." >&2
-    echo >&2
-    echo "To inject commands into the container, use a command like:" >&2
-    echo >&2
-    echo "$launch_client \\" >&2
-    echo "    $launcher_service_address \\" >&2
-    # --directory='' means keep using the game's working directory
-    echo "    --directory='' \\"
-    echo "    -- \\"
-    echo "    xterm"
-    echo >&2
-fi
 
 unset LD_LIBRARY_PATH
 unset STEAM_RUNTIME

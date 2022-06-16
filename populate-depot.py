@@ -551,7 +551,6 @@ class Main:
         source_dir: str = HERE,
         ssh_host: str = '',
         ssh_path: str = '',
-        steam_app_id: str = '',
         suite: str = '',
         toolmanifest: bool = False,
         unpack_ld_library_path: str = '',
@@ -620,7 +619,6 @@ class Main:
         self.source_dir = source_dir
         self.ssh_host = ssh_host
         self.ssh_path = ssh_path
-        self.steam_app_id = steam_app_id
         self.toolmanifest = toolmanifest
         self.unpack_ld_library_path = unpack_ld_library_path
         self.unpack_runtime = unpack_runtime
@@ -793,30 +791,9 @@ class Main:
                 'Cannot use --unpack-source with --layered'
             )
 
-        source_dir = os.path.join(
-            self.source_dir,
-            'runtimes',
-            'scout-on-soldier',
+        self.merge_dir_into_depot(
+            os.path.join(self.source_dir, 'runtimes', 'scout-on-soldier')
         )
-        self.merge_dir_into_depot(source_dir)
-
-        if self.steam_app_id:
-            with open(
-                os.path.join(source_dir, 'scout-on-soldier-entry-point-v2')
-            ) as text_reader, open(
-                os.path.join(self.depot, 'scout-on-soldier-entry-point-v2'),
-                'w',
-            ) as text_writer:
-                for line in text_reader:
-                    if line.startswith('this_compat_tool_appid='):
-                        line = f'this_compat_tool_appid={self.steam_app_id}\n'
-
-                    text_writer.write(line)
-
-            os.chmod(
-                os.path.join(self.depot, 'scout-on-soldier-entry-point-v2'),
-                0o755,
-            )
 
         if self.runtime.version:
             self.unpack_ld_library_path = self.depot
@@ -910,24 +887,6 @@ class Main:
 
         if os.path.exists(root):
             self.merge_dir_into_depot(root)
-
-        if self.steam_app_id:
-            with open(
-                os.path.join(self.source_dir, 'common', '_v2-entry-point')
-            ) as text_reader, open(
-                os.path.join(self.depot, '_v2-entry-point'),
-                'w',
-            ) as text_writer:
-                for line in text_reader:
-                    if line.startswith('this_compat_tool_appid='):
-                        line = f'this_compat_tool_appid={self.steam_app_id}\n'
-
-                    text_writer.write(line)
-
-            os.chmod(
-                os.path.join(self.depot, '_v2-entry-point'),
-                0o755,
-            )
 
         pressure_vessel_runtime = self.pressure_vessel_runtime
 
@@ -1909,10 +1868,6 @@ def main() -> None:
         help=(
             'Source directory for files to include in the depot'
         )
-    )
-    parser.add_argument(
-        '--steam-app-id', default='',
-        help='Set Steam app ID for the depot',
     )
     parser.add_argument(
         '--toolmanifest', default=False, action='store_true',

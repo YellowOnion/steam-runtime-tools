@@ -413,6 +413,14 @@ child_setup_func (gpointer user_data)
     {
       setsid ();
       setpgid (0, 0);
+
+      /* If one of the three standard fds is a terminal, try to make it our
+       * controlling terminal. */
+      for (i = STDIN_FILENO; i < STDERR_FILENO; i++)
+        {
+          if (isatty (i) && ioctl (i, TIOCSCTTY, 0) == 0)
+            break;
+        }
     }
 }
 

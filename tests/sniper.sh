@@ -10,7 +10,7 @@ if [ -n "${TESTS_ONLY-}" ]; then
     exit 0
 fi
 
-populate_depot_args=()
+populate_depot_args=("--steam-app-id=1628350")
 
 if [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
     populate_depot_args=( \
@@ -66,6 +66,12 @@ python3 ./populate-depot.py \
     sniper \
     ${NULL+}
 find depots/test-sniper-archives -ls > depots/test-sniper-archives.txt
+
+if ! grep '^this_compat_tool_appid=1628350' depots/test-sniper-archives/_v2-entry-point >/dev/null; then
+    echo "Bail out! App ID not found in _v2-entry-point"
+    exit 1
+fi
+
 echo "ok 1 - sniper, deploying from archive"
 
 rm -fr depots/test-sniper-unpacked
@@ -81,6 +87,12 @@ python3 ./populate-depot.py \
     sniper \
     ${NULL+}
 find depots/test-sniper-unpacked -ls > depots/test-sniper-unpacked.txt
+
+if ! grep '^this_compat_tool_appid=1628350' depots/test-sniper-unpacked/_v2-entry-point >/dev/null; then
+    echo "Bail out! App ID not found in _v2-entry-point"
+    exit 1
+fi
+
 echo "ok 2 - sniper, running from unpacked directory"
 
 # vim:set sw=4 sts=4 et:

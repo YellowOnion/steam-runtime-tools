@@ -1,3 +1,31 @@
+steam-runtime-tools (0.20220617.0) UNRELEASED; urgency=medium
+
+  * pressure-vessel: Compatibility with FEX-Emu x86 emulation on ARM
+    (steam-runtime-tools#81)
+  * pressure-vessel: Compatibility with Solus glibc patches
+    (steam-runtime#510)
+  * s-r-launch-client improvements:
+    - Add --list option
+    - Improve compatibility with s-r-launcher-service --replace
+    - Exit 0 if Terminate() succeeds
+    - Clarify documentation
+  * s-r-launcher-service improvements:
+    - Don't exit while we are still managing any processes
+    - Add --[no-]stop-on-name-loss option. --stop-on-name-loss is still
+      the default, but this might change. (steamrt/tasks#128)
+    - Fail if initial acquisition of bus names fails, unless
+      --no-stop-on-name-loss was given
+    - Add --[no-]stop-on-exit option. --stop-on-exit is still
+      the default. (steamrt/tasks#127)
+    - Add --exec-fallback option (steamrt/tasks#129)
+    - Allow taking more than one D-Bus name
+    - Add --session, which chooses a D-Bus name automatically
+    - Fix terminating non-process-group-leader processes
+    - Provide $MAINPID to debug processes (steamrt/tasks#126)
+  * tests: Reliability fixes
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 17 Jun 2022 17:06:29 +0100
+
 steam-runtime-tools (0.20220601.0) steamrt; urgency=medium
 
   [ Simon McVittie ]

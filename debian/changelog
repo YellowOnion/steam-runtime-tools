@@ -1,9 +1,9 @@
-steam-runtime-tools (0.20220617.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220620.0) steamrt; urgency=medium
 
-  * pressure-vessel: Compatibility with FEX-Emu x86 emulation on ARM
-    (steam-runtime-tools#81)
-  * pressure-vessel: Compatibility with Solus glibc patches
-    (steam-runtime#510)
+  * pressure-vessel improvements:
+    - Compatibility with Solus glibc patches (steam-runtime#510)
+    - Compatibility with FEX-Emu x86 emulation on ARM
+      (steam-runtime-tools#81)
   * s-r-launch-client improvements:
     - Add --list option
     - Improve compatibility with s-r-launcher-service --replace
@@ -24,7 +24,7 @@ steam-runtime-tools (0.20220617.0) UNRELEASED; urgency=medium
     - Provide $MAINPID to debug processes (steamrt/tasks#126)
   * tests: Reliability fixes
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 17 Jun 2022 17:06:29 +0100
+ -- Simon McVittie <smcv@collabora.com>  Mon, 20 Jun 2022 12:03:49 +0100
 
 steam-runtime-tools (0.20220601.0) steamrt; urgency=medium
 

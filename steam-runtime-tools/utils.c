@@ -169,8 +169,8 @@ _srt_check_not_setuid (void)
 /**
  * _srt_process_timeout_wait_status:
  * @wait_status: The wait_status from g_spawn_sync to process
- * @exit_status: (not optional): The exit_status to populate
- * @terminating_signal: (not optional): The terminating signal if any, 0 otherwise
+ * @exit_status: (out): The exit_status to populate
+ * @terminating_signal: (out): The terminating signal if any, 0 otherwise
  *
  * Check given wait_status and populate given exit_status and terminating_signal
  *

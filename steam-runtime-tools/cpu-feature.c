@@ -110,7 +110,7 @@ gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
  * _srt_feature_get_x86_flags:
  * @mock_cpuid: (nullable) (element-type guint SrtCpuidData): mock data
  *  to use instead of the real CPUID instruction
- * @known: (out) (not optional): Used to return the #SrtX86FeatureFlags
+ * @known: (out): Used to return the #SrtX86FeatureFlags
  *  that have been checked
  *
  * Returns: A #SrtX86FeatureFlags with the available X86 CPU flags.

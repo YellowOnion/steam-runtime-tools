@@ -1950,7 +1950,7 @@ _srt_get_graphics_issues_from_json_object (JsonObject *json_obj)
  *  which is checked for a "graphics-details" member
  * @multiarch_tuple: (not nullable) (type filename): A Debian-style multiarch tuple
  *  such as %SRT_ABI_X86_64
- * @cached_graphics: (not optional) (inout): An hash table with the #SrtGraphics
+ * @cached_graphics: (inout): An hash table with the #SrtGraphics
  *  objects that have been found. The hash key is an int generated combining
  *  the graphics window system and rendering interface.
  */

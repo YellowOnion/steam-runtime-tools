@@ -722,9 +722,9 @@ static int
 _srt_get_library_class (gchar **envp,
                         const gchar *library)
 {
-  Elf *elf = NULL;
-  int fd = -1;
-  int class = ELFCLASSNONE;
+  g_autoptr(Elf) elf = NULL;
+  glnx_autofd int fd = -1;
+  g_autoptr(GError) error = NULL;
 
   g_return_val_if_fail (envp != NULL, ELFCLASSNONE);
   g_return_val_if_fail (library != NULL, ELFCLASSNONE);
@@ -737,44 +737,21 @@ _srt_get_library_class (gchar **envp,
           || strstr (library, "/lib64") != NULL
           || strstr (library, "64/") != NULL)
         {
-          class = ELFCLASS64;
-          goto out;
+          return ELFCLASS64;
         }
       else
         {
-          class = ELFCLASS32;
-          goto out;
+          return ELFCLASS32;
         }
     }
 
-  if (elf_version (EV_CURRENT) == EV_NONE)
+  if (!_srt_open_elf (-1, library, &fd, &elf, &error))
     {
-      g_debug ("elf_version(EV_CURRENT): %s", elf_errmsg (elf_errno ()));
-      goto out;
+      g_debug ("%s", error->message);
+      return ELFCLASSNONE;
     }
 
-  if ((fd = open (library, O_RDONLY | O_CLOEXEC, 0)) < 0)
-    {
-      g_debug ("failed to open %s", library);
-      goto out;
-    }
-
-  if ((elf = elf_begin (fd, ELF_C_READ, NULL)) == NULL)
-    {
-      g_debug ("elf_begin() failed: %s", elf_errmsg (elf_errno ()));
-      goto out;
-    }
-
-  class = gelf_getclass (elf);
-
-out:
-  if (elf != NULL)
-    elf_end (elf);
-
-  if (fd >= 0)
-    close (fd);
-
-  return class;
+  return gelf_getclass (elf);
 }
 
 /*

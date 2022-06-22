@@ -2551,6 +2551,7 @@ bind_icds (PvRuntime *self,
   glnx_autofd int subdir_fd = -1;
   gsize multiarch_index;
   gsize i;
+  int digits = pv_count_decimal_digits (n_details);
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (runtime_architecture_check_valid (arch), FALSE);
@@ -2814,7 +2815,7 @@ bind_icds (PvRuntime *self,
         {
           g_autofree gchar *pattern = NULL;
 
-          seq_str = g_strdup_printf ("%" G_GSIZE_FORMAT, i);
+          seq_str = g_strdup_printf ("%.*" G_GSIZE_FORMAT, digits, i);
           numbered_subdir = g_build_filename (subdir_in_current_namespace,
                                               seq_str, NULL);
 
@@ -4378,6 +4379,7 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
  *  current execution environment
  * @details: An #IcdDetails holding a #SrtVulkanLayer or #SrtVulkanIcd,
  *  whichever is appropriate for @sub_dir
+ * @digits: Number of digits to pad length of numeric prefix
  * @seq: Sequence number of @details, used to make unique filenames
  * @search_path: Used to build `$VK_DRIVER_FILES` or a similar search path
  * @error: Used to raise an error on failure
@@ -4390,6 +4392,7 @@ setup_json_manifest (PvRuntime *self,
                      const gchar *sub_dir,
                      const gchar *write_to_dir,
                      IcdDetails *details,
+                     int digits,
                      gsize seq,
                      GString *search_path,
                      GError **error)
@@ -4450,8 +4453,8 @@ setup_json_manifest (PvRuntime *self,
 
           g_assert (details->paths_in_container[i] != NULL);
 
-          json_base = g_strdup_printf ("%" G_GSIZE_FORMAT "-%s.json",
-                                       seq, pv_multiarch_tuples[i]);
+          json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT "-%s.json",
+                                       digits, seq, pv_multiarch_tuples[i]);
           write_to_file = g_build_filename (write_to_dir, json_base, NULL);
           json_in_container = g_build_filename (self->overrides_in_container,
                                                 "share", sub_dir,
@@ -4520,7 +4523,7 @@ setup_json_manifest (PvRuntime *self,
       else
         json_in_provider = srt_vulkan_icd_get_json_path (icd);
 
-      json_base = g_strdup_printf ("%" G_GSIZE_FORMAT ".json", seq);
+      json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT ".json", digits, seq);
       json_in_container = g_build_filename (self->overrides_in_container,
                                             "share", sub_dir,
                                             json_base, NULL);
@@ -4564,6 +4567,7 @@ setup_each_json_manifest (PvRuntime *self,
 {
   gsize j;
   g_autofree gchar *write_to_dir = NULL;
+  int digits = pv_count_decimal_digits (details->len);
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
@@ -4581,7 +4585,7 @@ setup_each_json_manifest (PvRuntime *self,
     {
       if (!setup_json_manifest (self, bwrap, sub_dir, write_to_dir,
                                 g_ptr_array_index (details, j),
-                                j, search_path, error))
+                                digits, j, search_path, error))
         return FALSE;
     }
 

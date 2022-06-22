@@ -771,3 +771,25 @@ pv_delete_dangling_symlink (int dirfd,
                debug_path, name, g_strerror (saved_errno));
     }
 }
+
+/*
+ * Return the number of decimal digits in n.
+ */
+int
+pv_count_decimal_digits (gsize n)
+{
+  gsize next_power_of_10 = 10;
+  int required = 1;
+
+  while (G_UNLIKELY (n >= next_power_of_10))
+    {
+      required += 1;
+
+      if (G_UNLIKELY (next_power_of_10 > G_MAXSIZE / 10))
+        return required;
+
+      next_power_of_10 *= 10;
+    }
+
+  return required;
+}

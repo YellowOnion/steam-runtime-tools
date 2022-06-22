@@ -53,3 +53,5 @@ gchar *pv_current_namespace_path_to_host_path (const gchar *current_env_path);
 void pv_delete_dangling_symlink (int dirfd,
                                  const char *debug_path,
                                  const char *name);
+
+int pv_count_decimal_digits (gsize n);

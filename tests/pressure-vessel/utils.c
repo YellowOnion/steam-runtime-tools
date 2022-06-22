@@ -87,6 +87,38 @@ test_arbitrary_key (Fixture *f,
     g_assert_cmpstr (k, ==, "world");
 }
 
+typedef struct
+{
+  gsize n;
+  int digits;
+} DecimalDigitsData;
+
+static void
+test_count_decimal_digits (Fixture *f,
+                           gconstpointer context)
+{
+  static const DecimalDigitsData tests[] =
+  {
+      { 0, 1 },
+      { 1, 1 },
+      { 9, 1 },
+      { 10, 2 },
+      { 99, 2 },
+      { 100, 3 },
+      { 1000000000U, 10 },
+      { 4294967295U, 10 },
+#ifdef __LP64__
+      { 10000000000ULL, 11 },
+      { 10000000000000000000ULL, 20 },
+      { 18446744073709551615ULL, 20 },
+#endif
+  };
+  gsize i;
+
+  for (i = 0; i < G_N_ELEMENTS (tests); i++)
+    g_assert_cmpint (pv_count_decimal_digits (tests[i].n), ==, tests[i].digits);
+}
+
 static void
 test_run_sync (Fixture *f,
                gconstpointer context)
@@ -473,6 +505,8 @@ main (int argc,
   g_test_init (&argc, &argv, NULL);
   g_test_add ("/arbitrary-key", Fixture, NULL,
               setup, test_arbitrary_key, teardown);
+  g_test_add ("/count-decimal-digits", Fixture, NULL,
+              setup, test_count_decimal_digits, teardown);
   g_test_add ("/run-sync", Fixture, NULL,
               setup, test_run_sync, teardown);
   g_test_add ("/delete-dangling-symlink", Fixture, NULL,

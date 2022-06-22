@@ -1001,7 +1001,7 @@ main (int argc,
   g_set_prgname ("pressure-vessel-wrap");
 
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (FALSE);
+  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, FALSE);
 
   g_info ("pressure-vessel version %s", VERSION);
 
@@ -1087,7 +1087,7 @@ main (int argc,
     goto out;
 
   if (opt_verbose)
-    _srt_util_set_glib_log_handler (opt_verbose);
+    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, opt_verbose);
 
   interpreter_root = pv_wrap_detect_interpreter_root ();
 

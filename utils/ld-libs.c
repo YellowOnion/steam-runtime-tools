@@ -588,7 +588,7 @@ dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
             target = prefixed;
         }
         else
-        {   // name is a standard bare 'libfoo.so.X' spec:
+        {   // no path prefix, we can look up 'name' directly
             target = name;
         }
 
@@ -614,6 +614,7 @@ dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
     }
     else
     {
+        // name is a standard bare 'libfoo.so.X' spec:
         assert( !absolute );
     }
 

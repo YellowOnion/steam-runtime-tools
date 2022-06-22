@@ -542,7 +542,7 @@ search_ldpath (const char *name, const char *ldpath, ld_libs *ldlibs, int i)
 // and will contain a valid fd for the DSO. (and search_ldcache will
 // return true). Otherwise the entry will be empty and we will return false:
 static int
-dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
+dso_find (const char *name, ld_libs *ldlibs, int i, const char *runpaths, int *code, char **message)
 {
     int found = 0;
     const char *ldpath = NULL;
@@ -619,11 +619,27 @@ dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
     }
 
     LDLIB_DEBUG( ldlibs, DEBUG_SEARCH, "target DSO is %s", name );
-    // now search LD_LIBRARY_PATH, the ld.so.cache, and the default locations
-    // in that order (similar algorithm to the linker, but with the RPATH and
-    // ${ORIGIN} support dropped)
+
+    // Search in the same order that ld.so/libdl use:
+    //
+    // - DT_RPATH, if no DT_RUNPATH
+    // - LD_LIBRARY_PATH
+    // - DT_RUNPATH
+    // - ld.so.cache
+    // - hard-coded directories
+
+    // TODO: Implement DT_RPATH support?
+    // If runpaths is null, try the RPATH of the object that
+    // resulted in 'name' being loaded, then the RPATH of the object
+    // that resulted in that object being loaded, and so on up the hierarchy.
+    // We probably don't need this, because modern OSs use DT_RUNPATH.
+
     if( (ldpath = getenv( "LD_LIBRARY_PATH" )) )
         if( (found = search_ldpath( name, ldpath, ldlibs, i )) )
+            return found;
+
+    if( runpaths != NULL )
+        if( (found = search_ldpath( name, runpaths, ldlibs, i )) )
             return found;
 
     if( (found = search_ldcache( name, ldlibs, i )) )
@@ -635,11 +651,12 @@ dso_find (const char *name, ld_libs *ldlibs, int i, int *code, char **message)
     if (ldpath)
         _capsule_set_error( code, message, ENOENT,
                             "Could not find \"%s\" in LD_LIBRARY_PATH \"%s\", "
-                            "ld.so.cache, /lib or /usr/lib", name, ldpath );
+                            "ld.so.cache, DT_RUNPATH, /lib or /usr/lib",
+                            name, ldpath );
     else
         _capsule_set_error( code, message, ENOENT,
                             "Could not find \"%s\" in LD_LIBRARY_PATH (unset), "
-                            "ld.so.cache, /lib or /usr/lib", name );
+                            "ld.so.cache, DT_RUNPATH, /lib or /usr/lib", name );
 
     return 0;
 }
@@ -684,6 +701,7 @@ _dso_iterate_sections (ld_libs *ldlibs, int idx, int *code, char **error)
 {
     int had_error = 0;
     Elf_Scn *scn = NULL;
+    dso_needed_t *needed = ldlibs->needed;
 
     //debug(" ldlibs: %p; idx: %d (%s)", ldlibs, idx, ldlibs->needed[idx].name);
 
@@ -692,11 +710,11 @@ _dso_iterate_sections (ld_libs *ldlibs, int idx, int *code, char **error)
     LDLIB_DEBUG( ldlibs, DEBUG_ELF,
                  "%03d: fd:%d dso:%p ← %s",
                  idx,
-                 ldlibs->needed[idx].fd,
-                 ldlibs->needed[idx].dso,
-                 ldlibs->needed[idx].path );
+                 needed[idx].fd,
+                 needed[idx].dso,
+                 needed[idx].path );
 
-    while((scn = elf_nextscn( ldlibs->needed[idx].dso, scn )) != NULL)
+    while((scn = elf_nextscn( needed[idx].dso, scn )) != NULL)
     {
         GElf_Shdr shdr = {};
         gelf_getshdr( scn, &shdr );
@@ -707,17 +725,46 @@ _dso_iterate_sections (ld_libs *ldlibs, int idx, int *code, char **error)
             int i = 0;
             GElf_Dyn dyn = {};
             Elf_Data *edata = NULL;
+            const char *runpaths = NULL;
+            const char *rpaths = NULL;
 
             edata = elf_getdata( scn, edata );
 
-            // process eaach DT_* entry in the SHT_DYNAMIC section:
+            // process each DT_* entry in the SHT_DYNAMIC section,
+            // looking for DT_RUNPATH or DT_RPATH
+            while( !had_error                      &&
+                   gelf_getdyn( edata, i++, &dyn ) &&
+                   (dyn.d_tag != DT_NULL)          )
+            {
+
+                if( dyn.d_tag == DT_RUNPATH )
+                {
+                    runpaths = elf_strptr( needed[idx].dso, shdr.sh_link,
+                                           dyn.d_un.d_val );
+                    LDLIB_DEBUG( ldlibs, DEBUG_SEARCH|DEBUG_ELF,
+                                 "%s DT_RUNPATHs \"%s\"",
+                                 needed[idx].name, runpaths );
+                }
+                else if( dyn.d_tag == DT_RPATH )
+                {
+                    rpaths = elf_strptr( needed[idx].dso, shdr.sh_link,
+                                         dyn.d_un.d_val );
+                    LDLIB_DEBUG( ldlibs, DEBUG_SEARCH|DEBUG_ELF,
+                                 "TODO: Not using %s DT_RPATHs \"%s\"",
+                                 needed[idx].name, rpaths );
+                }
+            }
+
+            i = 0;
+
+            // process each DT_* entry in the SHT_DYNAMIC section again,
+            // this time looking for DT_NEEDED
             while( !had_error                      &&
                    gelf_getdyn( edata, i++, &dyn ) &&
                    (dyn.d_tag != DT_NULL)          )
             {
                 int skip = 0;
                 int next = ldlibs->last_idx;
-                dso_needed_t *needed = ldlibs->needed;
                 char *next_dso; // name of the dependency we're going to need
                 char *local_error = NULL;
 
@@ -765,7 +812,7 @@ _dso_iterate_sections (ld_libs *ldlibs, int idx, int *code, char **error)
                     break;
                 }
 
-                if( !dso_find( next_dso, ldlibs, next, code, &local_error ) )
+                if( !dso_find( next_dso, ldlibs, next, runpaths, code, &local_error ) )
                 {
                     had_error = 1;
                     ldlibs->not_found[ ldlibs->last_not_found++ ] =
@@ -928,7 +975,7 @@ ld_libs_init (ld_libs *ldlibs,
 int
 ld_libs_set_target (ld_libs *ldlibs, const char *target, int *code, char **message)
 {
-    return dso_find( target, ldlibs, 0, code, message );
+    return dso_find( target, ldlibs, 0, NULL, code, message );
 }
 
 int

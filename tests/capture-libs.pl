@@ -712,6 +712,24 @@ SKIP: {
        "should take provider's version by default when they have the same symbol versions");
 }
 
+my $testlibs = "$builddir/tests";
+run_ok(['rm', '-fr', $libdir]);
+mkdir($libdir);
+run_ok([$CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+        "--dest=$libdir", "path:$testlibs/libcapsule-test-dependent-runpath.so.1"], '>&2');
+{
+    opendir(my $dir_iter, $libdir);
+    my @links = sort grep { $_ ne '.' and $_ ne '..' } readdir $dir_iter;
+    foreach my $symlink (@links) {
+        diag "- $symlink -> ".readlink("$libdir/$symlink");
+    }
+    closedir $dir_iter;
+}
+like(readlink "$libdir/libcapsule-test-dependent-runpath.so.1", qr{^/run/host/},
+     '$libdir/libcapsule-test-dependent-runpath.so.1 is a symlink to /run/host + something');
+like(readlink "$libdir/libcapsule-test-dependency.so.1", qr{^/run/host/},
+     '$libdir/libcapsule-test-dependency.so.1 is a symlink to /run/host + something');
+
 done_testing;
 
 # vim:set sw=4 sts=4 et:

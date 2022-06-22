@@ -4719,6 +4719,7 @@ collect_vulkan_layers (PvRuntime *self,
           if (g_strcmp0 (self->provider->path_in_current_ns, "/") == 0)
             {
               /* It's in our current namespace, so we can dlopen it. */
+              g_info ("Evaluating dynamic string tokens in \"%s\"", resolved_library);
               issues = srt_check_library_presence (resolved_library,
                                                    arch->details->tuple, NULL,
                                                    SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
@@ -4732,6 +4733,9 @@ collect_vulkan_layers (PvRuntime *self,
                   g_clear_pointer (&details->resolved_libraries[multiarch_index], g_free);
                   continue;
                 }
+
+              g_info ("After evaluating dynamic string tokens: \"%s\"",
+                      srt_library_get_absolute_path (library));
 
               /* This is "borrowed" and we are about to invalidate it */
               resolved_library = NULL;

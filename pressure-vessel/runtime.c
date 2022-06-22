@@ -2362,12 +2362,36 @@ typedef enum
   ICD_KIND_META_LAYER,
 } IcdKind;
 
+static const char *
+icd_kind_to_string (IcdKind kind)
+{
+  switch (kind)
+    {
+      case ICD_KIND_NONEXISTENT:
+        return "does not exist";
+
+      case ICD_KIND_ABSOLUTE:
+        return "absolute path";
+
+      case ICD_KIND_SONAME:
+        return "SONAME";
+
+      case ICD_KIND_META_LAYER:
+        return "Vulkan meta-layer";
+
+      default:
+        g_return_val_if_reached ("(internal error!)");
+    }
+}
+
 typedef struct
 {
   /* (type SrtEglIcd) or (type SrtVulkanIcd) or (type SrtVdpauDriver)
    * or (type SrtVaApiDriver) or (type SrtVulkanLayer) or
    * (type SrtDriDriver) */
   gpointer icd;
+  /* Some sort of name borrowed from icd */
+  const char *debug_name;
   /* Either SONAME, or absolute path in the provider's namespace.
    * Keyed by the index of a multiarch tuple in multiarch_tuples. */
   gchar *resolved_libraries[PV_N_SUPPORTED_ARCHITECTURES];
@@ -2381,19 +2405,30 @@ icd_details_new (gpointer icd)
 {
   IcdDetails *self;
   gsize i;
+  const char *name;
 
   g_return_val_if_fail (G_IS_OBJECT (icd), NULL);
-  g_return_val_if_fail (SRT_IS_DRI_DRIVER (icd) ||
-                        SRT_IS_EGL_ICD (icd) ||
-                        SRT_IS_EGL_EXTERNAL_PLATFORM (icd) ||
-                        SRT_IS_VULKAN_ICD (icd) ||
-                        SRT_IS_VULKAN_LAYER (icd) ||
-                        SRT_IS_VDPAU_DRIVER (icd) ||
-                        SRT_IS_VA_API_DRIVER (icd),
-                        NULL);
+
+  if (SRT_IS_DRI_DRIVER (icd))
+    name = srt_dri_driver_get_library_path (icd);
+  else if (SRT_IS_EGL_ICD (icd))
+    name = srt_egl_icd_get_json_path (icd);
+  else if (SRT_IS_EGL_EXTERNAL_PLATFORM (icd))
+    name = srt_egl_external_platform_get_json_path (icd);
+  else if (SRT_IS_VULKAN_ICD (icd))
+    name = srt_vulkan_icd_get_json_path (icd);
+  else if (SRT_IS_VULKAN_LAYER (icd))
+    name = srt_vulkan_layer_get_json_path (icd);
+  else if (SRT_IS_VDPAU_DRIVER (icd))
+    name = srt_vdpau_driver_get_library_path (icd);
+  else if (SRT_IS_VA_API_DRIVER (icd))
+    name = srt_va_api_driver_get_library_path (icd);
+  else
+    g_return_val_if_reached (NULL);
 
   self = g_slice_new0 (IcdDetails);
   self->icd = g_object_ref (icd);
+  self->debug_name = name;
 
   for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
     {
@@ -2579,13 +2614,17 @@ bind_icds (PvRuntime *self,
       g_return_val_if_fail (details->paths_in_container[multiarch_index] == NULL,
                             FALSE);
 
-      g_info ("Capturing loadable module: %s",
+      g_info ("Capturing %s loadable module #%" G_GSIZE_FORMAT ": %s",
+              subdir, i, details->debug_name);
+      g_info ("Checking for implementation on %s: %s",
+              arch->details->tuple,
               details->resolved_libraries[multiarch_index]);
 
       if (!g_path_is_absolute (details->resolved_libraries[multiarch_index]))
         {
           g_autofree gchar *pattern = NULL;
 
+          g_debug ("Classified as SONAME");
           details->kinds[multiarch_index] = ICD_KIND_SONAME;
 
           pattern = g_strdup_printf ("even-if-older:%s:soname:%s",
@@ -2595,6 +2634,7 @@ bind_icds (PvRuntime *self,
           continue;
         }
 
+      g_debug ("Classified as path-based");
       details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
 
       /* We set subdir_in_current_namespace non-NULL if and only if at least
@@ -2606,7 +2646,7 @@ bind_icds (PvRuntime *self,
 
   /* If no driver was ICD_KIND_ABSOLUTE, then there is nothing more to do */
   if (subdir_in_current_namespace == NULL)
-    return TRUE;
+    goto success;
 
   if (g_mkdir_with_parents (subdir_in_current_namespace, 0700) != 0)
     return glnx_throw_errno_prefix (error, "Unable to create %s",
@@ -2891,6 +2931,18 @@ bind_icds (PvRuntime *self,
                                                                        seq_str ? seq_str : "",
                                                                        base,
                                                                        NULL);
+    }
+
+success:
+  for (i = 0; i < n_details; i++)
+    {
+      IcdDetails *details = details_arr[i];
+      const char *type_str = icd_kind_to_string (details->kinds[multiarch_index]);
+
+      g_info ("Captured %s loadable module #%" G_GSIZE_FORMAT ": %s",
+              subdir, i, details->debug_name);
+      g_info ("Implementation on %s: %s",
+              arch->details->tuple, type_str);
     }
 
   return TRUE;
@@ -4401,6 +4453,7 @@ setup_json_manifest (PvRuntime *self,
   SrtVulkanIcd *icd = NULL;
   SrtEglIcd *egl = NULL;
   SrtEglExternalPlatform *ext_platform = NULL;
+  gboolean loaded = FALSE;
   gboolean need_provider_json = FALSE;
   gsize i;
 
@@ -4418,26 +4471,23 @@ setup_json_manifest (PvRuntime *self,
   else
     g_return_val_if_reached (FALSE);
 
+  g_debug ("Setting up JSON manifest for %s loadable module #%" G_GSIZE_FORMAT ": %s",
+           sub_dir, seq, details->debug_name);
+
   /* If the layer failed to load, there's nothing to make available */
   if (layer != NULL)
-    {
-      if (!srt_vulkan_layer_check_error (layer, NULL))
-        return TRUE;
-    }
+    loaded = srt_vulkan_layer_check_error (layer, NULL);
   else if (egl != NULL)
-    {
-      if (!srt_egl_icd_check_error (egl, NULL))
-        return TRUE;
-    }
+    loaded = srt_egl_icd_check_error (egl, NULL);
   else if (ext_platform != NULL)
-    {
-      if (!srt_egl_external_platform_check_error (ext_platform, NULL))
-        return TRUE;
-    }
+    loaded = srt_egl_external_platform_check_error (ext_platform, NULL);
   else
+    loaded = srt_vulkan_icd_check_error (icd, NULL);
+
+  if (!loaded)
     {
-      if (!srt_vulkan_icd_check_error (icd, NULL))
-        return TRUE;
+      g_debug ("Original JSON manifest failed to load, nothing to do");
+      return TRUE;
     }
 
   for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
@@ -4459,6 +4509,10 @@ setup_json_manifest (PvRuntime *self,
           json_in_container = g_build_filename (self->overrides_in_container,
                                                 "share", sub_dir,
                                                 json_base, NULL);
+
+          g_debug ("Generating \"%s\" with path \"%s\", implementing \"%s\" in container",
+                   write_to_file, details->paths_in_container[i],
+                   json_in_container);
 
           if (layer != NULL)
             {
@@ -4505,6 +4559,8 @@ setup_json_manifest (PvRuntime *self,
       else if (details->kinds[i] == ICD_KIND_SONAME
                || details->kinds[i] == ICD_KIND_META_LAYER)
         {
+          g_debug ("Will use graphics stack provider JSON as-is for %s #%" G_GSIZE_FORMAT,
+                   sub_dir, seq);
           need_provider_json = TRUE;
         }
     }
@@ -4527,6 +4583,9 @@ setup_json_manifest (PvRuntime *self,
       json_in_container = g_build_filename (self->overrides_in_container,
                                             "share", sub_dir,
                                             json_base, NULL);
+
+      g_debug ("Copying \"%s\" as-is to implement \"%s\" in container",
+               json_in_provider, json_in_container);
 
       if (!pv_runtime_take_from_provider (self, bwrap,
                                           json_in_provider,

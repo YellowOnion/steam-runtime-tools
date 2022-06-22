@@ -990,7 +990,7 @@ main (int argc,
   g_set_prgname ("pressure-vessel-adverb");
 
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (FALSE);
+  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, FALSE);
 
   context = g_option_context_new (
       "COMMAND [ARG...]\n"
@@ -1024,7 +1024,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    _srt_util_set_glib_log_handler (opt_verbose);
+    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, opt_verbose);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 

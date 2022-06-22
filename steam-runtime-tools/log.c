@@ -323,6 +323,7 @@ log_to_stderr (const gchar *log_domain,
 
 /*
  * _srt_util_set_glib_log_handler:
+ * @extra_log_domain: (nullable): A log domain, usually %G_LOG_DOMAIN
  * @opt_verbose: If %TRUE, enable g_debug() messages and profiling
  *
  * Configure GLib to log to stderr with a message format suitable for
@@ -331,9 +332,14 @@ log_to_stderr (const gchar *log_domain,
  * ```
  * my-program[123]: W: Resonance cascade scenario occurred
  * ```
+ *
+ * The chosen message format is used for @extra_log_domain, and also
+ * for the `steam-runtime-tools` log domain used by the
+ * steam-runtime-tools library.
  */
 void
-_srt_util_set_glib_log_handler (gboolean opt_verbose)
+_srt_util_set_glib_log_handler (const char *extra_log_domain,
+                                gboolean opt_verbose)
 {
   GLogLevelFlags log_levels = (G_LOG_LEVEL_ERROR
                                | G_LOG_LEVEL_CRITICAL
@@ -356,6 +362,9 @@ _srt_util_set_glib_log_handler (gboolean opt_verbose)
       _srt_profiling_enable ();
     }
 
+  g_log_set_handler (extra_log_domain, log_levels,
+                     opt_timestamp ? log_to_stderr_with_timestamp : log_to_stderr,
+                     NULL);
   g_log_set_handler (G_LOG_DOMAIN, log_levels,
                      opt_timestamp ? log_to_stderr_with_timestamp : log_to_stderr,
                      NULL);

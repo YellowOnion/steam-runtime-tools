@@ -35,5 +35,6 @@
 #define _srt_log_failure(...) \
   g_log (G_LOG_DOMAIN, SRT_LOG_LEVEL_FAILURE, __VA_ARGS__)
 
-void _srt_util_set_glib_log_handler (gboolean opt_verbose);
+void _srt_util_set_glib_log_handler (const char *extra_log_domain,
+                                     gboolean opt_verbose);
 void _srt_util_set_up_logging (const char *identifier);

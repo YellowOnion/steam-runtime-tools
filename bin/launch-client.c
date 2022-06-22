@@ -821,7 +821,7 @@ main (int argc,
   g_set_prgname ("steam-runtime-launch-client");
 
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (FALSE);
+  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, FALSE);
 
   context = g_option_context_new ("COMMAND [ARG...]");
   g_option_context_set_summary (context,
@@ -847,7 +847,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    _srt_util_set_glib_log_handler (opt_verbose);
+    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, opt_verbose);
 
   if (opt_list)
     {

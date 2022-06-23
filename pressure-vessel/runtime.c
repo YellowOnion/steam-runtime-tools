@@ -5005,6 +5005,8 @@ pv_runtime_collect_libc_family (PvRuntime *self,
       g_autofree gchar *gconv_dir_in_provider = NULL;
       gboolean found = FALSE;
       const char *target_in_provider;
+      const char *gconv_prefix;
+      gsize n_slashes = 0;
 
       /* As with pv_runtime_collect_lib_symlink_data(), we need to remove the
        * provider prefix if present. Note that after this, target_in_provider
@@ -5018,24 +5020,33 @@ pv_runtime_collect_libc_family (PvRuntime *self,
       /* Either absolute, or relative to the root of the provider */
       dir = g_path_get_dirname (target_in_provider);
 
+      /* Normalize to be relative to the root so we have fewer cases
+       * to consider */
+      while (dir[n_slashes] == '/')
+        n_slashes++;
+
+      if (n_slashes)
+        memmove (dir, dir + n_slashes, strlen (dir) - n_slashes + 1);
+
+      g_debug ("glibc directory relative to provider root: %s", dir);
+
       /* We are assuming that in the glibc "Makeconfig", $(libdir) was the same as
        * $(slibdir) (this is the upstream default) or the same as "/usr$(slibdir)"
        * (like in Debian without the mergerd /usr). We also assume that $(gconvdir)
        * had its default value "$(libdir)/gconv".
-       * We check /usr first because otherwise, if the host is merged-/usr and the
+       * We prefer /usr because otherwise, if the host is merged-/usr and the
        * container is not, we might end up binding /lib instead of /usr/lib
-       * and that could cause issues. */
-      if (g_str_has_prefix (dir, "/usr/"))
-        memmove (dir, dir + strlen ("/usr"), strlen (dir) - strlen ("/usr") + 1);
-      else if (g_str_has_prefix (dir, "usr/"))
-        memmove (dir, dir + strlen ("usr"), strlen (dir) - strlen ("usr") + 1);
-
-      /* If it starts with "/app/" we don't prepend "/usr/" because we don't
-       * expect "/usr/app/" to be available */
-      if (g_str_has_prefix (dir, "/app/") || g_str_has_prefix (dir, "app/"))
-        gconv_dir_in_provider = g_build_filename ("/", dir, "gconv", NULL);
+       * and that could cause issues.
+       * Note that this special case is intentionally using g_str_has_prefix()
+       * and not flatpak_has_path_prefix(), so that it matches "lib64"
+       * or "lib/x86_64-linux-gnu" or similar. */
+      if (g_str_has_prefix (dir, "lib"))
+        gconv_prefix = "/usr/";
       else
-        gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
+        gconv_prefix = "/";
+
+      gconv_dir_in_provider = g_build_filename (gconv_prefix, dir, "gconv", NULL);
+      g_debug ("Checking for gconv in %s", gconv_dir_in_provider);
 
       if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
                                      self->provider->fd,
@@ -5067,10 +5078,9 @@ pv_runtime_collect_libc_family (PvRuntime *self,
             }
 
           g_clear_pointer (&gconv_dir_in_provider, g_free);
-          if (g_str_has_prefix (dir, "/app/"))
-            gconv_dir_in_provider = g_build_filename (dir, "gconv", NULL);
-          else
-            gconv_dir_in_provider = g_build_filename ("/usr", dir, "gconv", NULL);
+          gconv_dir_in_provider = g_build_filename (gconv_prefix, dir, "gconv", NULL);
+          g_debug ("Checking for gconv (after removing hwcaps subdirectories) in %s",
+                   gconv_dir_in_provider);
 
           if (_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
                                          self->provider->fd,
@@ -5085,8 +5095,8 @@ pv_runtime_collect_libc_family (PvRuntime *self,
       if (!found)
         {
           g_info ("We were expecting the gconv modules directory in the provider "
-                  "to be located in \"%s/gconv\", but instead it is missing",
-                  dir);
+                  "to be located in \"%s\", but instead it is missing",
+                  gconv_dir_in_provider);
         }
     }
 

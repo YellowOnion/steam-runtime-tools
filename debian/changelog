@@ -1,3 +1,26 @@
+steam-runtime-tools (0.20220620.1) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * pressure-vessel: Update libcapsule to v0.20220623.0
+    - Implement DT_RUNPATH for dependency search, fixing Vulkan layers
+      with non-trivial dependencies (notably MangoHud) on NixOS
+      (ValveSoftware/steam-runtime#511)
+  * pv-runtime: Pad numeric prefixes if necessary.
+    Otherwise, we could end up loading drivers or layers in an unexpected
+    order, with the layer numbered 10 loaded before the layer numbered 2.
+  * pressure-vessel: Override log handler for pressure-vessel log domain.
+    This fixes a regression that resulted in PRESSURE_VESSEL_VERBOSE and
+    STEAM_LINUX_RUNTIME_VERBOSE only being partially effective.
+  * pv-runtime: Improve debug output
+  * pv-runtime: Only prepend /usr to expected glibc gconv directory if it
+    starts with /lib
+  * .reuse/dep5: Update
+
+  [ Ludovico de Nittis ]
+  * API documentation: Remove "not optional" annotations
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 23 Jun 2022 17:24:59 +0100
+
 steam-runtime-tools (0.20220620.0) steamrt; urgency=medium
 
   * pressure-vessel improvements:

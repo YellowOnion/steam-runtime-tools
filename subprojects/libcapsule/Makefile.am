@@ -356,7 +356,9 @@ endif
 
 if ENABLE_SHARED
 AM_CPPFLAGS                         += -DENABLE_SHARED
-nobase_insttests_LTLIBRARIES        += tests/version1/libunversionedabibreak.la \
+nobase_insttests_LTLIBRARIES        += tests/libcapsule-test-dependency.la \
+                                       tests/libcapsule-test-dependent.la \
+                                       tests/version1/libunversionedabibreak.la \
                                        tests/version2/libunversionedabibreak.la \
                                        tests/version1/libunversionednumber.la \
                                        tests/version2/libunversionednumber.la \
@@ -376,6 +378,13 @@ nobase_insttests_LTLIBRARIES        += tests/version1/libunversionedabibreak.la 
                                        tests/version2/libversionedsymbols.la \
                                        tests/version1/libversionedupgrade.la \
                                        tests/version2/libversionedupgrade.la
+tests_libcapsule_test_dependency_la_CFLAGS        = $(test_fixture_cflags)
+tests_libcapsule_test_dependency_la_LDFLAGS       = -shared -version-number 1:0:0
+tests_libcapsule_test_dependency_la_SOURCES       = tests/dependency.c tests/dependency.h
+tests_libcapsule_test_dependent_la_CFLAGS         = $(test_fixture_cflags)
+tests_libcapsule_test_dependent_la_LIBADD         = tests/libcapsule-test-dependency.la
+tests_libcapsule_test_dependent_la_LDFLAGS        = -shared -version-number 1:0:0
+tests_libcapsule_test_dependent_la_SOURCES        = tests/dependent.c
 tests_version1_libunversionedabibreak_la_CFLAGS  = $(test_fixture_cflags)
 tests_version1_libunversionedabibreak_la_LDFLAGS = -shared -version-number 1:0:0
 tests_version2_libunversionedabibreak_la_CFLAGS  = $(test_fixture_cflags)
@@ -430,6 +439,19 @@ tests_version1_libversionedupgrade_la_LDFLAGS = -shared -version-number 1:0:0 \
 tests_version2_libversionedupgrade_la_CFLAGS  = $(test_fixture_cflags)
 tests_version2_libversionedupgrade_la_LDFLAGS = -shared -version-number 1:0:0 \
                                                 -Wl,--version-script=$(srcdir)/tests/version2/libversionedupgrade.map
+
+nobase_insttests_DATA                = tests/libcapsule-test-dependent-runpath.so.1
+# If we were linked with an ancient toolchain, use chrpath(1) to turn
+# the RPATH into a RUNPATH. If chrpath(1) wasn't found, assume the
+# toolchain is non-ancient.
+tests/libcapsule-test-dependent-runpath.so.1: tests/libcapsule-test-dependent.la
+	set -eu; \
+	cp -aL tests/.libs/libcapsule-test-dependent.so.1 $@.$$$$; \
+	if [ "$(CHRPATH)" != false ]; then \
+		$(CHRPATH) --list $@.$$$$; \
+		$(CHRPATH) --convert $@.$$$$; \
+	fi; \
+	mv $@.$$$$ $@
 endif
 
 LOG_DRIVER                           = env AM_TAP_AWK='$(AWK)'                 \
@@ -560,6 +582,7 @@ dist-hook: dist-hook-shim-sources
 install-data-local: install-data-local-shim-sources
 .PHONY: install-data-local-shim-sources
 
+CLEANFILES             += $(nobase_insttests_DATA)
 CLEANFILES             += $(testmeta_DATA)
 if ENABLE_HOST_PREFIX
 CLEANFILES             += data/$(HOST_PREFIX)capsule-mkstublib

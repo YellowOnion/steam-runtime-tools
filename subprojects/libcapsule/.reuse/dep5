@@ -18,3 +18,9 @@ License: LGPL-2.1-or-later
 Files: build-aux/git-version-gen
 Copyright: 2007-2017 Free Software Foundation, Inc.
 License: GPL-3.0-or-later
+
+Files: m4/ax_is_release.m4
+Copyright:
+ 2015 Philip Withnall
+ 2016 Collabora Ltd.
+License: FSFAP

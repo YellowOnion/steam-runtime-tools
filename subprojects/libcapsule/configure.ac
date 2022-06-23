@@ -26,6 +26,8 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AC_ARG_VAR([PERL])
 AC_PATH_PROG([PERL], [perl], [perl])
+AC_ARG_VAR([CHRPATH])
+AC_PATH_PROG([CHRPATH], [chrpath], [false])
 
 m4_pattern_forbid(
     [^AX_(IS_RELEASE|COMPILER_FLAGS)],

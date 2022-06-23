@@ -1,3 +1,10 @@
+libcapsule (0.20220623.0-0co1) upstream; urgency=medium
+
+  * ld-libs: Parse and use DT_RUNPATH to find dependencies
+  * .reuse/dep5: Update
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 23 Jun 2022 16:29:22 +0100
+
 libcapsule (0.20211026.0-0co1) upstream; urgency=medium
 
   [ Ludovico de Nittis ]

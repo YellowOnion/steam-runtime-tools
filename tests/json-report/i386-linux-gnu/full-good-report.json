@@ -219,7 +219,8 @@
       ],
       "va-api_drivers" : [
         {
-          "library_path" : "/usr/lib/dri/vdpau_drv_video.so"
+          "library_path" : "/usr/lib/dri/vdpau_drv_video.so",
+          "version": "libva2"
         },
         {
           "library_path" : "/home/me/.local/share/Steam/ubuntu12_32/steam-runtime/usr/lib/x86_64-linux-gnu/dri/dummy_drv_video.so"

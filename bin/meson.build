@@ -36,7 +36,7 @@ executable(
   'steam-runtime-check-requirements',
   'check-requirements.c',
   c_args : srt_c_args,
-  dependencies : [glib, gobject, libsteamrt_static_dep],
+  dependencies : [glib, gobject, libglnx_dep, libsteamrt_static_dep],
   install : true,
   # Use the adjacent GLib, ignoring LD_LIBRARY_PATH even if set
   build_rpath : bin_rpath,

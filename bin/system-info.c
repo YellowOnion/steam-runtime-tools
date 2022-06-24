@@ -512,6 +512,7 @@ print_va_api_details (JsonBuilder *builder,
         {
           const gchar *library;
           gchar *resolved = NULL;
+          SrtVaApiVersion version;
           json_builder_begin_object (builder);
           library = srt_va_api_driver_get_library_path (iter->data);
           json_builder_set_member_name (builder, "library_path");
@@ -521,6 +522,12 @@ print_va_api_details (JsonBuilder *builder,
             {
               json_builder_set_member_name (builder, "library_path_resolved");
               json_builder_add_string_value (builder, resolved);
+            }
+          version = srt_va_api_driver_get_version (iter->data);
+          if (version != SRT_VA_API_VERSION_UNKNOWN)
+            {
+              json_builder_set_member_name (builder, "version");
+              jsonify_enum (builder, SRT_TYPE_VA_API_VERSION, version);
             }
           if (srt_va_api_driver_is_extra (iter->data))
             {

@@ -34,6 +34,21 @@
 
 #include <steam-runtime-tools/macros.h>
 
+/**
+ * SrtVaApiVersion:
+ * @SRT_VA_API_VERSION_UNKNOWN: Unknown VA-API version
+ * @SRT_VA_API_VERSION_LIBVA1: libva version 1.x (VA-API version 0.x, SONAME `libva.so.1`)
+ * @SRT_VA_API_VERSION_LIBVA2: libva version 2.x (VA-API version 1.x, SONAME `libva.so.2`)
+ *
+ * The libva version a particular driver is compatible with.
+ */
+typedef enum
+{
+  SRT_VA_API_VERSION_UNKNOWN = 0,
+  SRT_VA_API_VERSION_LIBVA1 = 1,
+  SRT_VA_API_VERSION_LIBVA2 = 2
+} SrtVaApiVersion;
+
 typedef struct _SrtVaApiDriver SrtVaApiDriver;
 typedef struct _SrtVaApiDriverClass SrtVaApiDriverClass;
 
@@ -52,6 +67,8 @@ _SRT_PUBLIC
 gboolean srt_va_api_driver_is_extra (SrtVaApiDriver *self);
 _SRT_PUBLIC
 gchar *srt_va_api_driver_resolve_library_path (SrtVaApiDriver *self);
+_SRT_PUBLIC
+SrtVaApiVersion srt_va_api_driver_get_version (SrtVaApiDriver *self);
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (SrtVaApiDriver, g_object_unref)

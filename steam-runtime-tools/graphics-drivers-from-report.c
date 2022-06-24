@@ -150,16 +150,21 @@ _srt_va_api_driver_get_from_report (JsonObject *json_obj)
       for (guint j = 0; j < length; j++)
         {
           const gchar *va_api_path = NULL;
+          int version = SRT_VA_API_VERSION_UNKNOWN;
           gboolean is_extra = FALSE;
           JsonObject *json_va_api_obj = json_array_get_object_element (array, j);
           va_api_path = json_object_get_string_member_with_default (json_va_api_obj,
                                                                     "library_path",
                                                                     NULL);
+          _srt_json_object_get_enum_member (json_va_api_obj, "version",
+                                            SRT_TYPE_VA_API_VERSION, &version);
           is_extra = json_object_get_boolean_member_with_default (json_va_api_obj,
                                                                   "is_extra",
                                                                   FALSE);
 
-          va_api_drivers = g_list_prepend (va_api_drivers, srt_va_api_driver_new (va_api_path, is_extra));
+          va_api_drivers = g_list_prepend (va_api_drivers, srt_va_api_driver_new (va_api_path,
+                                                                                  version,
+                                                                                  is_extra));
         }
     }
 

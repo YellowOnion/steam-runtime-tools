@@ -606,6 +606,12 @@ keys:
         :   Absolute path to the driver module that has been found.
             This key is present only if **library_path** is relative.
 
+        **version**
+        :   A short machine-readable string identifying the libva version
+            this DRI driver is compatible with. The current possible values are
+            either **libva1** or **libva2**. This key is optional and is not
+            provided if the libva version could not be determined.
+
         **is_extra**
         :   A boolean value indicating whether the driver module is in an
             "unusual" location, probably not in the canonical search path.

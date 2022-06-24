@@ -39,7 +39,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <gelf.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

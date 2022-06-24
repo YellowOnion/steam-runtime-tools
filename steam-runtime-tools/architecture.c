@@ -48,8 +48,6 @@
 
 G_DEFINE_QUARK (srt-architecture-error-quark, srt_architecture_error)
 
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(Elf, elf_end);
-
 /* Backport the ARM 64 bit definition to support older toolchains */
 #ifndef EM_AARCH64
 #define EM_AARCH64	183	/* ARM AARCH64 */
@@ -276,18 +274,8 @@ _srt_architecture_read_elf (int dfd,
   g_return_val_if_fail (machine != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  dfd = glnx_dirfd_canonicalize (dfd);
-
-  if ((fd = openat (dfd, file_path, O_RDONLY | O_CLOEXEC, 0)) < 0)
-    return glnx_throw_errno_prefix (error, "Error reading \"%s\"", file_path);
-
-  if (elf_version (EV_CURRENT) == EV_NONE)
-    return glnx_throw (error, "elf_version(EV_CURRENT): %s",
-                       elf_errmsg (elf_errno ()));
-
-  if ((elf = elf_begin (fd, ELF_C_READ, NULL)) == NULL)
-    return glnx_throw (error, "Error reading library \"%s\": %s",
-                       file_path, elf_errmsg (elf_errno ()));
+  if (!_srt_open_elf (dfd, file_path, &fd, &elf, error))
+    return FALSE;
 
   if (gelf_getehdr (elf, &eh) == NULL)
     return glnx_throw (error, "Error reading \"%s\" ELF header: %s",

@@ -336,6 +336,10 @@ gchar ** _srt_graphics_get_vulkan_search_paths (const char *sysroot,
                                                 const char * const *multiarch_tuples,
                                                 const char *suffix);
 
+G_GNUC_INTERNAL
+SrtVaApiVersion _srt_va_api_driver_version (int dfd,
+                                            const gchar *library_path);
+
 #define _SRT_GRAPHICS_EXPLICIT_VULKAN_LAYER_SUFFIX "vulkan/explicit_layer.d"
 #define _SRT_GRAPHICS_IMPLICIT_VULKAN_LAYER_SUFFIX "vulkan/implicit_layer.d"
 #define _SRT_GRAPHICS_VULKAN_ICD_SUFFIX "vulkan/icd.d"
@@ -348,6 +352,7 @@ SrtVdpauDriver *srt_vdpau_driver_new (const gchar *library_path,
                                       const gchar *library_link,
                                       gboolean is_extra);
 SrtVaApiDriver *srt_va_api_driver_new (const gchar *library_path,
+                                       SrtVaApiVersion version,
                                        gboolean is_extra);
 
 SrtEglIcd *srt_egl_icd_new_error (const gchar *json_path,

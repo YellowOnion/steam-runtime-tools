@@ -27,6 +27,8 @@
 #include "steam-runtime-tools/graphics-internal.h"
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 /**
  * SECTION:graphics-drivers-vaapi
@@ -51,6 +53,7 @@ struct _SrtVaApiDriver
   /*< private >*/
   GObject parent;
   gchar *library_path;
+  SrtVaApiVersion version;
   gboolean is_extra;
 };
 
@@ -64,6 +67,7 @@ enum
 {
   VA_API_DRIVER_PROP_0,
   VA_API_DRIVER_PROP_LIBRARY_PATH,
+  VA_API_DRIVER_PROP_VERSION,
   VA_API_DRIVER_PROP_IS_EXTRA,
   VA_API_DRIVER_PROP_RESOLVED_LIBRARY_PATH,
   N_VA_API_DRIVER_PROPERTIES
@@ -88,6 +92,10 @@ srt_va_api_driver_get_property (GObject *object,
     {
       case VA_API_DRIVER_PROP_LIBRARY_PATH:
         g_value_set_string (value, self->library_path);
+        break;
+
+      case VA_API_DRIVER_PROP_VERSION:
+        g_value_set_enum (value, self->version);
         break;
 
       case VA_API_DRIVER_PROP_IS_EXTRA:
@@ -116,6 +124,12 @@ srt_va_api_driver_set_property (GObject *object,
       case VA_API_DRIVER_PROP_LIBRARY_PATH:
         g_return_if_fail (self->library_path == NULL);
         self->library_path = g_value_dup_string (value);
+        break;
+
+      case VA_API_DRIVER_PROP_VERSION:
+        /* Construct-only */
+        g_return_if_fail (self->version == SRT_VA_API_VERSION_UNKNOWN);
+        self->version = g_value_get_enum (value);
         break;
 
       case VA_API_DRIVER_PROP_IS_EXTRA:
@@ -166,6 +180,13 @@ srt_va_api_driver_class_init (SrtVaApiDriverClass *cls)
                           G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS);
 
+  va_api_driver_properties[VA_API_DRIVER_PROP_VERSION] =
+    g_param_spec_enum ("version", "Libva version",
+                       "The libva version that the DRI driver is compatible with",
+                       SRT_TYPE_VA_API_VERSION, SRT_VA_API_VERSION_UNKNOWN,
+                       G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                       G_PARAM_STATIC_STRINGS);
+
   va_api_driver_properties[VA_API_DRIVER_PROP_RESOLVED_LIBRARY_PATH] =
     g_param_spec_string ("resolved-library-path", "Resolved library path",
                          "Absolute path to the DRI driver library in provider's "
@@ -183,20 +204,108 @@ srt_va_api_driver_class_init (SrtVaApiDriverClass *cls)
 /*
  * srt_va_api_driver_new:
  * @library_path: (transfer none): the path to the library
+ * @version: required libva version, or %SRT_VA_API_VERSION_UNKNOWN if unknown
  * @is_extra: if the DRI driver is in an unusual path
  *
  * Returns: (transfer full): a new VA-API driver
  */
 SrtVaApiDriver *
 srt_va_api_driver_new (const gchar *library_path,
+                       SrtVaApiVersion version,
                        gboolean is_extra)
 {
   g_return_val_if_fail (library_path != NULL, NULL);
 
   return g_object_new (SRT_TYPE_VA_API_DRIVER,
                        "library-path", library_path,
+                       "version", version,
                        "is-extra", is_extra,
                        NULL);
+}
+
+/*
+ * _srt_va_api_driver_version:
+ * @dfd: A directory file descriptor, `AT_FDCWD` or -1
+ * @library_path: (type filename): Non-empty path to a library relative to @dfd
+ *
+ * Returns: The libva version, or %SRT_VA_API_VERSION_UNKNOWN if unsure.
+ */
+SrtVaApiVersion
+_srt_va_api_driver_version (int dfd,
+                            const gchar *library_path)
+{
+  g_autoptr(Elf) elf = NULL;
+  glnx_autofd int fd = -1;
+  Elf_Scn *scn = NULL;
+  GElf_Shdr shdr;
+  GElf_Shdr *shdr_mem;
+  Elf_Data *data;
+  gsize count;
+  gsize i;
+  SrtVaApiVersion version = SRT_VA_API_VERSION_UNKNOWN;
+  g_autoptr(GError) local_error = NULL;
+
+  g_return_val_if_fail (library_path != NULL, SRT_VA_API_VERSION_UNKNOWN);
+  g_return_val_if_fail (library_path[0] != '\0', SRT_VA_API_VERSION_UNKNOWN);
+
+  if (!_srt_open_elf (dfd, library_path, &fd, &elf, &local_error))
+    {
+      g_debug ("%s", local_error->message);
+      return SRT_VA_API_VERSION_UNKNOWN;
+    }
+
+  while ((scn = elf_nextscn (elf, scn)) != NULL)
+  {
+    shdr_mem = gelf_getshdr (scn, &shdr);
+    if (shdr_mem == NULL)
+      {
+        g_debug ("Failed to parse the library \"%s\" header: %s",
+                 library_path, elf_errmsg (-1));
+        return SRT_VA_API_VERSION_UNKNOWN;
+      }
+    if (shdr.sh_type == SHT_DYNSYM || shdr.sh_type == SHT_SYMTAB)
+      break;
+  }
+
+  if (scn == NULL)
+    {
+      g_debug ("Failed to find the symbols table for \"%s\"", library_path);
+      return SRT_VA_API_VERSION_UNKNOWN;
+    }
+
+  data = elf_getdata (scn, NULL);
+  count = shdr.sh_size / shdr.sh_entsize;
+  /* We are looking for a symbol named __vaDriverInit_x_*, where x is the
+   * VA-API ABI major version. */
+  for (i = 0; i < count; i++)
+    {
+      GElf_Sym sym;
+      const gchar *symbol;
+      SrtVaApiVersion parsed_version = SRT_VA_API_VERSION_UNKNOWN;
+
+      gelf_getsym (data, i, &sym);
+      symbol = elf_strptr (elf, shdr.sh_link, sym.st_name);
+
+      if (g_str_has_prefix (symbol, "__vaDriverInit_0_"))
+        parsed_version = SRT_VA_API_VERSION_LIBVA1;
+      else if (g_str_has_prefix (symbol, "__vaDriverInit_1_"))
+        parsed_version = SRT_VA_API_VERSION_LIBVA2;
+      else
+        continue;
+
+      g_debug ("Evaluating the symbol name %s", symbol);
+
+      if (version != SRT_VA_API_VERSION_UNKNOWN && parsed_version != version)
+        {
+          g_warning ("\"%s\" has symbols for multiple libva major versions",
+                     library_path);
+          return SRT_VA_API_VERSION_UNKNOWN;
+        }
+
+      version = parsed_version;
+    }
+
+  return version;
 }
 
 /**
@@ -247,4 +356,19 @@ srt_va_api_driver_resolve_library_path (SrtVaApiDriver *self)
   g_return_val_if_fail (self->library_path != NULL, NULL);
 
   return g_canonicalize_filename (self->library_path, NULL);
+}
+
+/**
+ * srt_va_api_driver_get_version:
+ * @self: The VA-API driver
+ *
+ * Returns the libva version that @self is compatible with.
+ *
+ * Returns: The libva version, or %SRT_VA_API_VERSION_UNKNOWN if unsure.
+ */
+SrtVaApiVersion
+srt_va_api_driver_get_version (SrtVaApiDriver *self)
+{
+  g_return_val_if_fail (SRT_IS_VA_API_DRIVER (self), FALSE);
+  return self->version;
 }

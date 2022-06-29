@@ -6979,7 +6979,11 @@ pv_runtime_bind (PvRuntime *self,
 
               /* Otherwise, if the directory exists, mask it */
               if (g_file_test (dir, G_FILE_TEST_IS_DIR))
-                flatpak_exports_add_path_tmpfs (exports, dir);
+                {
+                  g_info ("Hiding \"%s\" from the container so that \"%s/share/%s\" will be used instead",
+                          dir, self->overrides_in_container, suffix);
+                  flatpak_exports_add_path_tmpfs (exports, dir);
+                }
             }
         }
     }

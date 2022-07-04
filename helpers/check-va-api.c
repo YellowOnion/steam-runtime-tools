@@ -157,6 +157,10 @@ usage (int code)
 
   fprintf (fp, "Usage: %s [OPTIONS]\n",
            program_invocation_short_name);
+  fprintf (fp, "Options:\n");
+  fprintf (fp, "--help\t\tShow this help and exit\n");
+  fprintf (fp, "--verbose\tBe more verbose\n");
+  fprintf (fp, "--version\tShow version and exit\n");
   exit (code);
 }
 

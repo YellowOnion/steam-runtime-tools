@@ -310,7 +310,7 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
   if (type == SRT_VIRTUALIZATION_TYPE_FEX_EMU && signature.registers[0] >= 0x40000001U)
     {
       /* https://github.com/FEX-Emu/FEX/blob/HEAD/docs/CPUID.md */
-      if (_srt_x86_cpuid (mock_cpuid, TRUE, 0x40000001U, &eax, &ebx, &ecx, &edx))
+      if (_srt_x86_cpuid_count (mock_cpuid, 0x40000001U, 0, &eax, &ebx, &ecx, &edx))
         {
           g_debug ("FEX-Emu host machine from CPUID 0x4000_0001: 0x%u", (eax & 0xF));
 

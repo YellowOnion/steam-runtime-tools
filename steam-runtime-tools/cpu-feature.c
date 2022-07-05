@@ -104,6 +104,55 @@ gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
         }
     }
 }
+
+/*
+ * _srt_x86_cpuid_count:
+ * @mock_cpuid: (nullable) (element-type guint SrtCpuidData): mock data
+ *  to use instead of the real CPUID instruction
+ * @leaf: CPUID leaf to return
+ * @subleaf: CPUID subleaf to return
+ * @eax: (out) (not optional): used to return part of the given CPUID leaf and subleaf
+ * @ebx: (out) (not optional): used to return part of the given CPUID leaf and subleaf
+ * @ecx: (out) (not optional): used to return part of the given CPUID leaf and subleaf
+ * @edx: (out) (not optional): used to return part of the given CPUID leaf and subleaf
+ *
+ * Like `__cpuid_count()`, but with support for using mock data in unit tests.
+ *
+ * Returns: %TRUE on success
+ */
+gboolean _srt_x86_cpuid_count (GHashTable *mock_cpuid,
+                               guint leaf,
+                               guint subleaf,
+                               guint *eax,
+                               guint *ebx,
+                               guint *ecx,
+                               guint *edx)
+{
+  if (G_UNLIKELY (mock_cpuid != NULL))
+    {
+      SrtCpuidData *mock = g_hash_table_lookup (mock_cpuid,
+                                                GUINT_TO_POINTER ((guint64)subleaf << 32 | leaf));
+
+      if (mock == NULL)
+        return FALSE;
+
+      *eax = mock->registers[0];
+      *ebx = mock->registers[1];
+      *ecx = mock->registers[2];
+      *edx = mock->registers[3];
+      return TRUE;
+    }
+  else
+    {
+      *eax = *ebx = *ecx = *edx = 0;
+
+      /* __cpuid_count takes lvalues as parameters, and takes their addresses
+       * internally, so this is right even though it looks wrong. */
+      __cpuid_count (leaf, subleaf, (*eax), (*ebx), (*ecx), (*edx));
+      return TRUE;
+    }
+}
+
 #endif
 
 /**

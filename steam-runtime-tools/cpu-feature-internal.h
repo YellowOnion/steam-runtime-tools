@@ -85,6 +85,16 @@ gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
                          guint *ebx,
                          guint *ecx,
                          guint *edx);
+
+G_GNUC_INTERNAL
+gboolean _srt_x86_cpuid_count (GHashTable *mock_cpuid,
+                               guint leaf,
+                               guint subleaf,
+                               guint *eax,
+                               guint *ebx,
+                               guint *ecx,
+                               guint *edx);
+
 #endif
 
 G_GNUC_INTERNAL

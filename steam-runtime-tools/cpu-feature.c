@@ -181,7 +181,7 @@ _srt_feature_get_x86_flags (GHashTable *mock_cpuid,
   guint edx = 0;
 
   /* Get the list of basic features (leaf 1) */
-  if (_srt_x86_cpuid (mock_cpuid, FALSE, 1, &eax, &ebx, &ecx, &edx))
+  if (_srt_x86_cpuid (mock_cpuid, FALSE, _SRT_CPUID_LEAF_PROCESSOR_INFO, &eax, &ebx, &ecx, &edx))
     {
       *known |= (SRT_X86_FEATURE_CMPXCHG16B | SRT_X86_FEATURE_SSE3);
 
@@ -197,7 +197,7 @@ _srt_feature_get_x86_flags (GHashTable *mock_cpuid,
       return present;
     }
 
-  if (_srt_x86_cpuid (mock_cpuid, FALSE, 0x80000001, &eax, &ebx, &ecx, &edx))
+  if (_srt_x86_cpuid (mock_cpuid, FALSE, _SRT_CPUID_LEAF_EXT_PROCESSOR_INFO, &eax, &ebx, &ecx, &edx))
     {
       *known |= SRT_X86_FEATURE_X86_64;
 

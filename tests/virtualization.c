@@ -79,12 +79,6 @@ teardown (Fixture *f,
   g_free (f->builddir);
 }
 
-#define FEATURES_LEAF (1U)
-#define HYPERVISOR_PRESENT (1U << 31)
-
-#define HYPERVISOR_LEAF (0x40000000U)
-
-#define FEX_INFO_LEAF (0x40000001U)
 #define FEX_ARCH_AARCH64 (2U)
 
 static void
@@ -121,8 +115,8 @@ test_cpuid (Fixture *f,
       g_autoptr(SrtVirtualizationInfo) virt = NULL;
 
       g_hash_table_remove_all (mock_cpuid);
-      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (FEATURES_LEAF),
-                            _srt_cpuid_data_new (0, 0, HYPERVISOR_PRESENT, 0));
+      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_PROCESSOR_INFO),
+                            _srt_cpuid_data_new (0, 0, _SRT_CPUID_FLAG_PROCESSOR_INFO_ECX_HYPERVISOR_PRESENT, 0));
       virt = _srt_check_virtualization (mock_cpuid, "", sysroot_fd);
       g_assert_nonnull (virt);
       g_assert_cmpint (srt_virtualization_info_get_virtualization_type (virt), ==,
@@ -136,9 +130,9 @@ test_cpuid (Fixture *f,
       g_autoptr(SrtVirtualizationInfo) virt = NULL;
 
       g_hash_table_remove_all (mock_cpuid);
-      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (FEATURES_LEAF),
-                            _srt_cpuid_data_new (0, 0, HYPERVISOR_PRESENT, 0));
-      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (HYPERVISOR_LEAF),
+      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_PROCESSOR_INFO),
+                            _srt_cpuid_data_new (0, 0, _SRT_CPUID_FLAG_PROCESSOR_INFO_ECX_HYPERVISOR_PRESENT, 0));
+      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_HYPERVISOR_ID),
                             _srt_cpuid_data_new_for_signature ("xxxxKVMKVMKVM"));
       virt = _srt_check_virtualization (mock_cpuid, "", sysroot_fd);
       g_assert_nonnull (virt);
@@ -153,11 +147,11 @@ test_cpuid (Fixture *f,
       g_autoptr(SrtVirtualizationInfo) virt = NULL;
 
       g_hash_table_remove_all (mock_cpuid);
-      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (FEATURES_LEAF),
+      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_PROCESSOR_INFO),
                             _srt_cpuid_data_new (0, 0, 0, 0));
-      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (HYPERVISOR_LEAF),
+      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_HYPERVISOR_ID),
                             _srt_cpuid_data_new_for_signature ("xxxxFEXIFEXIEMU"));
-      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (FEX_INFO_LEAF),
+      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_FEX_INFO),
                             _srt_cpuid_data_new (FEX_ARCH_AARCH64, 0, 0, 0));
       virt = _srt_check_virtualization (mock_cpuid, "#FEX-2203-64-g8ad14728",
                                         sysroot_fd);
@@ -223,9 +217,9 @@ test_dmi_id (Fixture *f,
 #if defined(__x86_64__) || defined(__i386__)
       /* KVM from CPUID is not overwritten by QEMU from DMI ID */
       g_hash_table_remove_all (mock_cpuid);
-      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (FEATURES_LEAF),
-                            _srt_cpuid_data_new (0, 0, HYPERVISOR_PRESENT, 0));
-      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (HYPERVISOR_LEAF),
+      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_PROCESSOR_INFO),
+                            _srt_cpuid_data_new (0, 0, _SRT_CPUID_FLAG_PROCESSOR_INFO_ECX_HYPERVISOR_PRESENT, 0));
+      g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_HYPERVISOR_ID),
                             _srt_cpuid_data_new_for_signature ("xxxxKVMKVMKVM"));
       virt = _srt_check_virtualization (mock_cpuid, "", sysroot_fd);
       g_assert_nonnull (virt);

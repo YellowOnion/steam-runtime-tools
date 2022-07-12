@@ -33,6 +33,15 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#define _SRT_CPUID_LEAF_PROCESSOR_INFO (1U)
+#define _SRT_CPUID_FLAG_PROCESSOR_INFO_ECX_HYPERVISOR_PRESENT (1U << 31)
+
+#define _SRT_CPUID_LEAF_HYPERVISOR_ID (0x40000000U)
+#define _SRT_CPUID_LEAF_FEX_INFO (0x40000001U)
+
+#define _SRT_CPUID_LEAF_EXT_FUNCTIONS (0x80000000U)
+#define _SRT_CPUID_LEAF_EXT_PROCESSOR_INFO (0x80000001U)
+
 /* All real features (not including UNKNOWN) */
 #define _SRT_X86_FEATURE_ALL (SRT_X86_FEATURE_X86_64 \
                               | SRT_X86_FEATURE_SSE3 \

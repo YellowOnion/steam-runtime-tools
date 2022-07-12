@@ -233,9 +233,9 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
 
   /* CPUID leaf 1, bit 31 is the Hypervisor Present Bit.
    * https://lwn.net/Articles/301888/ */
-  if (_srt_x86_cpuid (mock_cpuid, FALSE, 1, &eax, &ebx, &ecx, &edx))
+  if (_srt_x86_cpuid (mock_cpuid, FALSE, _SRT_CPUID_LEAF_PROCESSOR_INFO, &eax, &ebx, &ecx, &edx))
     {
-      if (ecx & (1U << 31))
+      if (ecx & _SRT_CPUID_FLAG_PROCESSOR_INFO_ECX_HYPERVISOR_PRESENT)
         {
           g_debug ("Hypervisor Present bit set in CPUID 0x1");
           hypervisor_present = TRUE;
@@ -273,12 +273,12 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
     {
       if (_srt_x86_cpuid (mock_cpuid,
                           TRUE,
-                          0x40000000U,
+                          _SRT_CPUID_LEAF_HYPERVISOR_ID,
                           &signature.registers[0],
                           &signature.registers[1],
                           &signature.registers[2],
                           &signature.registers[3])
-          && signature.registers[0] >= 0x40000000U)
+          && signature.registers[0] >= _SRT_CPUID_LEAF_HYPERVISOR_ID)
         {
           /* The hypervisor signature appears in EBX, ECX, EDX, so skip
            * the first 4 bytes. */
@@ -307,10 +307,10 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
         }
     }
 
-  if (type == SRT_VIRTUALIZATION_TYPE_FEX_EMU && signature.registers[0] >= 0x40000001U)
+  if (type == SRT_VIRTUALIZATION_TYPE_FEX_EMU && signature.registers[0] >= _SRT_CPUID_LEAF_FEX_INFO)
     {
       /* https://github.com/FEX-Emu/FEX/blob/HEAD/docs/CPUID.md */
-      if (_srt_x86_cpuid_count (mock_cpuid, 0x40000001U, 0, &eax, &ebx, &ecx, &edx))
+      if (_srt_x86_cpuid_count (mock_cpuid, _SRT_CPUID_LEAF_FEX_INFO, 0, &eax, &ebx, &ecx, &edx))
         {
           g_debug ("FEX-Emu host machine from CPUID 0x4000_0001: 0x%u", (eax & 0xF));
 

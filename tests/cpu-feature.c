@@ -85,44 +85,44 @@ test_cpu_feature (Fixture *f,
   g_assert_cmpint (known, ==, SRT_X86_FEATURE_NONE);
   g_assert_cmpint (present, ==, SRT_X86_FEATURE_NONE);
 
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (1),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0, 0, 0, 0));
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (0x80000001U),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_EXT_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0, 0, 0, 0));
   present = _srt_feature_get_x86_flags (mock_cpuid, &known);
   g_assert_cmpint (known, ==, _SRT_X86_FEATURE_ALL);
   g_assert_cmpint (present, ==, SRT_X86_FEATURE_NONE);
 
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (1),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0,
                                              0,
                                              (bit_CMPXCHG16B | bit_SSE3),
                                              0));
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (0x80000001U),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_EXT_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0, 0, 0, bit_LM));
   present = _srt_feature_get_x86_flags (mock_cpuid, &known);
   g_assert_cmpint (known, ==, _SRT_X86_FEATURE_ALL);
   g_assert_cmpint (present, ==, _SRT_X86_FEATURE_ALL);
 
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (1),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0, 0, bit_CMPXCHG16B, 0));
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (0x80000001U),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_EXT_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0, 0, 0, 0));
   present = _srt_feature_get_x86_flags (mock_cpuid, &known);
   g_assert_cmpint (known, ==, _SRT_X86_FEATURE_ALL);
   g_assert_cmpint (present, ==, SRT_X86_FEATURE_CMPXCHG16B);
 
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (1),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0, 0, bit_SSE3, 0));
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (0x80000001U),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_EXT_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0, 0, 0, 0));
   present = _srt_feature_get_x86_flags (mock_cpuid, &known);
   g_assert_cmpint (known, ==, _SRT_X86_FEATURE_ALL);
   g_assert_cmpint (present, ==, SRT_X86_FEATURE_SSE3);
 
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (1),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0, 0, 0, 0));
-  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (0x80000001U),
+  g_hash_table_replace (mock_cpuid, GUINT_TO_POINTER (_SRT_CPUID_LEAF_EXT_PROCESSOR_INFO),
                         _srt_cpuid_data_new (0, 0, 0, bit_LM));
   present = _srt_feature_get_x86_flags (mock_cpuid, &known);
   g_assert_cmpint (known, ==, _SRT_X86_FEATURE_ALL);

@@ -47,7 +47,24 @@
                               | SRT_X86_FEATURE_SSE3 \
                               | SRT_X86_FEATURE_CMPXCHG16B)
 
+typedef struct
+{
+  guint leaf;
+  guint subleaf;
+} SrtCpuidKey;
+
 #if defined(__x86_64__) || defined(__i386__)
+static inline SrtCpuidKey *
+_srt_cpuid_key_new (guint leaf,
+                    guint subleaf)
+{
+  SrtCpuidKey *ret = g_new0 (SrtCpuidKey, 1);
+
+  ret->leaf = leaf;
+  ret->subleaf = subleaf;
+  return ret;
+}
+
 typedef union
 {
   char text[17];
@@ -80,10 +97,22 @@ _srt_cpuid_data_new_for_signature (const char *text)
 #endif
 
 static inline void
+_srt_cpuid_key_free (gpointer self)
+{
+  g_free (self);
+}
+
+static inline void
 _srt_cpuid_data_free (gpointer self)
 {
   g_free (self);
 }
+
+G_GNUC_INTERNAL
+gboolean _srt_cpuid_key_equals (gconstpointer p1,
+                                gconstpointer p2);
+G_GNUC_INTERNAL
+guint _srt_cpuid_key_hash (gconstpointer key);
 
 #if defined(__x86_64__) || defined(__i386__)
 G_GNUC_INTERNAL

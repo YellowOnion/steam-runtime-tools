@@ -203,7 +203,7 @@ static const struct
 
 /**
  * _srt_check_virtualization:
- * @mock_cpuid: (nullable) (element-type guint SrtCpuidData): mock data
+ * @mock_cpuid: (nullable) (element-type SrtCpuidKey SrtCpuidData): mock data
  *  to use instead of the real CPUID instruction
  * @sysroot_fd: Sysroot file descriptor
  *

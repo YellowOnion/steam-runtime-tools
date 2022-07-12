@@ -49,7 +49,7 @@
 #if defined(__x86_64__) || defined(__i386__)
 /*
  * _srt_x86_cpuid:
- * @mock_cpuid: (nullable) (element-type guint SrtCpuidData): mock data
+ * @mock_cpuid: (nullable) (element-type SrtCpuidKey SrtCpuidData): mock data
  *  to use instead of the real CPUID instruction
  * @force: if %TRUE, use low-level `__cpuid()`, a thin wrapper around the
  *  CPUID instruction. If %FALSE, use `__get_cpuid()`, which does
@@ -75,8 +75,8 @@ gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
 {
   if (G_UNLIKELY (mock_cpuid != NULL))
     {
-      SrtCpuidData *mock = g_hash_table_lookup (mock_cpuid,
-                                                GUINT_TO_POINTER (leaf));
+      const SrtCpuidKey key = { leaf, 0 };
+      SrtCpuidData *mock = g_hash_table_lookup (mock_cpuid, &key);
 
       if (mock == NULL)
         return FALSE;
@@ -107,7 +107,7 @@ gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
 
 /*
  * _srt_x86_cpuid_count:
- * @mock_cpuid: (nullable) (element-type guint SrtCpuidData): mock data
+ * @mock_cpuid: (nullable) (element-type SrtCpuidKey SrtCpuidData): mock data
  *  to use instead of the real CPUID instruction
  * @leaf: CPUID leaf to return
  * @subleaf: CPUID subleaf to return
@@ -130,8 +130,8 @@ gboolean _srt_x86_cpuid_count (GHashTable *mock_cpuid,
 {
   if (G_UNLIKELY (mock_cpuid != NULL))
     {
-      SrtCpuidData *mock = g_hash_table_lookup (mock_cpuid,
-                                                GUINT_TO_POINTER ((guint64)subleaf << 32 | leaf));
+      const SrtCpuidKey key = { leaf, subleaf };
+      SrtCpuidData *mock = g_hash_table_lookup (mock_cpuid, &key);
 
       if (mock == NULL)
         return FALSE;
@@ -157,7 +157,7 @@ gboolean _srt_x86_cpuid_count (GHashTable *mock_cpuid,
 
 /**
  * _srt_feature_get_x86_flags:
- * @mock_cpuid: (nullable) (element-type guint SrtCpuidData): mock data
+ * @mock_cpuid: (nullable) (element-type SrtCpuidKey SrtCpuidData): mock data
  *  to use instead of the real CPUID instruction
  * @known: (out): Used to return the #SrtX86FeatureFlags
  *  that have been checked
@@ -213,4 +213,22 @@ _srt_feature_get_x86_flags (GHashTable *mock_cpuid,
 #endif
 
   return present;
+}
+
+gboolean
+_srt_cpuid_key_equals (gconstpointer p1,
+                       gconstpointer p2)
+{
+  const SrtCpuidKey *k1 = p1;
+  const SrtCpuidKey *k2 = p2;
+
+  return k1->leaf == k2->leaf && k1->subleaf == k2->subleaf;
+}
+
+guint
+_srt_cpuid_key_hash (gconstpointer key)
+{
+  const SrtCpuidKey *k = key;
+
+  return k->leaf ^ k->subleaf;
 }

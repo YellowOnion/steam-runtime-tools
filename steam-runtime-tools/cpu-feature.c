@@ -51,82 +51,32 @@
  * _srt_x86_cpuid:
  * @mock_cpuid: (nullable) (element-type SrtCpuidKey SrtCpuidData): mock data
  *  to use instead of the real CPUID instruction
- * @force: if %TRUE, use low-level `__cpuid()`, a thin wrapper around the
- *  CPUID instruction. If %FALSE, use `__get_cpuid()`, which does
+ * @force: if %TRUE, use the equivalent of low-level `__cpuid_count()`,
+ *  a thin wrapper around the CPUID instruction.
+ *  If %FALSE, use the equivalent of `__get_cpuid_count()`, which does
  *  capability checking but only works in the 0x0xxxxxxx and 0x8xxxxxxx
  *  ranges.
  * @leaf: CPUID leaf to return
+ * @subleaf: CPUID subleaf to return (use 0 if @leaf is a leaf for which
+ *  the subleaf is ignored by the CPU)
  * @eax: (out) (not optional): used to return part of the given CPUID leaf
  * @ebx: (out) (not optional): used to return part of the given CPUID leaf
  * @ecx: (out) (not optional): used to return part of the given CPUID leaf
  * @edx: (out) (not optional): used to return part of the given CPUID leaf
  *
- * Like `__get_cpuid()`, but with support for using mock data in unit tests.
+ * Like `__get_cpuid_count()`, but with support for using mock data in
+ * unit tests.
  *
  * Returns: %TRUE on success
  */
 gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
                          gboolean force,
                          guint leaf,
+                         guint subleaf,
                          guint *eax,
                          guint *ebx,
                          guint *ecx,
                          guint *edx)
-{
-  if (G_UNLIKELY (mock_cpuid != NULL))
-    {
-      const SrtCpuidKey key = { leaf, 0 };
-      SrtCpuidData *mock = g_hash_table_lookup (mock_cpuid, &key);
-
-      if (mock == NULL)
-        return FALSE;
-
-      *eax = mock->registers[0];
-      *ebx = mock->registers[1];
-      *ecx = mock->registers[2];
-      *edx = mock->registers[3];
-      return TRUE;
-    }
-  else
-    {
-      *eax = *ebx = *ecx = *edx = 0;
-
-      if (force)
-        {
-          /* __cpuid takes lvalues as parameters, and takes their addresses
-           * internally, so this is right even though it looks wrong. */
-          __cpuid (leaf, (*eax), (*ebx), (*ecx), (*edx));
-          return TRUE;
-        }
-      else
-        {
-          return (__get_cpuid (leaf, eax, ebx, ecx, edx) == 1);
-        }
-    }
-}
-
-/*
- * _srt_x86_cpuid_count:
- * @mock_cpuid: (nullable) (element-type SrtCpuidKey SrtCpuidData): mock data
- *  to use instead of the real CPUID instruction
- * @leaf: CPUID leaf to return
- * @subleaf: CPUID subleaf to return
- * @eax: (out) (not optional): used to return part of the given CPUID leaf and subleaf
- * @ebx: (out) (not optional): used to return part of the given CPUID leaf and subleaf
- * @ecx: (out) (not optional): used to return part of the given CPUID leaf and subleaf
- * @edx: (out) (not optional): used to return part of the given CPUID leaf and subleaf
- *
- * Like `__cpuid_count()`, but with support for using mock data in unit tests.
- *
- * Returns: %TRUE on success
- */
-gboolean _srt_x86_cpuid_count (GHashTable *mock_cpuid,
-                               guint leaf,
-                               guint subleaf,
-                               guint *eax,
-                               guint *ebx,
-                               guint *ecx,
-                               guint *edx)
 {
   if (G_UNLIKELY (mock_cpuid != NULL))
     {
@@ -146,13 +96,21 @@ gboolean _srt_x86_cpuid_count (GHashTable *mock_cpuid,
     {
       *eax = *ebx = *ecx = *edx = 0;
 
+      /* This range check is equivalent to what __get_cpuid and
+       * __get_cpuid_count do. We can't use __get_cpuid_count
+       * directly, because gcc 4.8 in scout doesn't have it. */
+      if (!force && __get_cpuid_max (leaf & 0x80000000U, NULL) < leaf)
+        return FALSE;
+
       /* __cpuid_count takes lvalues as parameters, and takes their addresses
-       * internally, so this is right even though it looks wrong. */
+       * internally, so this is right even though it looks wrong.
+       * __cpuid is equivalent to __cpuid_count with an unspecified
+       * subleaf, so this is fine to use for leaves that ignore the
+       * subleaf. */
       __cpuid_count (leaf, subleaf, (*eax), (*ebx), (*ecx), (*edx));
       return TRUE;
     }
 }
-
 #endif
 
 /**
@@ -181,7 +139,8 @@ _srt_feature_get_x86_flags (GHashTable *mock_cpuid,
   guint edx = 0;
 
   /* Get the list of basic features (leaf 1) */
-  if (_srt_x86_cpuid (mock_cpuid, FALSE, _SRT_CPUID_LEAF_PROCESSOR_INFO, &eax, &ebx, &ecx, &edx))
+  if (_srt_x86_cpuid (mock_cpuid, FALSE, _SRT_CPUID_LEAF_PROCESSOR_INFO, 0,
+                      &eax, &ebx, &ecx, &edx))
     {
       *known |= (SRT_X86_FEATURE_CMPXCHG16B | SRT_X86_FEATURE_SSE3);
 
@@ -197,7 +156,8 @@ _srt_feature_get_x86_flags (GHashTable *mock_cpuid,
       return present;
     }
 
-  if (_srt_x86_cpuid (mock_cpuid, FALSE, _SRT_CPUID_LEAF_EXT_PROCESSOR_INFO, &eax, &ebx, &ecx, &edx))
+  if (_srt_x86_cpuid (mock_cpuid, FALSE, _SRT_CPUID_LEAF_EXT_PROCESSOR_INFO, 0,
+                      &eax, &ebx, &ecx, &edx))
     {
       *known |= SRT_X86_FEATURE_X86_64;
 

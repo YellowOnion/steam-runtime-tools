@@ -103,7 +103,7 @@ test_cpuid (Fixture *f,
     {
       g_autoptr(SrtVirtualizationInfo) virt = NULL;
 
-      virt = _srt_check_virtualization (mock_cpuid, "", sysroot_fd);
+      virt = _srt_check_virtualization (mock_cpuid, sysroot_fd);
       g_assert_nonnull (virt);
       g_assert_cmpint (srt_virtualization_info_get_virtualization_type (virt), ==,
                        SRT_VIRTUALIZATION_TYPE_NONE);
@@ -120,7 +120,7 @@ test_cpuid (Fixture *f,
       g_hash_table_replace (mock_cpuid,
                             _srt_cpuid_key_new (_SRT_CPUID_LEAF_PROCESSOR_INFO, 0),
                             _srt_cpuid_data_new (0, 0, _SRT_CPUID_FLAG_PROCESSOR_INFO_ECX_HYPERVISOR_PRESENT, 0));
-      virt = _srt_check_virtualization (mock_cpuid, "", sysroot_fd);
+      virt = _srt_check_virtualization (mock_cpuid, sysroot_fd);
       g_assert_nonnull (virt);
       g_assert_cmpint (srt_virtualization_info_get_virtualization_type (virt), ==,
                        SRT_VIRTUALIZATION_TYPE_UNKNOWN);
@@ -139,7 +139,7 @@ test_cpuid (Fixture *f,
       g_hash_table_replace (mock_cpuid,
                             _srt_cpuid_key_new (_SRT_CPUID_LEAF_HYPERVISOR_ID, 0),
                             _srt_cpuid_data_new_for_signature ("xxxxKVMKVMKVM"));
-      virt = _srt_check_virtualization (mock_cpuid, "", sysroot_fd);
+      virt = _srt_check_virtualization (mock_cpuid, sysroot_fd);
       g_assert_nonnull (virt);
       g_assert_cmpint (srt_virtualization_info_get_virtualization_type (virt), ==,
                        SRT_VIRTUALIZATION_TYPE_KVM);
@@ -154,15 +154,14 @@ test_cpuid (Fixture *f,
       g_hash_table_remove_all (mock_cpuid);
       g_hash_table_replace (mock_cpuid,
                             _srt_cpuid_key_new (_SRT_CPUID_LEAF_PROCESSOR_INFO, 0),
-                            _srt_cpuid_data_new (0, 0, 0, 0));
+                            _srt_cpuid_data_new (0, 0, _SRT_CPUID_FLAG_PROCESSOR_INFO_ECX_HYPERVISOR_PRESENT, 0));
       g_hash_table_replace (mock_cpuid,
                             _srt_cpuid_key_new (_SRT_CPUID_LEAF_HYPERVISOR_ID, 0),
                             _srt_cpuid_data_new_for_signature ("xxxxFEXIFEXIEMU"));
       g_hash_table_replace (mock_cpuid,
                             _srt_cpuid_key_new (_SRT_CPUID_LEAF_FEX_INFO, 0),
                             _srt_cpuid_data_new (FEX_ARCH_AARCH64, 0, 0, 0));
-      virt = _srt_check_virtualization (mock_cpuid, "#FEX-2203-64-g8ad14728",
-                                        sysroot_fd);
+      virt = _srt_check_virtualization (mock_cpuid, sysroot_fd);
       g_assert_nonnull (virt);
       g_assert_cmpint (srt_virtualization_info_get_virtualization_type (virt), ==,
                        SRT_VIRTUALIZATION_TYPE_FEX_EMU);
@@ -196,7 +195,7 @@ test_dmi_id (Fixture *f,
       glnx_opendirat (AT_FDCWD, sysroot, TRUE, &sysroot_fd, &error);
       g_assert_no_error (error);
 
-      virt = _srt_check_virtualization (mock_cpuid, "", sysroot_fd);
+      virt = _srt_check_virtualization (mock_cpuid, sysroot_fd);
       g_assert_nonnull (virt);
       g_assert_cmpint (srt_virtualization_info_get_virtualization_type (virt), ==,
                        SRT_VIRTUALIZATION_TYPE_ORACLE);
@@ -215,7 +214,7 @@ test_dmi_id (Fixture *f,
       glnx_opendirat (AT_FDCWD, sysroot, TRUE, &sysroot_fd, &error);
       g_assert_no_error (error);
 
-      virt = _srt_check_virtualization (mock_cpuid, "", sysroot_fd);
+      virt = _srt_check_virtualization (mock_cpuid, sysroot_fd);
       g_assert_nonnull (virt);
       g_assert_cmpint (srt_virtualization_info_get_virtualization_type (virt), ==,
                        SRT_VIRTUALIZATION_TYPE_QEMU);
@@ -233,7 +232,7 @@ test_dmi_id (Fixture *f,
       g_hash_table_replace (mock_cpuid,
                             _srt_cpuid_key_new (_SRT_CPUID_LEAF_HYPERVISOR_ID, 0),
                             _srt_cpuid_data_new_for_signature ("xxxxKVMKVMKVM"));
-      virt = _srt_check_virtualization (mock_cpuid, "", sysroot_fd);
+      virt = _srt_check_virtualization (mock_cpuid, sysroot_fd);
       g_assert_nonnull (virt);
       g_assert_cmpint (srt_virtualization_info_get_virtualization_type (virt), ==,
                        SRT_VIRTUALIZATION_TYPE_KVM);

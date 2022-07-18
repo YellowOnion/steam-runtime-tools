@@ -1067,7 +1067,7 @@ pv_wrap_detect_interpreter_root (void)
   /* At the moment we only care about FEX-Emu here, which we happen to
    * know implements CPUID, so it's faster to skip the filesystem-based
    * checks */
-  virt_info = _srt_check_virtualization (NULL, NULL, -1);
+  virt_info = _srt_check_virtualization (NULL, -1);
 
   val = srt_virtualization_info_get_interpreter_root (virt_info);
 

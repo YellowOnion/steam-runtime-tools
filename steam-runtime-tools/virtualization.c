@@ -25,7 +25,6 @@
 
 #if defined(__x86_64__) || defined(__i386__)
 #include <cpuid.h>
-#include <sys/utsname.h>
 #endif
 
 #include <glib.h>
@@ -215,7 +214,6 @@ static const struct
  */
 SrtVirtualizationInfo *
 _srt_check_virtualization (GHashTable *mock_cpuid,
-                           const char *mock_uname_version,
                            int sysroot_fd)
 {
   SrtVirtualizationType type = SRT_VIRTUALIZATION_TYPE_NONE;
@@ -227,7 +225,6 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
   guint32 ecx = 0;
   guint32 edx = 0;
   gboolean hypervisor_present = FALSE;
-  struct utsname uname_buf = {};
   SrtCpuidData signature = {};
   SrtMachineType host_machine = SRT_MACHINE_TYPE_UNKNOWN;
 
@@ -252,25 +249,8 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
       g_debug ("Unable to query Hypervisor Present bit from CPUID 0x1");
     }
 
-  /* FEX-Emu doesn't set Hypervisor Present: arguably this is wrong
-   * because it implements the 0x4000_0000 leaf, but arguably it's
-   * correct because it isn't technically a hypervisor. Either way... */
-
-  if (G_UNLIKELY (mock_uname_version != NULL))
-    strncpy (uname_buf.version, mock_uname_version, sizeof (uname_buf.version) - 1);
-
-  if (mock_uname_version != NULL || uname (&uname_buf) == 0)
-    {
-      if (g_str_has_prefix (uname_buf.version, "#FEX-"))
-        {
-          g_debug ("This is probably FEX-Emu according to uname(2): %s",
-                   uname_buf.version);
-          type = SRT_VIRTUALIZATION_TYPE_FEX_EMU;
-        }
-    }
-
   /* https://lwn.net/Articles/301888/ */
-  if (hypervisor_present || type == SRT_VIRTUALIZATION_TYPE_FEX_EMU)
+  if (hypervisor_present)
     {
       if (_srt_x86_cpuid (mock_cpuid,
                           TRUE,

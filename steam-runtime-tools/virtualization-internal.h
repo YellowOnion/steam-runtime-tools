@@ -75,5 +75,4 @@ _srt_virtualization_info_new_empty (void)
 #endif
 
 SrtVirtualizationInfo *_srt_check_virtualization (GHashTable *mock_cpuid,
-                                                  const char *mock_uname_version,
                                                   int sysroot_fd);

@@ -79,8 +79,6 @@ teardown (Fixture *f,
   g_free (f->builddir);
 }
 
-#define FEX_ARCH_AARCH64 (2U)
-
 static void
 test_cpuid (Fixture *f,
             gconstpointer context)
@@ -160,7 +158,8 @@ test_cpuid (Fixture *f,
                             _srt_cpuid_data_new_for_signature ("xxxxFEXIFEXIEMU"));
       g_hash_table_replace (mock_cpuid,
                             _srt_cpuid_key_new (_SRT_CPUID_LEAF_FEX_INFO, 0),
-                            _srt_cpuid_data_new (FEX_ARCH_AARCH64, 0, 0, 0));
+                            _srt_cpuid_data_new (_SRT_CPUID_FEX_HOST_MACHINE_AARCH64,
+                                                 0, 0, 0));
       virt = _srt_check_virtualization (mock_cpuid, sysroot_fd);
       g_assert_nonnull (virt);
       g_assert_cmpint (srt_virtualization_info_get_virtualization_type (virt), ==,

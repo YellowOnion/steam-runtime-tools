@@ -297,13 +297,13 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
         {
           g_debug ("FEX-Emu host machine from CPUID 0x4000_0001: 0x%u", (eax & 0xF));
 
-          switch (eax & 0xF)
+          switch (eax & _SRT_CPUID_MASK_FEX_INFO_EAX_HOST_MACHINE)
             {
-              case 1:
+              case _SRT_CPUID_FEX_HOST_MACHINE_X86_64:
                 host_machine = SRT_MACHINE_TYPE_X86_64;
                 break;
 
-              case 2:
+              case _SRT_CPUID_FEX_HOST_MACHINE_AARCH64:
                 host_machine = SRT_MACHINE_TYPE_AARCH64;
                 break;
 

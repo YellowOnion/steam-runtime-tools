@@ -70,7 +70,7 @@ test_utils = static_library(
     'test-utils.c',
   ],
   c_args : [
-    '-D_SRT_PYTHON="' + python.path() + '"',
+    '-D_SRT_PYTHON="' + python.full_path() + '"',
   ],
   dependencies : [
     glib,

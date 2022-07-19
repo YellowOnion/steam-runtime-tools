@@ -35,16 +35,17 @@ api_major = '0'
 abi_major = '0'
 abi_minor = '20220726.0'
 
-pkg = import('pkgconfig')
 gnome = import('gnome')
+pkg = import('pkgconfig')
+python_module = import('python')
 
-# We'd like to use import('python').find_installation(), but before
-# Meson 0.50 there was a bug where it didn't have a path() method,
-# making it useless to us here.
 if get_option('python') == ''
-  python = find_program('python3.5', 'python3', required : true)
+  python = python_module.find_installation('python3.5', required : false)
+  if not python.found()
+    python = python_module.find_installation('python3')
+  endif
 else
-  python = find_program(get_option('python'), required : true)
+  python = python_module.find_installation(get_option('python'))
 endif
 
 if get_option('fully_featured_python') == ''

@@ -49,8 +49,8 @@ def setup(args):
     # type: (typing.Any) -> None
 
     common_options = [
-        '-Dgtk_doc=false',
-        '-Dman=false',
+        '-Dgtk_doc=disabled',
+        '-Dman=disabled',
         '-Dsrcdir=src',
         '--optimization=g',
         '--prefix=/usr',

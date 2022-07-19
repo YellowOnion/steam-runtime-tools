@@ -287,8 +287,8 @@ class Environment:
             [
                 'meson',
                 str(self.abs_builddir_parent / 'doc'),
-                '-Dgtk_doc=true',
-                '-Dman=true',
+                '-Dgtk_doc=enabled',
+                '-Dman=enabled',
             ] + args,
             check=True,
         )

@@ -223,7 +223,7 @@ if get_option('srcdir') != ''
   meson.add_install_script(
     python.full_path(),
     meson.current_source_dir() / 'copy-source-code.py',
-    '--srcdir', meson.source_root(),
+    '--srcdir', meson.project_source_root(),
     '--prefix', get_option('prefix'),
     '--pressure-vessel-dir', pv_dir,
     '--set-version', version,

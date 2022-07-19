@@ -254,7 +254,7 @@ relocatable-install:i386:
               --architecture-multiarch i386-linux-gnu \
               ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
               ${NULL+}
-            prove -epython3.5 -v ./tests/pressure-vessel/relocatable-install.py :: \
+            python3.5 ./tests/pressure-vessel/relocatable-install.py \
               --multiarch-tuple=i386-linux-gnu \
               "$(pwd)/_build/i386/relocatable-install"
     artifacts:
@@ -301,7 +301,7 @@ relocatable-install:production:
               --no-archive-versions \
               ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
               ${NULL+}
-            prove -epython3.5 -v ./tests/pressure-vessel/relocatable-install.py :: \
+            python3.5 ./tests/pressure-vessel/relocatable-install.py \
               "$(pwd)/_build/production/relocatable-install"
     artifacts:
         paths:

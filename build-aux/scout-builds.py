@@ -172,14 +172,11 @@ def install(args):
     subprocess.check_call([
         'env',
         'DESTDIR=' + destdir,
-        'prove',
-        '-epython3.5',
-        '-v',
+        'python3.5',
         os.path.join(
             args.abs_srcdir, 'tests', 'pressure-vessel',
             'relocatable-install.py',
         ),
-        '::',
         relocatable,
     ])
 

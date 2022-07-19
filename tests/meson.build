@@ -191,9 +191,21 @@ foreach test_info : tests
   endif
 
   if glib_tap_support.found()
-    test(test_name, exe, args : ['--tap'], env : test_env, timeout : timeout)
+    test(
+      test_name,
+      exe,
+      args : ['--tap'],
+      env : test_env,
+      protocol : 'tap',
+      timeout : timeout,
+    )
   else
-    test(test_name, exe, env : test_env, timeout : timeout)
+    test(
+      test_name,
+      exe,
+      env : test_env,
+      timeout : timeout,
+    )
   endif
 endforeach
 
@@ -423,22 +435,13 @@ lint_scripts = [
 foreach test_name : lint_scripts
   timeout = 30
 
-  if meson.version().version_compare('>=0.50')
-    test(
-      test_name, files(test_name),
-      env : test_env,
-      suite : 'lint',
-      protocol : 'tap',
-      timeout : timeout,
-    )
-  else
-    test(
-      test_name, files(test_name),
-      env : test_env,
-      suite : 'lint',
-      timeout : timeout,
-    )
-  endif
+  test(
+    test_name, files(test_name),
+    env : test_env,
+    suite : 'lint',
+    protocol : 'tap',
+    timeout : timeout,
+  )
 endforeach
 
 if get_option('pressure_vessel') and get_option('bin')

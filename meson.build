@@ -92,7 +92,6 @@ build_gir = gobject_introspection_dep.found()
 
 dbus_run_session = find_program('dbus-run-session', required : false)
 glslang_validator = find_program('glslangValidator', required : true)
-prove = find_program('prove', required : false)
 sh = find_program('sh', required : true)
 
 version = get_option('version')

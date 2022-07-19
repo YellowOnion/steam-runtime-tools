@@ -29,6 +29,13 @@ test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
 no_activation_session_conf = files('session.conf')
 
+if meson.version().version_compare('>=0.63')
+    # Work around https://github.com/mesonbuild/meson/issues/10577
+    tap_test_protocol = 'exitcode'
+else
+    tap_test_protocol = 'tap'
+endif
+
 tests = [
   {'name': 'architecture'},
   {'name': 'container'},
@@ -196,7 +203,7 @@ foreach test_info : tests
       exe,
       args : ['--tap'],
       env : test_env,
-      protocol : 'tap',
+      protocol : tap_test_protocol,
       timeout : timeout,
     )
   else
@@ -439,7 +446,7 @@ foreach test_name : lint_scripts
     test_name, files(test_name),
     env : test_env,
     suite : 'lint',
-    protocol : 'tap',
+    protocol : tap_test_protocol,
     timeout : timeout,
   )
 endforeach

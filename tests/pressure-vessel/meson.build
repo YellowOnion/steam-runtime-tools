@@ -78,7 +78,7 @@ foreach test_name : compiled_tests
       test_name, exe,
       args : ['--tap'],
       env : test_env,
-      protocol : 'tap',
+      protocol : tap_test_protocol,
       suite : ['pressure-vessel'],
     )
   else
@@ -117,7 +117,7 @@ foreach test_name : tests
         '--',
       ] + test_argv,
       env : test_env,
-      protocol : 'tap',
+      protocol : tap_test_protocol,
       suite : ['pressure-vessel'],
       timeout : timeout,
     )
@@ -133,7 +133,7 @@ foreach test_name : tests
           files(test_name),
         ],
         env : test_env,
-        protocol : 'tap',
+        protocol : tap_test_protocol,
         suite : ['pressure-vessel'],
         timeout : timeout,
       )

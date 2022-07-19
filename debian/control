@@ -24,7 +24,7 @@ Build-Depends:
  libxau-dev,
  libxcb1-dev,
  locales <!nocheck> | locales-all <!nocheck>,
- meson (>= 0.49.0),
+ meson (>= 0.56.2),
  pandoc,
  python3,
  python3 (>= 3.5) | python3.5,

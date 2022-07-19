@@ -28,7 +28,7 @@ project(
     'c_std=c99',
     'warning_level=2',
   ],
-  meson_version : '>=0.49.0',
+  meson_version : '>=0.56.2',
 )
 
 api_major = '0'

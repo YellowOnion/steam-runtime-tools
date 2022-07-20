@@ -1088,6 +1088,28 @@ _srt_fstatat_is_same_file (int afd,
 }
 
 /*
+ * GHashFunc for struct stat.
+ */
+guint
+_srt_struct_stat_devino_hash (gconstpointer p)
+{
+  const struct stat *s = p;
+
+  return (guint) (s->st_dev ^ s->st_ino);
+}
+
+/*
+ * GEqualFunc for struct stat, comparing for equality by device number
+ * and inode number.
+ */
+gboolean
+_srt_struct_stat_devino_equal (gconstpointer p1,
+                               gconstpointer p2)
+{
+  return _srt_is_same_stat (p1, p2);
+}
+
+/*
  * _srt_steam_command_via_pipe:
  * @arguments: (not nullable) (element-type utf8) (transfer none): An array
  *  of command-line arguments that need to be passed to the Steam pipe

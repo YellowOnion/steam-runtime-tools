@@ -104,6 +104,7 @@ gboolean _srt_portal_listener_listen (SrtPortalListener *self,
 
 void _srt_portal_listener_close_info_fh (SrtPortalListener *self,
                                          gboolean success);
+const char *_srt_portal_listener_get_suggested_bus_name (SrtPortalListener *self);
 
 void _srt_portal_listener_stop_listening (SrtPortalListener *self);
 

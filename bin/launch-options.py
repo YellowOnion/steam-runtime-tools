@@ -792,30 +792,13 @@ class Gui:
         self.launcher_service_combo = Gtk.ComboBoxText.new()
         self.launcher_service_combo.append(None, "Don't override")
         self.launcher_service_combo.append(
-            'container-runtime', 'any container runtime',
+            'container-runtime', 'SteamLinuxRuntime_{soldier,sniper,...}',
         )
         self.launcher_service_combo.append(
             'proton', 'any Proton version',
         )
         self.launcher_service_combo.append(
             'scout-in-container', 'any layered scout-on-* runtime',
-        )
-        self.launcher_service_combo.append(
-            '1391110', 'SteamLinuxRuntime_soldier (1391110)',
-        )
-        self.launcher_service_combo.append(
-            '1628350', 'SteamLinuxRuntime_sniper (1628350)',
-        )
-        self.launcher_service_combo.append(
-            '1493710', 'Proton - experimental (1493710)',
-        )
-        self.launcher_service_combo.append(
-            '1887720', 'Proton 7.0 (1887720)',
-        )
-        # No support for Proton 6.3 or 5.13 here, on the assumption that
-        # steam-runtime-launcher-service integration won't be backported
-        self.launcher_service_combo.append(
-            '1070560', 'SteamLinuxRuntime (1070560)',
         )
         self.launcher_service_combo.append(
             '', 'None',

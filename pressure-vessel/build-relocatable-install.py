@@ -106,6 +106,7 @@ EXECUTABLES = [
     'pressure-vessel-wrap',
     'pv-bwrap',
     'steam-runtime-launch-client',
+    'steam-runtime-launcher-interface-0',
     'steam-runtime-launcher-service',
     'steam-runtime-system-info',
 ]

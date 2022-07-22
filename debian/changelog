@@ -1,3 +1,22 @@
+steam-runtime-tools (0.20220624.1) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * system-info: Report whether each VA-API driver is for libva.so.1
+    or libva.so.2
+  * system-info: Refactoring
+
+  [ Ryan Houdek, Ludovico de Nittis ]
+  * pressure-vessel: Improve correctness of FEX-Emu host architecture
+    detection
+
+  [ Simon McVittie ]
+  * pv-runtime: Add a log message to clarify why we are hiding the original
+    version of Vulkan layers' JSON manifests (see steam-runtime#511)
+  * build: Update option syntax for gtk_doc and man options
+  * build: Update populate-depot.py from SteamLinuxRuntime scripts
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 22 Jul 2022 14:27:06 +0100
+
 steam-runtime-tools (0.20220624.0) steamrt; urgency=medium
 
   [ Simon McVittie ]

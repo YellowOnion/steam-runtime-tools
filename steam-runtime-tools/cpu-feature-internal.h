@@ -33,12 +33,44 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#define _SRT_CPUID_LEAF_PROCESSOR_INFO (1U)
+#define _SRT_CPUID_FLAG_PROCESSOR_INFO_ECX_HYPERVISOR_PRESENT (1U << 31)
+
+/* https://lwn.net/Articles/301888/ */
+#define _SRT_CPUID_LEAF_HYPERVISOR_ID (0x40000000U)
+
+/* https://github.com/FEX-Emu/FEX/blob/HEAD/docs/CPUID.md */
+#define _SRT_CPUID_LEAF_FEX_INFO (0x40000001U)
+#define _SRT_CPUID_MASK_FEX_INFO_EAX_HOST_MACHINE (0xF)
+#define _SRT_CPUID_FEX_HOST_MACHINE_X86_64 (1)
+#define _SRT_CPUID_FEX_HOST_MACHINE_AARCH64 (2)
+
+#define _SRT_CPUID_LEAF_EXT_FUNCTIONS (0x80000000U)
+#define _SRT_CPUID_LEAF_EXT_PROCESSOR_INFO (0x80000001U)
+
 /* All real features (not including UNKNOWN) */
 #define _SRT_X86_FEATURE_ALL (SRT_X86_FEATURE_X86_64 \
                               | SRT_X86_FEATURE_SSE3 \
                               | SRT_X86_FEATURE_CMPXCHG16B)
 
+typedef struct
+{
+  guint leaf;
+  guint subleaf;
+} SrtCpuidKey;
+
 #if defined(__x86_64__) || defined(__i386__)
+static inline SrtCpuidKey *
+_srt_cpuid_key_new (guint leaf,
+                    guint subleaf)
+{
+  SrtCpuidKey *ret = g_new0 (SrtCpuidKey, 1);
+
+  ret->leaf = leaf;
+  ret->subleaf = subleaf;
+  return ret;
+}
+
 typedef union
 {
   char text[17];
@@ -71,30 +103,33 @@ _srt_cpuid_data_new_for_signature (const char *text)
 #endif
 
 static inline void
+_srt_cpuid_key_free (gpointer self)
+{
+  g_free (self);
+}
+
+static inline void
 _srt_cpuid_data_free (gpointer self)
 {
   g_free (self);
 }
+
+G_GNUC_INTERNAL
+gboolean _srt_cpuid_key_equals (gconstpointer p1,
+                                gconstpointer p2);
+G_GNUC_INTERNAL
+guint _srt_cpuid_key_hash (gconstpointer key);
 
 #if defined(__x86_64__) || defined(__i386__)
 G_GNUC_INTERNAL
 gboolean _srt_x86_cpuid (GHashTable *mock_cpuid,
                          gboolean force,
                          guint leaf,
+                         guint subleaf,
                          guint *eax,
                          guint *ebx,
                          guint *ecx,
                          guint *edx);
-
-G_GNUC_INTERNAL
-gboolean _srt_x86_cpuid_count (GHashTable *mock_cpuid,
-                               guint leaf,
-                               guint subleaf,
-                               guint *eax,
-                               guint *ebx,
-                               guint *ecx,
-                               guint *edx);
-
 #endif
 
 G_GNUC_INTERNAL

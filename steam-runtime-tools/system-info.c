@@ -3929,7 +3929,7 @@ srt_system_info_check_virtualization (SrtSystemInfo *self)
       if (self->immutable_values)
         self->virtualization_info = _srt_virtualization_info_new_empty ();
       else
-        self->virtualization_info = _srt_check_virtualization (NULL, NULL,
+        self->virtualization_info = _srt_check_virtualization (NULL,
                                                                self->sysroot_fd);
     }
 

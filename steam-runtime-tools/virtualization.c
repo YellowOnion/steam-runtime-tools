@@ -25,7 +25,6 @@
 
 #if defined(__x86_64__) || defined(__i386__)
 #include <cpuid.h>
-#include <sys/utsname.h>
 #endif
 
 #include <glib.h>
@@ -203,7 +202,7 @@ static const struct
 
 /**
  * _srt_check_virtualization:
- * @mock_cpuid: (nullable) (element-type guint SrtCpuidData): mock data
+ * @mock_cpuid: (nullable) (element-type SrtCpuidKey SrtCpuidData): mock data
  *  to use instead of the real CPUID instruction
  * @sysroot_fd: Sysroot file descriptor
  *
@@ -215,7 +214,6 @@ static const struct
  */
 SrtVirtualizationInfo *
 _srt_check_virtualization (GHashTable *mock_cpuid,
-                           const char *mock_uname_version,
                            int sysroot_fd)
 {
   SrtVirtualizationType type = SRT_VIRTUALIZATION_TYPE_NONE;
@@ -227,15 +225,15 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
   guint32 ecx = 0;
   guint32 edx = 0;
   gboolean hypervisor_present = FALSE;
-  struct utsname uname_buf = {};
   SrtCpuidData signature = {};
   SrtMachineType host_machine = SRT_MACHINE_TYPE_UNKNOWN;
 
   /* CPUID leaf 1, bit 31 is the Hypervisor Present Bit.
    * https://lwn.net/Articles/301888/ */
-  if (_srt_x86_cpuid (mock_cpuid, FALSE, 1, &eax, &ebx, &ecx, &edx))
+  if (_srt_x86_cpuid (mock_cpuid, FALSE, _SRT_CPUID_LEAF_PROCESSOR_INFO, 0,
+                      &eax, &ebx, &ecx, &edx))
     {
-      if (ecx & (1U << 31))
+      if (ecx & _SRT_CPUID_FLAG_PROCESSOR_INFO_ECX_HYPERVISOR_PRESENT)
         {
           g_debug ("Hypervisor Present bit set in CPUID 0x1");
           hypervisor_present = TRUE;
@@ -251,34 +249,18 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
       g_debug ("Unable to query Hypervisor Present bit from CPUID 0x1");
     }
 
-  /* FEX-Emu doesn't set Hypervisor Present: arguably this is wrong
-   * because it implements the 0x4000_0000 leaf, but arguably it's
-   * correct because it isn't technically a hypervisor. Either way... */
-
-  if (G_UNLIKELY (mock_uname_version != NULL))
-    strncpy (uname_buf.version, mock_uname_version, sizeof (uname_buf.version) - 1);
-
-  if (mock_uname_version != NULL || uname (&uname_buf) == 0)
-    {
-      if (g_str_has_prefix (uname_buf.version, "#FEX-"))
-        {
-          g_debug ("This is probably FEX-Emu according to uname(2): %s",
-                   uname_buf.version);
-          type = SRT_VIRTUALIZATION_TYPE_FEX_EMU;
-        }
-    }
-
   /* https://lwn.net/Articles/301888/ */
-  if (hypervisor_present || type == SRT_VIRTUALIZATION_TYPE_FEX_EMU)
+  if (hypervisor_present)
     {
       if (_srt_x86_cpuid (mock_cpuid,
                           TRUE,
-                          0x40000000U,
+                          _SRT_CPUID_LEAF_HYPERVISOR_ID,
+                          0,
                           &signature.registers[0],
                           &signature.registers[1],
                           &signature.registers[2],
                           &signature.registers[3])
-          && signature.registers[0] >= 0x40000000U)
+          && signature.registers[0] >= _SRT_CPUID_LEAF_HYPERVISOR_ID)
         {
           /* The hypervisor signature appears in EBX, ECX, EDX, so skip
            * the first 4 bytes. */
@@ -307,20 +289,21 @@ _srt_check_virtualization (GHashTable *mock_cpuid,
         }
     }
 
-  if (type == SRT_VIRTUALIZATION_TYPE_FEX_EMU && signature.registers[0] >= 0x40000001U)
+  if (type == SRT_VIRTUALIZATION_TYPE_FEX_EMU && signature.registers[0] >= _SRT_CPUID_LEAF_FEX_INFO)
     {
       /* https://github.com/FEX-Emu/FEX/blob/HEAD/docs/CPUID.md */
-      if (_srt_x86_cpuid_count (mock_cpuid, 0x40000001U, 0, &eax, &ebx, &ecx, &edx))
+      if (_srt_x86_cpuid (mock_cpuid, TRUE, _SRT_CPUID_LEAF_FEX_INFO, 0,
+                          &eax, &ebx, &ecx, &edx))
         {
           g_debug ("FEX-Emu host machine from CPUID 0x4000_0001: 0x%u", (eax & 0xF));
 
-          switch (eax & 0xF)
+          switch (eax & _SRT_CPUID_MASK_FEX_INFO_EAX_HOST_MACHINE)
             {
-              case 1:
+              case _SRT_CPUID_FEX_HOST_MACHINE_X86_64:
                 host_machine = SRT_MACHINE_TYPE_X86_64;
                 break;
 
-              case 2:
+              case _SRT_CPUID_FEX_HOST_MACHINE_AARCH64:
                 host_machine = SRT_MACHINE_TYPE_AARCH64;
                 break;
 

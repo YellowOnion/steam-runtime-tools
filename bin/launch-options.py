@@ -1892,7 +1892,7 @@ class Gui:
         # pressure-vessel-adverb from any random copy of pressure-vessel
         # to get its "run in an xterm" code
         if (
-            shell is not None or terminal is not None
+            (shell is not None or terminal is not None)
             and not has_container_runtime
         ):
             any_pv = self.default_pressure_vessel

@@ -42,6 +42,7 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/launcher-internal.h"
 #include "steam-runtime-tools/log-internal.h"
+#include "steam-runtime-tools/pty-bridge-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 #include "libglnx.h"
 
@@ -107,6 +108,7 @@ static const char * const *global_original_environ = NULL;
 static GDBusConnection *bus_or_peer_connection = NULL;
 static guint child_pid = 0;
 static int launch_exit_status = LAUNCH_EX_USAGE;
+static SrtPtyBridge *first_pty_bridge = NULL;
 
 static void
 process_exited_cb (G_GNUC_UNUSED GDBusConnection *connection,
@@ -168,8 +170,28 @@ forward_signal (int sig)
   G_GNUC_UNUSED g_autoptr(GVariant) reply = NULL;
   gboolean to_process_group = FALSE;
   g_autoptr(GError) error = NULL;
+  gboolean handled = FALSE;
 
   g_return_if_fail (api != NULL);
+
+  if (first_pty_bridge != NULL)
+    {
+      if (!_srt_pty_bridge_handle_signal (first_pty_bridge, sig, &handled, &error))
+        {
+          g_debug ("%s", error->message);
+          g_clear_error (&error);
+        }
+      else if (handled)
+        {
+          if (G_IN_SET (sig, SIGSTOP, SIGTSTP))
+            {
+              g_info ("SIGSTOP:ing myself");
+              raise (SIGSTOP);
+            }
+
+          return;
+        }
+    }
 
   if (child_pid == 0)
     {
@@ -179,7 +201,7 @@ forward_signal (int sig)
         {
           raise (SIGSTOP);
         }
-      else if (sig != SIGCONT)
+      else if (sig != SIGCONT && sig != SIGWINCH)
         {
           sigset_t mask;
 
@@ -262,7 +284,8 @@ static guint
 forward_signals (GError **error)
 {
   static int forward[] = {
-    SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGCONT, SIGTSTP, SIGUSR1, SIGUSR2
+    SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGCONT, SIGTSTP, SIGUSR1, SIGUSR2,
+    SIGTTIN, SIGTTOU, SIGWINCH,
   };
   sigset_t mask;
   guint i;
@@ -800,6 +823,7 @@ main (int argc,
   g_auto(GVariantBuilder) env_builder = {};
   g_auto(GVariantBuilder) options_builder = {};
   g_autoptr(AutoUnixFDList) fd_list = NULL;
+  g_autoptr(GHashTable) pty_bridges = NULL;
   G_GNUC_UNUSED g_autoptr(GVariant) reply = NULL;
   gint stdin_handle = -1;
   gint stdout_handle = -1;
@@ -1312,6 +1336,101 @@ main (int argc,
     g_autoptr(GVariant) env = NULL;
     g_autoptr(GVariant) opts = NULL;
     GVariant *arguments = NULL;   /* floating */
+    int fd_list_len;
+    const int *fd_arr = g_unix_fd_list_peek_fds (fd_list, &fd_list_len);
+
+    g_assert (fd_list_len >= 0);
+    pty_bridges = g_hash_table_new_full (_srt_struct_stat_devino_hash,
+                                         _srt_struct_stat_devino_equal,
+                                         g_free, g_object_unref);
+
+    for (i = 0; i < (gsize) fd_list_len; i++)
+      {
+        int fd = fd_arr[i];
+        struct stat stat_buf = {};
+        SrtPtyBridge *pty_bridge;   /* (unowned) */
+
+        if (!isatty (fd))
+          continue;
+
+        if (fstat (fd, &stat_buf) != 0)
+          {
+            glnx_throw_errno_prefix (error, "Unable to inspect terminal fd %d", fd);
+            goto out;
+          }
+
+        pty_bridge = g_hash_table_lookup (pty_bridges, &stat_buf);
+
+        if (pty_bridge == NULL)
+          {
+            g_autoptr(SrtPtyBridge) new_bridge = NULL;
+            int dest_fd = fd;
+            const char *in_desc = "input";
+            const char *out_desc = "output";
+
+            /* If stdin is a terminal, see whether stdout and/or stderr
+             * point to the same terminal. If yes, then we can use a
+             * single bridge to handle both directions. */
+            if (i == stdin_handle)
+              {
+                struct stat other_stat = {};
+
+                in_desc = "copy of stdin";
+
+                if (fstat (fd_arr[stdout_handle], &other_stat) == 0
+                    && _srt_is_same_stat (&stat_buf, &other_stat))
+                  {
+                    dest_fd = fd_arr[stdout_handle];
+                    out_desc = "copy of stdout";
+                  }
+                else if (fstat (fd_arr[stderr_handle], &other_stat) == 0
+                         && _srt_is_same_stat (&stat_buf, &other_stat))
+                  {
+                    dest_fd = fd_arr[stderr_handle];
+                    out_desc = "copy of stderr";
+                  }
+              }
+
+            g_debug ("Creating new pseudo-terminal bridge for fd %d (%s), %d (%s)",
+                     fd, in_desc, dest_fd, out_desc);
+            new_bridge = _srt_pty_bridge_new (fd, dest_fd, error);
+
+            if (new_bridge == NULL)
+              {
+                glnx_throw_errno_prefix (error, "Unable to set up forwarding for terminal");
+                goto out;
+              }
+
+            if (first_pty_bridge == NULL)
+              first_pty_bridge = g_object_ref (new_bridge);
+
+            pty_bridge = new_bridge;
+            g_hash_table_replace (pty_bridges,
+                                  g_memdup2 (&stat_buf, sizeof (struct stat)),
+                                  g_steal_pointer (&new_bridge));
+          }
+        else
+          {
+            g_debug ("Reusing existing pseudo-terminal bridge for fd %d", fd);
+          }
+
+        /* Change the meaning of the fd that is stored in the fd list
+         * (a duplicate of the original fd) to be the fd of the terminal
+         * end of the bridge, so that the launched process can take it
+         * as its controlling terminal if it wants to. */
+        if (dup3 (_srt_pty_bridge_get_terminal_fd (pty_bridge), fd, O_CLOEXEC) < 0)
+          {
+            glnx_throw_errno_prefix (error, "Unable to duplicate terminal fd");
+            goto out;
+          }
+      }
+
+    /* Close the terminal end of each ptmx/terminal pair, now that the
+     * fd list has been populated with duplicates of them to be sent to
+     * the launcher service */
+    g_hash_table_iter_init (&iter, pty_bridges);
+    while (g_hash_table_iter_next (&iter, NULL, &value))
+      _srt_pty_bridge_close_terminal_fd (value);
 
     g_debug ("Forwarding command:");
 
@@ -1342,6 +1461,10 @@ main (int argc,
                                    spawn_flags,
                                    opts);
       }
+
+    /* It's important that we didn't append any more fds after replacing
+     * terminal references with pseudoterminals */
+    g_assert (fd_list_len == g_unix_fd_list_get_length (fd_list));
 
     reply = g_dbus_connection_call_with_unix_fd_list_sync (bus_or_peer_connection,
                                                            service_bus_name,
@@ -1392,6 +1515,7 @@ out:
   g_hash_table_unref (opt_unsetenv);
   g_free (opt_usr_path);
   global_original_environ = NULL;
+  g_clear_object (&first_pty_bridge);
 
   g_debug ("Exiting with status %d", launch_exit_status);
   return launch_exit_status;

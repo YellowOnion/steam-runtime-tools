@@ -115,6 +115,9 @@ G_GNUC_INTERNAL gboolean _srt_str_is_integer (const char *str);
 
 gboolean _srt_fstatat_is_same_file (int afd, const char *a,
                                     int bfd, const char *b);
+guint _srt_struct_stat_devino_hash (gconstpointer p);
+gboolean _srt_struct_stat_devino_equal (gconstpointer p1,
+                                        gconstpointer p2);
 
 G_GNUC_INTERNAL gboolean _srt_steam_command_via_pipe (const char * const *arguments,
                                                       gssize n_arguments,

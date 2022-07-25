@@ -2514,28 +2514,6 @@ pv_runtime_capture_libraries (PvRuntime *self,
 }
 
 /*
- * GHashFunc for struct stat.
- */
-static guint
-struct_stat_hash (gconstpointer p)
-{
-  const struct stat *s = p;
-
-  return (guint) (s->st_dev ^ s->st_ino);
-}
-
-/*
- * GEqualFunc for struct stat, comparing for equality by device number
- * and inode number.
- */
-static gboolean
-struct_stat_equal (gconstpointer p1,
-                   gconstpointer p2)
-{
-  return _srt_is_same_stat (p1, p2);
-}
-
-/*
  * @requested_subdir: (not nullable):
  * @details_arr: (array length=n_details):
  * @n_details: Number of entries in @details_arr
@@ -2709,8 +2687,8 @@ bind_icds (PvRuntime *self,
        *  basenames[] that is a symlink or hard link to that file */
       g_autoptr(GHashTable) unique_drivers = NULL;
 
-      unique_drivers = g_hash_table_new_full (struct_stat_hash,
-                                              struct_stat_equal,
+      unique_drivers = g_hash_table_new_full (_srt_struct_stat_devino_hash,
+                                              _srt_struct_stat_devino_equal,
                                               g_free,
                                               NULL);
       captured_instead = g_new (gsize, n_details);

@@ -101,6 +101,8 @@ libsteamrt_internals = [
     'portal-listener-internal.h',
     'profiling-internal.h',
     'profiling.c',
+    'pty-bridge-internal.h',
+    'pty-bridge.c',
     'resolve-in-sysroot-internal.h',
     'resolve-in-sysroot.c',
     'runtime-internal.h',

@@ -79,6 +79,32 @@ file with one top-level entry, `manifest`.
 `commandline`
 : The command-line for the entry point.
 
+`compatmanager_layer_name`
+: The name of this compatibility tool within a stack of compatibility
+    tools, used to target debugging commands at a particular layer
+    in the stack without needing to know a specific Steam app ID.
+    Compatibility tools that might be layered using `require_tool_appid`
+    should have different names here.
+    Compatibility tools that do not make sense to layer over each other,
+    such as different versions of Proton, can share a single name here.
+
+    Some example values for this field are:
+
+    `container-runtime`
+    : Any self-contained Steam container runtime environment such as
+        "[Steam Linux Runtime - soldier][soldier]" (app ID 1391110) or
+        "[Steam Linux Runtime - sniper][sniper]" (app ID 1628350)
+
+    `proton`
+    : Any official or unofficial version of Proton
+
+    `scout-in-container`
+    : The container runtime environment that sets up the
+        Steam Runtime 1 'scout'
+        [`LD_LIBRARY_PATH` runtime](ld-library-path-runtime.md)
+        as a layer over a `container-runtime`
+        (see [Steam Linux Runtime (scout-on-soldier)][scout-on-soldier]
+
 `require_tool_appid`
 : If set, this compatibility tool needs to be wrapped in another
     compatibility tool, specified by its numeric Steam app ID. For
@@ -100,6 +126,10 @@ file with one top-level entry, `manifest`.
 : If set to `1`, Steam will send `SIGINT` to the compatibility tool
     instead of proceeding directly to `SIGKILL`, to give it a chance
     to do graceful cleanup.
+
+[scout-on-soldier]: container-runtime.md#steam-linux-runtime-scout-on-soldier
+[soldier]: container-runtime.md#steam-runtime-2-soldier
+[sniper]: container-runtime.md#steam-runtime-3-sniper
 
 ## Command-line
 
@@ -198,6 +228,34 @@ Some environment variables are set by Steam, including:
     `/home/you/.local/share/Steam/steamapps/common/Estranged Act I`,
     even if the current working directory is a subdirectory of this
     (as is the case for Estranged: Act I (261820) for example).
+
+`STEAM_COMPAT_LAUNCHER_SERVICE`
+: May be set to the `compatmanager_layer_name` of a single compatibility
+    tool, to request that the tool is configured to allow debugging
+    commands to be inserted into its runtime environment via IPC.
+
+    The intention is that a future version of Steam will automatically
+    set this to the `compatmanager_layer_name` of the last compatibility
+    tool in the stack, if a debugging interface is requested.
+    Until that feature becomes available, this variable can be set manually
+    in a game's Steam "Launch Options" or in the environment variables
+    passed to Steam itself.
+
+    For compatibility tools that provide a Linux environment, such as
+    "[Steam Linux Runtime - soldier][soldier]", the debugging commands
+    should receive an execution environment that is equivalent to the
+    execution environment of the game itself.
+    For compatibility tools that provide a non-Linux environment,
+    such as Proton, the debugging commands should be run at the closest
+    possible point to the actual game that will still accept arbitrary
+    Linux commands.
+    For example, in Proton, Proton's special environment variables should
+    be set for the debugging commands, but they are run as Linux programs
+    (and must use Wine explicitly if running a Windows executable is
+    desired), even though the actual game will be run under Wine.
+
+    If unset, empty or set to an unrecognised string, then no debugging
+    commands will be inserted.
 
 `STEAM_COMPAT_LIBRARY_PATHS`
 : Colon-delimited list of paths to Steam Library directories containing

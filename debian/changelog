@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220624.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220625.0) steamrt; urgency=medium
 
   [ Simon McVittie ]
   * pressure-vessel: Fix a regression when launching Steam games when
@@ -22,7 +22,7 @@ steam-runtime-tools (0.20220624.1) UNRELEASED; urgency=medium
   * pressure-vessel: Improve correctness of FEX-Emu host architecture
     detection
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 25 Jul 2022 11:36:23 +0100
+ -- Simon McVittie <smcv@collabora.com>  Mon, 25 Jul 2022 13:50:50 +0100
 
 steam-runtime-tools (0.20220624.0) steamrt; urgency=medium
 

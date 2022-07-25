@@ -1,7 +1,7 @@
 # Steam Linux Runtime - guide for game developers
 
 <!-- This document:
-Copyright 2021 Collabora Ltd.
+Copyright 2021-2022 Collabora Ltd.
 SPDX-License-Identifier: MIT
 -->
 
@@ -390,6 +390,126 @@ this behaviour on other distributions, if desired.
 [set launch options]: https://help.steampowered.com/en/faqs/view/7D01-D2DD-D75E-2955
 [Debian's /etc/bash.bashrc]: https://sources.debian.org/src/bash/5.1-2/debian/etc.bash.bashrc/
 
+## Inserting debugging commands into the container
+
+Recent versions of the various container runtimes include a feature that
+can be used to run arbitrary debugging commands inside the container.
+This feature requires a working D-Bus session bus.
+
+To activate this, set the `STEAM_COMPAT_LAUNCHER_SERVICE` environment
+variable to the `compatmanager_layer_name` listed in the `toolmanifest.vdf`
+of the compatibility tool used to run a game:
+
+* `container-runtime` for "Steam Linux Runtime - soldier" or
+    "Steam Linux Runtime - sniper"
+
+* `proton` for any version of Proton
+
+* `scout-in-container` for "Steam Linux Runtime"
+
+When running games through Steam, you can either export something like
+`STEAM_COMPAT_LAUNCHER_SERVICE=container-runtime` for the whole Steam
+process, or [change an individual game's launch options][set launch options]
+to `STEAM_COMPAT_LAUNCHER_SERVICE=container-runtime %command%`.
+The special token `%command%` should be typed literally.
+
+The `SteamLinuxRuntime_soldier/run` script also accepts this environment
+variable, so it can be used in commands like these:
+
+```
+$ export STEAM_COMPAT_MOUNTS=/path/to/steamlibrary
+$ export STEAM_COMPAT_LAUNCHER_SERVICE=scout-in-container
+$ cd /builds/native-linux-game
+$ /path/to/steamlibrary/steamapps/common/SteamLinuxRuntime_soldier/run \
+    $pressure_vessel_options \
+    -- \
+    /path/to/steamlibrary/steamapps/common/SteamLinuxRuntime/scout-on-soldier-entry-point-v2 \
+    -- \
+    ./my-game.sh \
+    $game_options
+```
+
+or
+
+```
+$ gameid=123            # replace with your numeric Steam app ID
+$ cd /builds/proton-game
+$ export STEAM_COMPAT_LAUNCHER_SERVICE=proton
+$ export STEAM_COMPAT_CLIENT_INSTALL_PATH=$(readlink -f "$HOME/.steam/root")
+$ export STEAM_COMPAT_DATA_PATH="/path/to/steamlibrary/compatdata/$gameid"
+$ export STEAM_COMPAT_INSTALL_PATH=$(pwd)
+$ export STEAM_COMPAT_LIBRARY_PATHS=/path/to/steamlibrary:/path/to/otherlibrary
+$ /path/to/steamlibrary/steamapps/common/SteamLinuxRuntime_soldier/run \
+    $pressure_vessel_options \
+    -- \
+    /path/to/steamlibrary/steamapps/common/"Proton - Experimental"/proton \
+    run \
+    my-game.exe \
+    $game_options
+```
+
+After configuring this, while a game is running, you can list game sessions
+where this has taken effect like this:
+
+```
+$ .../SteamLinuxRuntime_soldier/pressure-vessel/bin/steam-runtime-launch-client --list
+--bus-name=com.steampowered.App123
+--bus-name=com.steampowered.App123.Instance31679
+```
+
+and then connect to one of them with a command like:
+
+```
+$ .../SteamLinuxRuntime_soldier/pressure-vessel/bin/steam-runtime-launch-client \
+    --bus-name=com.steampowered.App123 \
+    --directory='' \
+    -- \
+    bash
+```
+
+Commands that are run like this will run inside the container, but their
+standard input, standard output and standard error are connected to
+the `steam-runtime-launch-client` command, similar to `ssh` or `docker exec`.
+For example, `bash` can be used to get an interactive shell inside the
+container, or an interactive tool like `gdb` or `python3` or a
+non-interactive tool like `ls` can be placed directly after the `--`
+separator.
+
+### Debugging a game that is crashing on startup
+
+Normally, the debug interface used by `steam-runtime-launch-client`
+exits when the game does.
+However, this is not useful if the game exits or crashes on startup
+and the opportunity to debug it is lost.
+
+To debug a game that is in this situation, in addition to
+`STEAM_COMPAT_LAUNCHER_SERVICE`, you can export
+`SRT_LAUNCHER_SERVICE_STOP_ON_EXIT=0`.
+With this variable set, the command-launching service will *not* exit when
+the game does, allowing debugging commands to be sent to it by using
+`steam-runtime-launch-client`.
+For example, it is possible to re-run the crashed game under [gdbserver][]
+with a command like:
+
+```
+$ .../SteamLinuxRuntime_soldier/pressure-vessel/bin/steam-runtime-launch-client \
+    --bus-name=com.steampowered.App123 \
+    --directory='' \
+    -- \
+    gdbserver 127.0.0.1:12345 ./my-game-executable
+```
+
+Steam will behave as though the game is still running, because from
+Steam's point of view, the debugging service has replaced the game.
+To exit the "game" when you have finished debugging, instruct the
+command server to terminate:
+
+```
+$ .../SteamLinuxRuntime_soldier/pressure-vessel/bin/steam-runtime-launch-client \
+    --bus-name=com.steampowered.App123 \
+    --terminate
+```
+
 ## Layout of the container runtime
 
 In general, the container runtime is similar to Debian and Ubuntu.
@@ -593,6 +713,8 @@ directory and use Steam's [Verify integrity][] feature to re-download it.
 [Verify integrity]: https://help.steampowered.com/en/faqs/view/0C48-FCBD-DA71-93EB
 
 ## Attaching a debugger by using gdbserver
+
+[gdbserver]: #attaching-a-debugger-by-using-gdbserver
 
 The Platform runtime does not contain a full version of the `gdb` debugger,
 but it does contain `gdbserver`, a `gdb` "stub" to which a full debugger

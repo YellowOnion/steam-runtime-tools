@@ -1007,6 +1007,10 @@ _exports_path_expose (FlatpakExports *exports,
                   do_export_path (exports, path, FAKE_MODE_SYMLINK);
                   return TRUE;
                 }
+
+              flatpak_debug2 ("Could not export target %s, so ignoring %s",
+                              new_target, path);
+              return FALSE;
             }
           else
             {

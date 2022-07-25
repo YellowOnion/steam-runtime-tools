@@ -1233,8 +1233,14 @@ class Main:
                         use_tool_subprocess_reaper='1',
                     )
                 )       # type: Dict[str, Any]
+
                 if runtime.suite != 'scout':
                     content['manifest']['unlisted'] = '1'
+
+                content['manifest']['compatmanager_layer_name'] = (
+                    'container-runtime'
+                )
+
                 vdf.dump(content, writer, pretty=True, escaped=True)
 
             shutil.copy2(

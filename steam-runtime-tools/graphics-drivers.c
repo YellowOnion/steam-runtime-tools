@@ -374,6 +374,8 @@ _srt_list_links_from_directory (gchar **envp,
   g_autoptr(GError) error = NULL;
   g_autoptr(GDir) dir_iter = NULL;
   g_autoptr(GPtrArray) members = NULL;
+  g_autofree char *stdout_text = NULL;
+  g_autofree char *stderr_text = NULL;
   const gchar *member;
 
   g_autoptr(GPtrArray) lib_links = g_ptr_array_new_with_free_func (g_free);
@@ -388,14 +390,20 @@ _srt_list_links_from_directory (gchar **envp,
                      G_SPAWN_SEARCH_PATH,  /* flags */
                      _srt_child_setup_unblock_signals,
                      NULL,  /* user data */
-                     NULL,  /* stdout */
-                     NULL,  /* stderr */
+                     &stdout_text,
+                     &stderr_text,
                      &exit_status,
                      &error))
     {
       g_debug ("An error occurred calling the helper: %s", error->message);
       return NULL;
     }
+
+  if (stdout_text != NULL && *stdout_text != '\0')
+    g_debug ("stdout: %s", stdout_text);
+
+  if (stderr_text != NULL && *stderr_text != '\0')
+    g_debug ("stderr: %s", stderr_text);
 
   if (exit_status != 0)
     {

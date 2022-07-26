@@ -77,6 +77,7 @@ typedef enum
   PV_LAUNCHER_SERVER_FLAGS_STOP_ON_NAME_LOSS = (1 << 0),
   PV_LAUNCHER_SERVER_FLAGS_STOP_ON_EXIT = (1 << 1),
   PV_LAUNCHER_SERVER_FLAGS_STARTED = (1 << 2),
+  PV_LAUNCHER_SERVER_FLAGS_HINT = (1 << 3),
   PV_LAUNCHER_SERVER_FLAGS_NONE = 0,
 } PvLauncherServerFlags;
 
@@ -732,6 +733,122 @@ name_owner_changed (GDBusConnection *connection,
 }
 
 static gboolean
+argument_needs_quoting (const char *arg)
+{
+  if (*arg == '\0')
+    return TRUE;
+
+  while (*arg != 0)
+    {
+      char c = *arg;
+      if (!g_ascii_isalnum (c) &&
+          !(c == '-' || c == '/' || c == '~' ||
+            c == ':' || c == '.' || c == '_' ||
+            c == '=' || c == '@'))
+        return TRUE;
+      arg++;
+    }
+  return FALSE;
+}
+
+/*
+ * Path to steam-runtime-launch-client, relative to a
+ * SteamLinuxRuntime_{soldier,sniper,...} depot
+ */
+#define LAUNCH_CLIENT_FROM_SLR \
+  "pressure-vessel/bin/steam-runtime-launch-client"
+
+/*
+ * Path to the steam-runtime-launch-client in the LD_LIBRARY_PATH scout
+ * runtime, relative to the home directory
+ */
+#define LAUNCH_CLIENT_FROM_HOME \
+  ".steam/root/ubuntu12_32/steam-runtime/amd64/bin/steam-runtime-launch-client"
+
+/*
+ * Return a command that can be pasted into a shell to run the
+ * steam-runtime-launch-client.
+ */
+static gchar *
+find_launch_client_shell_quoted (void)
+{
+  const char *env = g_getenv ("PRESSURE_VESSEL_RUNTIME_BASE");
+
+  /* There's a copy in the Steam container runtime.
+   * If set, $PRESSURE_VESSEL_RUNTIME_BASE is a path valid on the host. */
+  if (env != NULL)
+    {
+      g_autofree char *tmp = g_build_filename (env,
+                                               LAUNCH_CLIENT_FROM_SLR,
+                                               NULL);
+
+      if (g_file_test (tmp, G_FILE_TEST_IS_EXECUTABLE))
+        {
+          if (argument_needs_quoting (tmp))
+            return g_shell_quote (tmp);
+          else
+            return g_steal_pointer (&tmp);
+        }
+    }
+
+  /* One of these is probably the Steam container runtime, too.
+   * These are all paths valid on the host. */
+  env = g_getenv ("STEAM_COMPAT_TOOL_PATHS");
+
+  if (env != NULL)
+    {
+      g_auto(GStrv) compat_tools = NULL;
+      gchar **iter;
+
+      compat_tools = g_strsplit (env, ":", 0);
+
+      for (iter = compat_tools; iter != NULL && *iter != NULL; iter++)
+        {
+          g_autofree char *tmp = g_build_filename (*iter,
+                                                   LAUNCH_CLIENT_FROM_SLR,
+                                                   NULL);
+
+
+          if (g_file_test (tmp, G_FILE_TEST_IS_EXECUTABLE))
+            {
+              if (argument_needs_quoting (tmp))
+                return g_shell_quote (tmp);
+              else
+                return g_steal_pointer (&tmp);
+            }
+        }
+    }
+
+  /* There's a copy in the LD_LIBRARY_PATH Steam Runtime (or there will be
+   * when it gets updated) */
+  do
+    {
+      g_autofree char *tmp = g_build_filename (g_get_home_dir (),
+                                               LAUNCH_CLIENT_FROM_HOME,
+                                               NULL);
+
+
+      /* Start the path with ~/ instead of the home directory, to make it
+       * a little bit shorter and easier to copy/paste */
+      if (g_file_test (tmp, G_FILE_TEST_IS_EXECUTABLE))
+        return g_build_filename ("~", LAUNCH_CLIENT_FROM_HOME, NULL);
+    }
+  while (0);
+
+  /* We specifically don't search PATH where the service is running,
+   * because paths that are valid in the container where the service is
+   * running are not necessarily valid on the host system where the user
+   * will run the client.
+   *
+   * Similarly, we don't look in the directory containing argv[0], even
+   * though there is almost certainly a steam-runtime-launch-client there,
+   * again because that path is not necessarily valid on the host system. */
+
+  /* Hope it's in PATH, or if not, that the user can find it somewhere */
+  return g_strdup ("steam-runtime-launch-client");
+}
+
+static gboolean
 pv_launcher_server_finish_startup (PvLauncherServer *self,
                                    GError **error)
 {
@@ -802,6 +919,46 @@ pv_launcher_server_finish_startup (PvLauncherServer *self,
 
   if (self->export_state < EXPORT_STATE_LISTENING)
     self->export_state = EXPORT_STATE_LISTENING;
+
+  if (self->flags & PV_LAUNCHER_SERVER_FLAGS_HINT)
+    {
+      g_autofree char *launch_client = find_launch_client_shell_quoted ();
+      const char *bus_name = _srt_portal_listener_get_suggested_bus_name (self->listener);
+
+      /* This is an unstructured hint for users, so write it to stderr
+       * rather than anywhere machine-readable. Don't put any special
+       * prefixes or decoration on it, for easier copy/paste. */
+      g_printerr ("\n");
+      g_printerr ("Starting program with command-launcher service.\n");
+      g_printerr ("\n");
+      g_printerr ("To inject commands into the container, use a command like:\n");
+      g_printerr ("\n");
+      g_printerr ("%s \\\n", launch_client);
+
+      if (bus_name != NULL)
+        {
+          /* D-Bus names are in a restricted character set that never needs
+           * escaping for shells */
+          g_printerr ("\t--bus-name=%s \\\n", bus_name);
+        }
+      else if (self->listener->server_socket != NULL)
+        {
+          g_autofree char *escaped_socket = g_shell_quote (self->listener->server_socket);
+
+          g_printerr ("\t--socket=%s \\\n", escaped_socket);
+        }
+      else
+        {
+          /* Shouldn't be possible in practice */
+          g_printerr ("\t(launcher address here) \\\n");
+        }
+
+      /* --directory='' means keep using the game's working directory */
+      g_printerr ("\t--directory='' \\\n");
+      g_printerr ("\t-- \\\n");
+      g_printerr ("\tbash\n");
+      g_printerr ("\n");
+    }
 
   self->exit_status = 0;
   _srt_portal_listener_close_info_fh (self->listener, TRUE);
@@ -1153,6 +1310,7 @@ pv_launcher_server_set_up_exit_on_readable (PvLauncherServer *server,
 static gchar **opt_bus_names = NULL;
 static gboolean opt_exec_fallback = FALSE;
 static gint opt_exit_on_readable_fd = -1;
+static gboolean opt_hint = FALSE;
 static gint opt_info_fd = -1;
 static gboolean opt_replace = FALSE;
 static gchar *opt_socket = NULL;
@@ -1194,6 +1352,10 @@ static GOptionEntry options[] =
     "Exit when data is available for reading or when end-of-file is "
     "reached on this fd, usually 0 for stdin.",
     "FD" },
+  { "hint", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_hint,
+    "Show an example steam-runtime-launch-client command on stderr.",
+    NULL, },
   { "info-fd", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_INT, &opt_info_fd,
     "Indicate readiness and print details of how to connect on this "
@@ -1276,6 +1438,7 @@ main (int argc,
                                 "processes.");
 
   g_option_context_add_main_entries (context, options, NULL);
+  opt_hint = _srt_boolean_environment ("SRT_LAUNCHER_SERVICE_HINT", FALSE);
   opt_stop_on_exit = _srt_boolean_environment ("SRT_LAUNCHER_SERVICE_STOP_ON_EXIT", TRUE);
   opt_stop_on_name_loss = _srt_boolean_environment ("SRT_LAUNCHER_SERVICE_STOP_ON_NAME_LOSS", TRUE);
   opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
@@ -1310,6 +1473,9 @@ main (int argc,
 
   if (opt_verbose)
     _srt_util_set_glib_log_handler (G_LOG_DOMAIN, opt_verbose);
+
+  if (opt_verbose || opt_hint)
+    server->flags |= PV_LAUNCHER_SERVER_FLAGS_HINT;
 
   if (opt_stop_on_exit)
     server->flags |= PV_LAUNCHER_SERVER_FLAGS_STOP_ON_EXIT;

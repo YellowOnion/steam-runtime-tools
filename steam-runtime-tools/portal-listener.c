@@ -595,6 +595,39 @@ _srt_portal_listener_listen (SrtPortalListener *self,
   return TRUE;
 }
 
+/*
+ * Return a suggested bus name that clients can use to connect to us.
+ */
+const char *
+_srt_portal_listener_get_suggested_bus_name (SrtPortalListener *self)
+{
+  const char *bus_name;
+
+  if (self->session_bus == NULL)
+    return NULL;
+
+  bus_name = g_dbus_connection_get_unique_name (self->session_bus);
+
+  if (self->bus_names != NULL
+      && !(self->flags & SRT_PORTAL_LISTENER_FLAGS_PREFER_UNIQUE_NAME))
+    {
+      const SrtPortalListenerBusName *record;
+      guint i;
+
+      for (i = 0; i < self->bus_names->len; i++)
+        {
+          record = &g_array_index (self->bus_names, SrtPortalListenerBusName, i);
+
+          if (record->status == SRT_PORTAL_LISTENER_BUS_NAME_STATUS_OWNED)
+            {
+              bus_name = record->name;
+              break;
+            }
+        }
+    }
+
+  return bus_name;
+}
 
 /*
  * If @success is true and we are connected to the session bus, then
@@ -608,30 +641,10 @@ _srt_portal_listener_close_info_fh (SrtPortalListener *self,
 {
   if (self->info_fh != NULL)
     {
-      if (self->session_bus != NULL && success)
-        {
-          const char *bus_name = g_dbus_connection_get_unique_name (self->session_bus);
+      const char *bus_name = _srt_portal_listener_get_suggested_bus_name (self);
 
-          if (self->bus_names != NULL
-              && !(self->flags & SRT_PORTAL_LISTENER_FLAGS_PREFER_UNIQUE_NAME))
-            {
-              const SrtPortalListenerBusName *record;
-              guint i;
-
-              for (i = 0; i < self->bus_names->len; i++)
-                {
-                  record = &g_array_index (self->bus_names, SrtPortalListenerBusName, i);
-
-                  if (record->status == SRT_PORTAL_LISTENER_BUS_NAME_STATUS_OWNED)
-                    {
-                      bus_name = record->name;
-                      break;
-                    }
-                }
-            }
-
-          fprintf (self->info_fh, "bus_name=%s\n", bus_name);
-        }
+      if (success && bus_name != NULL)
+        fprintf (self->info_fh, "bus_name=%s\n", bus_name);
 
       fflush (self->info_fh);
     }

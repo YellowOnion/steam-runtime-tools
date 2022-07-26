@@ -85,6 +85,13 @@ executable(
 )
 
 executable(
+  'steam-runtime-launcher-interface-0',
+  'launcher-interface-0.c',
+  c_args : srt_c_args,
+  install : true,
+)
+
+executable(
   'steam-runtime-launcher-service',
   sources: [
     'launcher-service.c',
@@ -159,6 +166,7 @@ if build_man_pages
     'input-monitor',
     'launch-client',
     'launch-options',
+    'launcher-interface-0',
     'launcher-service',
     'steam-remote',
     'system-info',

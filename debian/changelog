@@ -1,3 +1,16 @@
+steam-runtime-tools (0.20220725.2) UNRELEASED; urgency=medium
+
+  * s-r-launch-client, s-r-launcher-service improvements:
+    - Add s-r-launcher-interface-0, a simplified interface for compat
+      tools such as SteamLinuxRuntime and Proton to enable debugging
+      commands.
+    - Use a pseudo-terminal to bridge terminals into the container.
+      This allows debugging processes inside the container to take the
+      pseudo-terminal as their controlling terminal, which is enough to
+      run an interactive shell with full job control. (steamrt/tasks#125)
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 26 Jul 2022 13:00:47 +0100
+
 steam-runtime-tools (0.20220725.1) steamrt; urgency=medium
 
   [ Simon McVittie ]

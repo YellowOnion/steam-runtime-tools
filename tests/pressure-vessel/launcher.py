@@ -112,6 +112,7 @@ class TestLauncher(BaseTest):
                 ] + self.launcher + [
                     '--socket-directory', temp,
                 ],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=2,
                 universal_newlines=True,
@@ -151,6 +152,7 @@ class TestLauncher(BaseTest):
                         'true',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -177,6 +179,7 @@ class TestLauncher(BaseTest):
                         'sh', '-euc', 'printf hello; printf W"ORL"D >&2',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
@@ -194,6 +197,7 @@ class TestLauncher(BaseTest):
                         'sh', '-euc', 'printf \'%s\' "$PV_TEST_VAR"',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -220,6 +224,7 @@ class TestLauncher(BaseTest):
                         '"',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -237,6 +242,7 @@ class TestLauncher(BaseTest):
                         'sh', '-euc', 'printf \'%s\' "${PV_TEST_VAR-cleared}"',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -252,6 +258,7 @@ class TestLauncher(BaseTest):
                         'sh', '-euc', 'printf \'%s\' "${PV_TEST_VAR-cleared}"',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -266,6 +273,7 @@ class TestLauncher(BaseTest):
                         printf_symlink, 'hello',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -280,6 +288,7 @@ class TestLauncher(BaseTest):
                         'sh', '-euc', 'echo -n "${PV_TEST_VAR-cleared}"',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -299,6 +308,7 @@ class TestLauncher(BaseTest):
                         'sh', '-euc', 'printf \'%s\' "$PV_TEST_VAR"',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -311,6 +321,7 @@ class TestLauncher(BaseTest):
                         '--',
                         'sleep', '600',
                     ],
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -330,6 +341,7 @@ class TestLauncher(BaseTest):
                         'sh', '-euc', 'echo Goodbye',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -349,6 +361,7 @@ class TestLauncher(BaseTest):
                     '--',
                     'printf', 'hello',
                 ],
+                stdin=subprocess.DEVNULL,
                 stdout=2,
                 stderr=2,
             )
@@ -366,6 +379,7 @@ class TestLauncher(BaseTest):
                 self.launcher + [
                     '--socket', os.path.join(temp, 'socket'),
                 ],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=2,
                 universal_newlines=True,
@@ -408,6 +422,7 @@ class TestLauncher(BaseTest):
                         'printf', 'hello',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -421,6 +436,7 @@ class TestLauncher(BaseTest):
                         'sh', '-euc', 'printf hello; printf W"ORL"D >&2',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
@@ -575,6 +591,7 @@ class TestLauncher(BaseTest):
                     '--',
                     'printf', 'wrapped printf',
                 ],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=2,
                 universal_newlines=True,
@@ -597,6 +614,7 @@ class TestLauncher(BaseTest):
                         'true',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=2,
                     stderr=2,
                 )
@@ -607,6 +625,7 @@ class TestLauncher(BaseTest):
                         '--terminate',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=2,
                     stderr=2,
                 )
@@ -717,6 +736,7 @@ class TestLauncher(BaseTest):
                     'sh', '-euc', 'printf "%s" "$MAINPID"',
                 ],
                 check=True,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=2,
                 universal_newlines=True,
@@ -742,6 +762,7 @@ class TestLauncher(BaseTest):
                     '--',
                     'printf', 'this never happens',
                 ],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=2,
                 universal_newlines=True,
@@ -759,6 +780,7 @@ class TestLauncher(BaseTest):
                     '--',
                     'printf', 'ran this anyway',
                 ],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=2,
                 universal_newlines=True,
@@ -778,6 +800,7 @@ class TestLauncher(BaseTest):
                     'printf', 'ran this anyway',
                 ],
                 pass_fds=[write_end],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=2,
                 universal_newlines=True,
@@ -838,6 +861,7 @@ class TestLauncher(BaseTest):
                         'printf', 'hello',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -853,6 +877,7 @@ class TestLauncher(BaseTest):
                         'printf', 'world',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
                     stderr=2,
                 )
@@ -878,6 +903,7 @@ class TestLauncher(BaseTest):
                     '--',
                     'printf', 'hello',
                 ],
+                stdin=subprocess.DEVNULL,
                 stdout=2,
                 stderr=2,
             )
@@ -895,6 +921,7 @@ class TestLauncher(BaseTest):
                     'org.freedesktop.DBus.Peer.Ping',
                 ],
                 check=True,
+                stdin=subprocess.DEVNULL,
                 stdout=2,
                 stderr=2,
             )
@@ -929,6 +956,7 @@ class TestLauncher(BaseTest):
                 ] + self.launcher + [
                     '--session',
                 ],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=2,
                 universal_newlines=True,
@@ -963,6 +991,7 @@ class TestLauncher(BaseTest):
                     'org.freedesktop.DBus.Peer.Ping',
                 ],
                 check=True,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=2,
             )
@@ -975,6 +1004,7 @@ class TestLauncher(BaseTest):
                     'printf', 'hello',
                 ],
                 check=True,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=2,
             )
@@ -1082,6 +1112,7 @@ class TestLauncher(BaseTest):
                     'true',
                 ],
                 check=True,
+                stdin=subprocess.DEVNULL,
                 stdout=2,
                 stderr=2,
             )
@@ -1120,6 +1151,7 @@ class TestLauncher(BaseTest):
                     'true',
                 ],
                 check=True,
+                stdin=subprocess.DEVNULL,
                 stdout=2,
                 stderr=2,
             )
@@ -1135,6 +1167,7 @@ class TestLauncher(BaseTest):
                         'true',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=2,
                     stderr=2,
                 )
@@ -1162,6 +1195,7 @@ class TestLauncher(BaseTest):
                         'true',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=2,
                     stderr=2,
                 )
@@ -1172,6 +1206,7 @@ class TestLauncher(BaseTest):
                         'true',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=2,
                     stderr=2,
                 )
@@ -1237,6 +1272,7 @@ class TestLauncher(BaseTest):
                         '--terminate',
                     ],
                     check=True,
+                    stdin=subprocess.DEVNULL,
                     stdout=2,
                     stderr=2,
                 )

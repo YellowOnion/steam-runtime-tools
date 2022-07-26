@@ -340,7 +340,6 @@ class Environment:
             [
                 'meson', 'test',
                 '-C', str(self.builddir_parent / 'clang'),
-                '-v'
             ] + args,
             check=True,
         )
@@ -362,7 +361,6 @@ class Environment:
                 'AUTOPKGTEST_ARTIFACTS=' + str(artifacts),
                 'meson', 'test',
                 '-C', str(self.builddir_parent / 'host'),
-                '-v',
             ] + args,
             check=True,
         )

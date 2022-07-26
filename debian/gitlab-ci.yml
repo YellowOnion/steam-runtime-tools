@@ -90,8 +90,16 @@ stages:
     - deploy
     - test
 
-package:
+.srt_build_package:
     extends: .build_package
+    artifacts:
+        paths:
+            - _build/meson-logs/*.txt
+            - debian/tmp/artifacts/build
+        when: always
+
+package:
+    extends: .srt_build_package
     variables:
         BUILD_IMAGE: '${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}'
         DEB_BUILD_SNAPSHOT_RELEASE_TAGS: 'yes'
@@ -102,7 +110,7 @@ package:
             umask 022
 
 package:i386:
-    extends: .build_package
+    extends: .srt_build_package
     variables:
         BUILD_IMAGE: '${SCOUT_DOCKER_REGISTRY}/${SCOUT_I386_DOCKER_IMAGE}'
         DEB_BUILD_SNAPSHOT_RELEASE_TAGS: 'yes'
@@ -132,7 +140,7 @@ build:devel:
                 _build/devel
             ninja -C _build/devel
             ninja -C _build/devel install
-            meson test --verbose -C _build/devel
+            G_MESSAGES_DEBUG=all meson test -C _build/devel
 
     artifacts:
         paths:
@@ -173,7 +181,7 @@ build:clang:
                 _build/clang-asan
             ninja -C _build/clang-asan
             ninja -C _build/clang-asan install
-            meson test --verbose -C _build/clang-asan
+            G_MESSAGES_DEBUG=all meson test -C _build/clang-asan
 
     artifacts:
         paths:

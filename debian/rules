@@ -73,8 +73,14 @@ ifeq ($(filter nocheck,$(DEB_BUILD_OPTIONS)),)
 	debian/check-version-number.sh $(CURDIR)/_build $(DEB_VERSION_UPSTREAM)
 	mkdir debian/locales
 	localedef -f UTF-8 -i en_US --no-archive debian/locales/en_US.UTF-8
-	env LOCPATH=$(CURDIR)/debian/locales LC_ALL=en_US.UTF-8 \
-	meson test -C _build --verbose
+	if ! env \
+		G_MESSAGES_DEBUG=all \
+		LC_ALL=en_US.UTF-8 \
+		LOCPATH=$(CURDIR)/debian/locales \
+	meson test -C _build; then \
+		cat _build/meson-logs/testlog.txt; \
+		exit 1; \
+	fi
 endif
 
 override_dh_auto_install:

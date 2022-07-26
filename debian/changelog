@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220725.2) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220726.0) steamrt; urgency=medium
 
   * s-r-launch-client, s-r-launcher-service improvements:
     - Add s-r-launcher-interface-0, a simplified interface for compat
@@ -8,8 +8,10 @@ steam-runtime-tools (0.20220725.2) UNRELEASED; urgency=medium
       This allows debugging processes inside the container to take the
       pseudo-terminal as their controlling terminal, which is enough to
       run an interactive shell with full job control. (steamrt/tasks#125)
+  * build: Prefer to send Meson test logs to a log file
+  * docs: Documentation updates
 
- -- Simon McVittie <smcv@collabora.com>  Tue, 26 Jul 2022 13:00:47 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 26 Jul 2022 15:20:15 +0100
 
 steam-runtime-tools (0.20220725.1) steamrt; urgency=medium
 

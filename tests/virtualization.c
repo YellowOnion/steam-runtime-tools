@@ -249,6 +249,8 @@ main (int argc,
       char **argv)
 {
   int status;
+
+  _srt_tests_global_debug_log_to_stderr ();
   argv0 = argv[0];
 
   g_test_init (&argc, &argv, NULL);

@@ -3328,6 +3328,7 @@ main (int argc,
 {
   int ret;
 
+  _srt_tests_global_debug_log_to_stderr ();
   argv0 = argv[0];
   global_sysroots = _srt_global_setup_sysroots (argv0);
 

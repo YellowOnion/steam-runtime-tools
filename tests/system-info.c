@@ -4067,6 +4067,8 @@ main (int argc,
       char **argv)
 {
   int status;
+
+  _srt_tests_global_debug_log_to_stderr ();
   argv0 = argv[0];
 
   /* We can't use %G_TEST_OPTION_ISOLATE_DIRS because we are targeting an older glib verion.

@@ -122,6 +122,7 @@ int
 main (int argc,
       char **argv)
 {
+  _srt_tests_global_debug_log_to_stderr ();
   g_test_init (&argc, &argv, NULL);
 
   g_test_add ("/libdl/classify", Fixture, NULL, setup,

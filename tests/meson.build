@@ -66,6 +66,7 @@ test_utils = static_library(
   'test-utils',
   sources : [
     'fake-home.c',
+    'redirect-stdout.c',
     'test-utils.c',
   ],
   c_args : [

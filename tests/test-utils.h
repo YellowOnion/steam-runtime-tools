@@ -65,6 +65,8 @@
  * Other assorted test helpers.
  */
 
+void _srt_tests_global_debug_log_to_stderr (void);
+
 gchar *_srt_global_setup_private_xdg_dirs (void);
 gboolean _srt_global_teardown_private_xdg_dirs (void);
 

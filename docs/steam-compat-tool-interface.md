@@ -32,20 +32,24 @@ each identified by a unique name, in this case `my_compat_tool`.
 
 Each compatibility tool can have these fields:
 
-`install_path`
-: Installation directory containing `toolmanifest.vdf` and other
+* `install_path`:
+
+    Installation directory containing `toolmanifest.vdf` and other
     necessary files, for example
     `/path/to/steamapps/common/Proton - Experimental` for Proton
 
-`display_name`
-: Name to display in the Steam user interface
+* `display_name`:
 
-`from_oslist`
-: Operating system(s?) whose executables can be run by this
+    Name to display in the Steam user interface
+
+* `from_oslist`:
+
+    Operating system(s?) whose executables can be run by this
     compatibility tool, for example `windows` for Proton
 
-`to_oslist`
-: Operating system(s?) that can run this compatibility tool,
+* `to_oslist`:
+
+    Operating system(s?) that can run this compatibility tool,
     for example `linux` for Proton
 
 For the compatibility tools provided by Steam itself, such as
@@ -72,15 +76,18 @@ file with one top-level entry, `manifest`.
 
 `manifest` has the following known fields:
 
-`version`
-: The version number of the file format. The current version is `2`.
+* `version`:
+
+    The version number of the file format. The current version is `2`.
     The default is `1`.
 
-`commandline`
-: The command-line for the entry point.
+* `commandline`:
 
-`compatmanager_layer_name`
-: The name of this compatibility tool within a stack of compatibility
+    The command-line for the entry point.
+
+* `compatmanager_layer_name`:
+
+    The name of this compatibility tool within a stack of compatibility
     tools, used to target debugging commands at a particular layer
     in the stack without needing to know a specific Steam app ID.
     Compatibility tools that might be layered using `require_tool_appid`
@@ -90,40 +97,47 @@ file with one top-level entry, `manifest`.
 
     Some example values for this field are:
 
-    `container-runtime`
-    : Any self-contained Steam container runtime environment such as
+    * `container-runtime`:
+
+        Any self-contained Steam container runtime environment such as
         "[Steam Linux Runtime - soldier][soldier]" (app ID 1391110) or
         "[Steam Linux Runtime - sniper][sniper]" (app ID 1628350)
 
-    `proton`
-    : Any official or unofficial version of Proton
+    * `proton`:
 
-    `scout-in-container`
-    : The container runtime environment that sets up the
+        Any official or unofficial version of Proton
+
+    * `scout-in-container`:
+
+        The container runtime environment that sets up the
         Steam Runtime 1 'scout'
         [`LD_LIBRARY_PATH` runtime](ld-library-path-runtime.md)
         as a layer over a `container-runtime`
         (see [Steam Linux Runtime (scout-on-soldier)][scout-on-soldier]
 
-`require_tool_appid`
-: If set, this compatibility tool needs to be wrapped in another
+* `require_tool_appid`:
+
+    If set, this compatibility tool needs to be wrapped in another
     compatibility tool, specified by its numeric Steam app ID. For
     example, Proton 5.13 needs to be wrapped by "Steam Linux Runtime -
     soldier", so it sets this field to `1391110`.
 
-`unlisted`
-: If `1`, this compatibility tool will not be shown to users as an option for
+* `unlisted`:
+
+    If `1`, this compatibility tool will not be shown to users as an option for
     running games. For example, until Steam is able to distinguish between
     Steam Runtime 1 'scout' and Steam Runtime 2 'soldier' as distinct
     platforms, it is not useful to run ordinary Steam games under 'soldier',
     due to it being incompatible with 'scout'.
 
-`use_sessions`
-: If set to `1`, older versions of Steam would use the "session mode"
+* `use_sessions`:
+
+    If set to `1`, older versions of Steam would use the "session mode"
     described below.
 
-`use_tool_subprocess_reaper`
-: If set to `1`, Steam will send `SIGINT` to the compatibility tool
+* `use_tool_subprocess_reaper`:
+
+    If set to `1`, Steam will send `SIGINT` to the compatibility tool
     instead of proceeding directly to `SIGKILL`, to give it a chance
     to do graceful cleanup.
 
@@ -205,32 +219,39 @@ the actual game, but they are not used for install scripts.
 
 Some environment variables are set by Steam, including:
 
-`LD_LIBRARY_PATH`
-: Used to load Steam Runtime libraries.
+* `LD_LIBRARY_PATH`:
 
-`LD_PRELOAD`
-: Used to load the Steam Overlay.
+    Used to load Steam Runtime libraries.
 
-`STEAM_COMPAT_APP_ID`
-: The decimal app-ID of the game, for example 440 for Team Fortress 2.
+* `LD_PRELOAD`:
 
-`STEAM_COMPAT_CLIENT_INSTALL_PATH`
-: The absolute path to the directory where Steam is installed. This is the
+    Used to load the Steam Overlay.
+
+* `STEAM_COMPAT_APP_ID`:
+
+    The decimal app-ID of the game, for example 440 for Team Fortress 2.
+
+* `STEAM_COMPAT_CLIENT_INSTALL_PATH`:
+
+    The absolute path to the directory where Steam is installed. This is the
     same as the target of the `~/.steam/root` symbolic link.
 
-`STEAM_COMPAT_DATA_PATH`
-: The absolute path to a directory that compatibility tools can use to
+* `STEAM_COMPAT_DATA_PATH`:
+
+    The absolute path to a directory that compatibility tools can use to
     store game-specific data. For example, Proton puts its `WINEPREFIX`
     in `$STEAM_COMPAT_DATA_PATH/pfx`.
 
-`STEAM_COMPAT_INSTALL_PATH`
-: The absolute path to the game's [install folder][], for example
+* `STEAM_COMPAT_INSTALL_PATH`:
+
+    The absolute path to the game's [install folder][], for example
     `/home/you/.local/share/Steam/steamapps/common/Estranged Act I`,
     even if the current working directory is a subdirectory of this
     (as is the case for Estranged: Act I (261820) for example).
 
-`STEAM_COMPAT_LAUNCHER_SERVICE`
-: May be set to the `compatmanager_layer_name` of a single compatibility
+* `STEAM_COMPAT_LAUNCHER_SERVICE`:
+
+    May be set to the `compatmanager_layer_name` of a single compatibility
     tool, to request that the tool is configured to allow debugging
     commands to be inserted into its runtime environment via IPC.
 
@@ -257,31 +278,37 @@ Some environment variables are set by Steam, including:
     If unset, empty or set to an unrecognised string, then no debugging
     commands will be inserted.
 
-`STEAM_COMPAT_LIBRARY_PATHS`
-: Colon-delimited list of paths to Steam Library directories containing
+* `STEAM_COMPAT_LIBRARY_PATHS`:
+
+    Colon-delimited list of paths to Steam Library directories containing
     the game, the compatibility tools  if  any,  and any  other resources
     that the game will need, such as DirectX installers.
 
-`STEAM_COMPAT_MOUNTS`
-: Colon-delimited list of paths to additional directories that are to be
+* `STEAM_COMPAT_MOUNTS`:
+
+    Colon-delimited list of paths to additional directories that are to be
     made available read/write in a pressure-vessel container.
 
-`STEAM_COMPAT_SESSION_ID`
-: In the historical session mode (see below), this is used to link together
+* `STEAM_COMPAT_SESSION_ID`:
+
+    In the historical session mode (see below), this is used to link together
     multiple container invocations into a logical "session".
 
-`STEAM_COMPAT_SHADER_PATH`
-: The absolute path to the variable data directory used for cached
+* `STEAM_COMPAT_SHADER_PATH`:
+
+    The absolute path to the variable data directory used for cached
     shaders, if any.
 
-`STEAM_COMPAT_TOOL_PATHS`
-: Colon-delimited list of paths to Steam compatibility tools in use.
+* `STEAM_COMPAT_TOOL_PATHS`:
+
+    Colon-delimited list of paths to Steam compatibility tools in use.
     Typically this will be a single path, but when using tools with
     `require_tool_appid` set, such as Proton, it is a colon-separated
     list with the "innermost" tool first and the "outermost" tool last.
 
-`SteamAppId`
-: The same as `STEAM_COMPAT_APP_ID`, but only when running the actual
+* `SteamAppId`:
+
+    The same as `STEAM_COMPAT_APP_ID`, but only when running the actual
     game; not set when running
     [install scripts](https://partner.steamgames.com/doc/sdk/installscripts)
     or other setup commands. The Steamworks API assumes that every process

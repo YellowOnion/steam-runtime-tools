@@ -98,23 +98,28 @@ scout.
 Steam Runtime version 2, codenamed soldier, is based on Debian 10 (2019)
 and is already available to the public.
 
-As of 2021, it is not possible to ship games on Steam that will require
-soldier or newer container runtimes.
-We hope this will become possible in future.
-
-However, if it is useful to run in a newer container during development,
-the *Steam Linux Runtime - soldier* compatibility tool can be used to
-achieve this.
-
-Steam Runtime version 3, codenamed sniper, is not yet available to the
-public (although private builds already exist).
-It is expected to be very similar to soldier, but based on Debian 11 (2021)
-instead of Debian 10 (2019), with correspondingly newer versions of various
-shared libraries and other packages.
+Steam Runtime version 3, codenamed sniper, is very similar to soldier.
+It is based on Debian 11 (2021) instead of Debian 10 (2019), with
+correspondingly newer versions of various shared libraries and other
+packages.
 
 For commands, filenames, etc. in this document that refer to `soldier`,
 substituting `sniper` will usually provide a similar result for the sniper
 runtime.
+
+As of mid 2022, releasing games on Steam that require the soldier, sniper
+or newer container runtimes is not possible without manual action by the
+Steam developers.
+A development branch of Battle for Wesnoth is the first example of
+[a game using the sniper container runtime][wesnoth-sniper].
+We hope this will become available for general use in future.
+
+[wesnoth-sniper]: https://github.com/ValveSoftware/steam-runtime/issues/508#issuecomment-1147665747
+
+If it is useful to run in a newer container during development,
+the *Steam Linux Runtime - soldier* or
+*Steam Linux Runtime - sniper* compatibility tools can be used to
+achieve this.
 
 ### Windows games, using Proton
 
@@ -172,16 +177,18 @@ an easy way to test that the compatibility tool is working correctly.
 
 For a more scriptable version of this, launch one of these URLs:
 
-  * [Steam Linux Runtime](steam://install/1070560) (scout)
-  * [Steam Linux Runtime - soldier](steam://install/1391110)
-  * [Proton Experimental](steam://install/1493710)
-  * [Proton 6.3](steam://install/1580130)
-  * [Proton 5.13](steam://install/1420170)
+  * Steam Linux Runtime (scout): `steam steam://install/1070560`
+  * Steam Linux Runtime - soldier: `steam steam://install/1391110`
+  * Steam Linux Runtime - sniper: `steam steam://install/1628350`
+  * Proton Experimental: `steam steam://install/1493710`
+  * Proton 7.0: `steam steam://install/1887720`
+  * Proton 6.3: `steam steam://install/1580130`
+  * Proton 5.13: `steam steam://install/1420170`
 
 ### Running commands in soldier, sniper, etc.
 
 The simplest scenario for using the Steam Linux Runtime framework is to
-run commands in a newer runtime such as soldier (or, in future, sniper).
+run commands in a newer runtime such as soldier or sniper.
 This is not directly supported by Steam itself, but is useful as a
 baseline for testing.
 To do this, run a command like:
@@ -721,14 +728,16 @@ $ export DEBUGINFOD_URLS="https://debuginfod.debian.net"
 $ gdb -x file-containing-configuration
 ```
 
+or on Arch Linux systems:
+
+```
+$ export DEBUGINFOD_URLS="https://debuginfod.archlinux.org"
+$ gdb -x file-containing-configuration
+```
+
 Ubuntu does not yet provide a `debuginfod` server.
 For Ubuntu, you will need to install special `-dbgsym` packages that
 contain the detached debug symbols.
-
-Arch Linux does not yet provide a `debuginfod` server or detached debug
-symbols.
-For Arch Linux, you will need to recompile packages that are of interest
-with their debug symbols included.
 
 [debuginfod]: https://sourceware.org/elfutils/Debuginfod.html
 

@@ -87,6 +87,7 @@ class TestCheapCopy(BaseTest):
                     dest,
                 ],
                 check=True,
+                stdout=2,       # >&2, i.e. stderr
             )
             self.assert_tree_is_same(source, dest)
 
@@ -102,6 +103,7 @@ class TestCheapCopy(BaseTest):
                     dest,
                 ],
                 check=True,
+                stdout=2,       # >&2, i.e. stderr
             )
             self.assert_tree_is_same(source, dest)
 
@@ -142,6 +144,7 @@ class TestCheapCopy(BaseTest):
                     dest,
                 ],
                 check=True,
+                stdout=2,       # >&2, i.e. stderr
             )
             self.assert_tree_is_same(source, dest, require_hard_links)
 
@@ -226,7 +229,7 @@ class TestCheapCopy(BaseTest):
                     dest,
                 ],
                 check=True,
-                stdout=2,
+                stdout=2,       # >&2, i.e. stderr
             )
             self.assert_tree_is_same(expected, dest, require_hard_links=False)
 

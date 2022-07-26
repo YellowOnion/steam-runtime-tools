@@ -172,11 +172,11 @@ an easy way to test that the compatibility tool is working correctly.
 
 For a more scriptable version of this, launch one of these URLs:
 
-  * [Steam Linux Runtime](steam://install/1070560) (scout)
-  * [Steam Linux Runtime - soldier](steam://install/1391110)
-  * [Proton Experimental](steam://install/1493710)
-  * [Proton 6.3](steam://install/1580130)
-  * [Proton 5.13](steam://install/1420170)
+  * Steam Linux Runtime (scout): `steam steam://install/1070560`
+  * Steam Linux Runtime - soldier: `steam steam://install/1391110`
+  * Proton Experimental: `steam steam://install/1493710`
+  * Proton 6.3: `steam steam://install/1580130`
+  * Proton 5.13: `steam steam://install/1420170`
 
 ### Running commands in soldier, sniper, etc.
 

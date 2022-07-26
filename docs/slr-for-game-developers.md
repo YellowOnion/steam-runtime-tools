@@ -721,14 +721,16 @@ $ export DEBUGINFOD_URLS="https://debuginfod.debian.net"
 $ gdb -x file-containing-configuration
 ```
 
+or on Arch Linux systems:
+
+```
+$ export DEBUGINFOD_URLS="https://debuginfod.archlinux.org"
+$ gdb -x file-containing-configuration
+```
+
 Ubuntu does not yet provide a `debuginfod` server.
 For Ubuntu, you will need to install special `-dbgsym` packages that
 contain the detached debug symbols.
-
-Arch Linux does not yet provide a `debuginfod` server or detached debug
-symbols.
-For Arch Linux, you will need to recompile packages that are of interest
-with their debug symbols included.
 
 [debuginfod]: https://sourceware.org/elfutils/Debuginfod.html
 

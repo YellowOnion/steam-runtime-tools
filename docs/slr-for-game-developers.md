@@ -181,6 +181,7 @@ For a more scriptable version of this, launch one of these URLs:
   * Steam Linux Runtime - soldier: `steam steam://install/1391110`
   * Steam Linux Runtime - sniper: `steam steam://install/1628350`
   * Proton Experimental: `steam steam://install/1493710`
+  * Proton 7.0: `steam steam://install/1887720`
   * Proton 6.3: `steam steam://install/1580130`
   * Proton 5.13: `steam steam://install/1420170`
 

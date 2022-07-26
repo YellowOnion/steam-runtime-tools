@@ -194,7 +194,7 @@ Some environment variables are set by Steam, including:
     in `$STEAM_COMPAT_DATA_PATH/pfx`.
 
 `STEAM_COMPAT_INSTALL_PATH`
-: The absolute path to the game's installation directory, for example
+: The absolute path to the game's [install folder][], for example
     `/home/you/.local/share/Steam/steamapps/common/Estranged Act I`,
     even if the current working directory is a subdirectory of this
     (as is the case for Estranged: Act I (261820) for example).
@@ -241,6 +241,8 @@ scout libraries. After setting up the container, it runs the "inner"
 compatibility tool (Proton) with an entirely new `LD_LIBRARY_PATH`
 pointing to mixed host and soldier libraries.
 
+[install folder]: https://partner.steamgames.com/doc/store/application/depots
+
 ## Native Linux Steam games
 
 This is the simplest situation and can be considered to be the baseline.
@@ -260,10 +262,23 @@ The game is expected to run in the usual way. Conventionally, it does not
 double-fork to put itself in the background, but if it does, any background
 processes will be reparented to have the subreaper as their parent.
 
-The current working directory is the working directory configured in the
-game's Steam metadata (for example `estrangedact1` for Estranged: Act 1,
-261820), or the game's directory (or maybe the executable's directory?)
-if unconfigured. The compatibility tool is expected to preserve this
+If the game's Steam metadata has a non-empty working directory
+(the `Working Dir` in its [Steamworks launch options][]),
+then the current working directory is set to that directory before
+launching any compatibility tools. For example, Estranged: Act 1
+(app ID 261820) has `Working Dir: estrangedact1` and its
+[install folder][] is set to `Estranged Act I`, so it runs with
+current working directory `.../Estranged Act I/estrangedact1`.
+
+If the working directory is left blank, then the current working directory
+is set to the game's top-level [install folder][].
+For example, Dota 2 (app ID 570) runs from its top-level install folder
+`dota 2 beta`, even though its main executable is in the `game`
+subdirectory.
+
+[Steamworks launch options]: https://partner.steamgames.com/doc/sdk/uploading
+
+Either way, the compatibility tool is expected to preserve this
 working directory when running the actual game.
 
 The environment variable `STEAM_COMPAT_SESSION_ID` is not set.

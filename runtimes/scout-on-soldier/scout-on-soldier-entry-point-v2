@@ -109,6 +109,8 @@ main () {
         this_compat_tool_appid="$(< "${here}/steam_appid.txt")"
     fi
 
+    # TODO: Remove this block and the launcher_service* variables when
+    # s-r-l-i-0 is in the public stable SLR_soldier container
     case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
         ("")
             ;;
@@ -263,7 +265,14 @@ main () {
     # Steam client itself, but let's try keeping 32-bit games consistent
     # with 64-bit games.
 
-    if [ -n "$launcher_service" ]; then
+    if command -v steam-runtime-launcher-interface-0 >/dev/null; then
+        set -- \
+            steam-runtime-launcher-interface-0 \
+            "scout-in-container:scout-on-soldier:$this_compat_tool_appid" \
+            "$@"
+    # TODO: Remove this block and the launcher_service* variables when
+    # s-r-l-i-0 is in the public stable SLR_soldier container
+    elif [ -n "$launcher_service" ]; then
         unset STEAM_COMPAT_LAUNCHER_SERVICE
         launcher_service_address="--bus-name=com.steampowered.App${appid}"
         launcher_args+=("$launcher_service_address")

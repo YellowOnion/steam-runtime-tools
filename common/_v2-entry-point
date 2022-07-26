@@ -285,6 +285,9 @@ for word in $ld_preload; do
 done
 IFS="$old_IFS"
 
+# TODO: Remove this block and the launcher_service variable when
+# s-r-l-i-0 is in the public stable Steam Runtime or the public stable
+# SLR_soldier/pressure-vessel/bin
 case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
     ("")
         ;;
@@ -294,7 +297,19 @@ case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
         ;;
 esac
 
-if [ -n "$launcher_service" ]; then
+if [ -x "$here/pressure-vessel/bin/steam-runtime-launcher-interface-0" ]; then
+    set -- \
+        "$here/pressure-vessel/bin/steam-runtime-launcher-interface-0" \
+        "container-runtime:$this_compat_tool_appid" \
+        "$@"
+elif command -v steam-runtime-launcher-interface-0 >/dev/null; then
+    set -- \
+        steam-runtime-launcher-interface-0 \
+        "container-runtime:$this_compat_tool_appid" \
+        "$@"
+# TODO: Remove this elif block when s-r-l-i-0 is in the public stable
+# Steam Runtime or the public stable SLR_soldier/pressure-vessel/bin
+elif [ -n "$launcher_service" ]; then
     unset STEAM_COMPAT_LAUNCHER_SERVICE
     appid="${STEAM_COMPAT_APP_ID-"${SteamAppId-0}"}"
     launch_client="$here/pressure-vessel/bin/steam-runtime-launch-client"

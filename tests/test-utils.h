@@ -65,6 +65,9 @@
  * Other assorted test helpers.
  */
 
+void _srt_tests_init (int *argc,
+                      char ***argv,
+                      const char *reserved);
 void _srt_tests_global_debug_log_to_stderr (void);
 
 gchar *_srt_global_setup_private_xdg_dirs (void);

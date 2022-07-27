@@ -186,8 +186,7 @@ int
 main (int argc,
       char **argv)
 {
-  _srt_tests_global_debug_log_to_stderr ();
-  g_test_init (&argc, &argv, NULL);
+  _srt_tests_init (&argc, &argv, NULL);
   g_test_add ("/json-utils/dup-array-of-lines-member", Fixture, NULL,
               setup, test_dup_array_of_lines_member, teardown);
   g_test_add ("/json-utils/dup-strv-member", Fixture, NULL,

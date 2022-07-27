@@ -500,10 +500,9 @@ int
 main (int argc,
       char **argv)
 {
-  _srt_tests_global_debug_log_to_stderr ();
   _srt_setenv_disable_gio_modules ();
 
-  g_test_init (&argc, &argv, NULL);
+  _srt_tests_init (&argc, &argv, NULL);
   g_test_add ("/arbitrary-key", Fixture, NULL,
               setup, test_arbitrary_key, teardown);
   g_test_add ("/count-decimal-digits", Fixture, NULL,

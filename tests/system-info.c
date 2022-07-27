@@ -4068,14 +4068,13 @@ main (int argc,
 {
   int status;
 
-  _srt_tests_global_debug_log_to_stderr ();
   argv0 = argv[0];
 
   /* We can't use %G_TEST_OPTION_ISOLATE_DIRS because we are targeting an older glib verion.
    * As a workaround we use our function `setup_env()`.
    * We can't use an environ because in `_srt_steam_check()` we call `g_app_info_get_*` that
    * doesn't support a custom environ. */
-  g_test_init (&argc, &argv, NULL);
+  _srt_tests_init (&argc, &argv, NULL);
   fake_home_path = _srt_global_setup_private_xdg_dirs ();
   global_sysroots = _srt_global_setup_sysroots (argv0);
 

@@ -323,11 +323,10 @@ main (int argc,
   if (pthread_sigmask (SIG_BLOCK, &mask, NULL) != 0)
     g_error ("pthread_sigmask: %s", g_strerror (errno));
 
-  _srt_tests_global_debug_log_to_stderr ();
   prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
   _srt_setenv_disable_gio_modules ();
 
-  g_test_init (&argc, &argv, NULL);
+  _srt_tests_init (&argc, &argv, NULL);
   g_test_add ("/terminate/nothing", Fixture, NULL,
               setup, test_terminate_nothing, teardown);
   g_test_add ("/terminate/sigterm", Fixture, NULL,

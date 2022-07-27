@@ -554,10 +554,9 @@ int
 main (int argc,
       char **argv)
 {
-  _srt_tests_global_debug_log_to_stderr ();
   _srt_setenv_disable_gio_modules ();
 
-  g_test_init (&argc, &argv, NULL);
+  _srt_tests_init (&argc, &argv, NULL);
   g_test_add ("/remap-ld-preload", Fixture, NULL,
               setup, test_remap_ld_preload, teardown);
   g_test_add ("/remap-ld-preload-flatpak", Fixture, NULL,

@@ -245,10 +245,9 @@ int
 main (int argc,
       char **argv)
 {
-  _srt_tests_global_debug_log_to_stderr ();
   argv0 = argv[0];
 
-  g_test_init (&argc, &argv, NULL);
+  _srt_tests_init (&argc, &argv, NULL);
   g_test_add ("/check-requirements-cli/arguments_validation", Fixture, NULL,
               setup, test_arguments_validation, teardown);
   g_test_add ("/check-requirements-cli/help-and-version", Fixture, NULL,

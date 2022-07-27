@@ -323,6 +323,7 @@ main (int argc,
   if (pthread_sigmask (SIG_BLOCK, &mask, NULL) != 0)
     g_error ("pthread_sigmask: %s", g_strerror (errno));
 
+  _srt_tests_global_debug_log_to_stderr ();
   prctl (PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0);
   _srt_setenv_disable_gio_modules ();
 

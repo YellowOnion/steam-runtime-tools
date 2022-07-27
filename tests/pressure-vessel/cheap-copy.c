@@ -26,6 +26,9 @@
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
+
+#include "tests/test-utils.h"
+
 #include "tree-copy.h"
 #include "utils.h"
 
@@ -57,6 +60,7 @@ main (int argc,
   PvCopyFlags flags = PV_COPY_FLAGS_NONE;
   int ret = EX_USAGE;
 
+  _srt_tests_global_debug_log_to_stderr ();
   setlocale (LC_ALL, "");
   _srt_setenv_disable_gio_modules ();
 

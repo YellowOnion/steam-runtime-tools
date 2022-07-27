@@ -45,6 +45,7 @@ main (int argc,
   int ret = EX_USAGE;
   int i;
 
+  _srt_tests_global_debug_log_to_stderr ();
   setlocale (LC_ALL, "");
   _srt_setenv_disable_gio_modules ();
 

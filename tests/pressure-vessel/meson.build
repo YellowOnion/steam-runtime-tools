@@ -172,9 +172,11 @@ foreach helper : helpers
       helper + '.c',
     ],
     dependencies : [
+      force_libelf,
       gio_unix,
       json_glib,
       libglnx_dep,
+      test_utils_static_libsteamrt_dep,
     ],
     link_with : [
       pressure_vessel_utils,

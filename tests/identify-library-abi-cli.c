@@ -395,6 +395,7 @@ main (int argc,
   int status;
   GError *error = NULL;
 
+  _srt_tests_global_debug_log_to_stderr ();
   argv0 = argv[0];
 
   g_test_init (&argc, &argv, NULL);

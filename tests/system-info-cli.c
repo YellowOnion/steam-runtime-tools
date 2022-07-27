@@ -882,10 +882,9 @@ int
 main (int argc,
       char **argv)
 {
-  _srt_tests_global_debug_log_to_stderr ();
   argv0 = argv[0];
 
-  g_test_init (&argc, &argv, NULL);
+  _srt_tests_init (&argc, &argv, NULL);
   g_test_add ("/system-info-cli/libraries_presence", Fixture, NULL,
               setup, libraries_presence, teardown);
   g_test_add ("/system-info-cli/libraries_missing", Fixture, NULL,

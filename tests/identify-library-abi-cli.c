@@ -395,10 +395,9 @@ main (int argc,
   int status;
   GError *error = NULL;
 
-  _srt_tests_global_debug_log_to_stderr ();
   argv0 = argv[0];
 
-  g_test_init (&argc, &argv, NULL);
+  _srt_tests_init (&argc, &argv, NULL);
   /* Creates an empty temporary directory to test the --directory option */
   empty_temp_dir = g_dir_make_tmp ("empty-dir-XXXXXX", &error);
   g_test_add ("/identify-library-abi-cli/arguments_validation", Fixture, NULL,

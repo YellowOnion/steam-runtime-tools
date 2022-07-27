@@ -35,7 +35,7 @@
 #include "steam-runtime-tools/utils-internal.h"
 
 #if !GLIB_CHECK_VERSION(2, 68, 0)
-FILE *original_stdout = NULL;
+static FILE *original_stdout = NULL;
 
 static void
 print_to_original_stdout (const char *message)
@@ -47,6 +47,8 @@ print_to_original_stdout (const char *message)
 }
 #endif
 
+static gboolean global_debug_log_to_stderr = FALSE;
+
 /*
  * Ensure that g_debug() and g_info() log to stderr.
  *
@@ -57,6 +59,9 @@ print_to_original_stdout (const char *message)
 void
 _srt_tests_global_debug_log_to_stderr (void)
 {
+  g_return_if_fail (!global_debug_log_to_stderr);
+  global_debug_log_to_stderr = TRUE;
+
 #if GLIB_CHECK_VERSION(2, 68, 0)
   /* Send g_debug() and g_info() to stderr instead of the default stdout. */
   g_log_writer_default_set_use_stderr (TRUE);
@@ -75,4 +80,19 @@ _srt_tests_global_debug_log_to_stderr (void)
    * but in this #else we only need to deal with past versions of GLib. */
   g_set_print_handler (print_to_original_stdout);
 #endif
+}
+
+static gboolean tests_init_done = FALSE;
+
+void
+_srt_tests_init (int *argc,
+                 char ***argv,
+                 const char *reserved)
+{
+  g_return_if_fail (!tests_init_done);
+  g_return_if_fail (reserved == NULL);
+  tests_init_done = TRUE;
+
+  _srt_tests_global_debug_log_to_stderr ();
+  g_test_init (argc, argv, NULL);
 }

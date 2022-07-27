@@ -82,6 +82,43 @@ _srt_tests_global_debug_log_to_stderr (void)
 #endif
 }
 
+#if !GLIB_CHECK_VERSION(2, 70, 0)
+static GLogFunc gtest_log_func = NULL;
+
+/*
+ * Work around GLib < 2.70 not escaping newlines in log messages when
+ * passing them to g_test_message().
+ */
+static void
+split_log_func (const char *log_domain,
+                GLogLevelFlags log_level,
+                const gchar *message,
+                gpointer user_data)
+{
+  g_return_if_fail (gtest_log_func != NULL);
+
+  if (strchr (message, '\n') == NULL
+      || (log_level & (G_LOG_FLAG_RECURSION|G_LOG_FLAG_FATAL)) != 0)
+    {
+      /* For messages with no newline (common case), just output it.
+       * For fatal messages, also just output it, otherwise we'd crash
+       * after outputting the first split line. */
+      gtest_log_func (log_domain, log_level, message, NULL);
+    }
+  else
+    {
+      /* GLib < 2.70 didn't replace newlines with "\n# " when outputting
+       * a multi-line g_test_message(), so we have to split the message
+       * into lines to avoid corrupting stdout. */
+      g_auto(GStrv) lines = g_strsplit (message, "\n", -1);
+      gchar **iter;
+
+      for (iter = lines; iter != NULL && *iter != NULL; iter++)
+        gtest_log_func (log_domain, log_level, *iter, NULL);
+    }
+}
+#endif
+
 static gboolean tests_init_done = FALSE;
 
 void
@@ -95,4 +132,9 @@ _srt_tests_init (int *argc,
 
   _srt_tests_global_debug_log_to_stderr ();
   g_test_init (argc, argv, NULL);
+
+#if !GLIB_CHECK_VERSION(2, 70, 0)
+  /* Do this *after* g_test_init so we can hijack its log handler */
+  gtest_log_func = g_log_set_default_handler (split_log_func, NULL);
+#endif
 }

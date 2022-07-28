@@ -77,11 +77,6 @@ if ! grep $'^depot\t0\\.1\\.2\\.3\t' depots/test-soldier-archives/VERSIONS.txt >
     exit 1
 fi
 
-if ! grep '^this_compat_tool_appid=1391110' depots/test-soldier-archives/_v2-entry-point >/dev/null; then
-    echo "Bail out! App ID not found in _v2-entry-point"
-    exit 1
-fi
-
 buildid="$(cat "depots/test-soldier-archives/$archive-buildid.txt")"
 soldier_version="$(
     IFS="$(printf '\t')"
@@ -141,11 +136,6 @@ python3 ./populate-depot.py \
     soldier \
     ${NULL+}
 find depots/test-soldier-unpacked -ls > depots/test-soldier-unpacked.txt
-
-if ! grep '^this_compat_tool_appid=1391110' depots/test-soldier-unpacked/_v2-entry-point >/dev/null; then
-    echo "Bail out! App ID not found in _v2-entry-point"
-    exit 1
-fi
 
 soldier_version="$(
     IFS="$(printf '\t')"

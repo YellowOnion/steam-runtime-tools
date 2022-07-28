@@ -274,6 +274,55 @@ Any value less than 128
 
 # EXAMPLES
 
-See **steam-runtime-launcher-service**(1).
+For a Steam game that runs under Proton, if you set its Steam
+Launch Options to
+
+    STEAM_COMPAT_LAUNCHER_SERVICE=proton %command%
+
+then you can run commands in its execution environment with commands
+like:
+
+    $ steam-runtime-launch-client --list
+    --bus-name=com.steampowered.App312990
+    --bus-name=com.steampowered.App312990.Instance123
+
+    $ steam-runtime-launch-client \
+        --bus-name=com.steampowered.App312990 \
+        --directory="" \
+        -- \
+        wine winedbg notepad.exe
+
+(As of July 2022, this requires configuring it to run under
+**Proton - Experimental** and selecting the **bleeding-edge** beta branch,
+and also changing the options of **Steam Linux Runtime - soldier** to
+select the **client_beta** branch.)
+
+Similarly, for a Steam game that runs under the "Steam Linux Runtime"
+compatibility tool, if you set its Steam Launch Options to
+
+    STEAM_COMPAT_LAUNCHER_SERVICE=scout-in-container %command%
+
+then you can attach a debugger with commands like:
+
+    $ steam-runtime-launch-client --list
+    --bus-name=com.steampowered.App440
+    --bus-name=com.steampowered.App440.Instance54321
+
+    $ pgrep hl2_linux
+    12345
+
+    $ gdb ./hl2_linux
+    (gdb) set sysroot /proc/12345/root
+    (gdb) target remote | \
+        steam-runtime-launch-client \
+        --bus-name=com.steampowered.App440 \
+        -- gdbserver --attach - 12345
+    (gdb) thread apply all bt
+    (gdb) detach
+
+(As of July 2022, this requires configuring it to run under
+**Steam Linux Runtime** and selecting the **client_beta** beta branch,
+and also changing the options of **Steam Linux Runtime - soldier** to
+select the **client_beta** branch.)
 
 <!-- vim:set sw=4 sts=4 et: -->

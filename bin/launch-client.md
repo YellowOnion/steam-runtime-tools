@@ -87,9 +87,9 @@ as a subprocess of **steam-runtime-launcher-service**.
     the new subsandbox. If *PATH* is specified as the empty string,
     place an empty directory at `/app`.
 
-    This experimental option is only valid when used with
-    **--bus-name=org.freedesktop.portal.Flatpak**, and requires a
-    Flatpak branch that has not yet been merged.
+    This option is only valid when used with
+    **--bus-name=org.freedesktop.portal.Flatpak**, and requires
+    Flatpak 1.12 or later.
 
 **--clear-env**
 :   The *COMMAND* runs in an empty environment, apart from any environment
@@ -140,9 +140,9 @@ as a subprocess of **steam-runtime-launcher-service**.
 :   When creating a Flatpak subsandbox, mount *PATH* as the `/usr` in
     the new subsandbox.
 
-    This experimental option is only valid when used with
-    **--bus-name=org.freedesktop.portal.Flatpak**, and requires a
-    Flatpak branch that has not yet been merged.
+    This option is only valid when used with
+    **--bus-name=org.freedesktop.portal.Flatpak**, and requires
+    Flatpak 1.12 or later.
 
 **--verbose**
 :   Be more verbose.

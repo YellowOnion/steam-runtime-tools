@@ -185,6 +185,12 @@ For example,
 will set **FOO** to **bar**, unset **FOCUS** even if the caller has
 it set, and pass through **FONTS** from the caller.
 
+If standard input, standard output or standard error is a terminal, then
+the **TERM** environment variable is passed through by default, as if
+**--pass-env=TERM** had been used at the beginning of the command line.
+This behaviour can be overridden by other options that affect **TERM**,
+or disabled with **--inherit-env=TERM**.
+
 **--env** _VAR=VALUE_
 :   Set environment variable _VAR_ to _VALUE_.
     This is mostly equivalent to using
@@ -260,6 +266,10 @@ Some variables affect the behaviour of **steam-runtime-launch-client**:
 `SHELL`
 :   If set to a non-empty value, it is used as the default shell when
     no *COMMAND* is provided.
+
+`TERM`
+:   If standard input, standard output or standard error is a terminal,
+    then this environment variable is passed to the *COMMAND* by default.
 
 # OUTPUT
 

@@ -917,6 +917,17 @@ main (int argc,
   opt_unsetenv = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
 
+  for (i = 0; i <= 2; i++)
+    {
+      if (isatty (i))
+        {
+          g_debug ("Passing through TERM environment variable because "
+                   "fd %zu is a terminal", i);
+          opt_env_cb ("--pass-env", "TERM", NULL, NULL);
+          break;
+        }
+    }
+
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 

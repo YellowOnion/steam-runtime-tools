@@ -836,6 +836,23 @@ main (int argc,
   g_autofree char *home_realpath = NULL;
   g_autofree char *service_unique_name = NULL;
   const char *flatpak_id = NULL;
+  static const char * const run_interactive_shell[] =
+  {
+    "sh",
+    "-euc",
+    ("if [ -n \"${SHELL-}\" ]; then\n"
+     "  if command -v \"$SHELL\" >/dev/null; then\n"
+     "    exec \"$SHELL\"\n"
+     "  fi\n"
+     "  echo \"Shell '$SHELL' not available, falling back to bash\" >&2\n"
+     "fi\n"
+     "if command -v bash >/dev/null; then\n"
+     "  exec bash\n"
+     "fi\n"
+     "echo 'bash not available, falling back to sh' >&2\n"
+     "exec sh"),
+    NULL
+  };
 
   setlocale (LC_ALL, "");
 
@@ -956,14 +973,11 @@ main (int argc,
 
   if (argc < 2)
     {
-      if (!opt_terminate)
-        {
-          glnx_throw (error, "Usage: %s [OPTIONS] COMMAND [ARG...]",
-                      g_get_prgname ());
-          goto out;
-        }
 
-      command_and_args = NULL;
+      if (opt_terminate)
+        command_and_args = NULL;
+      else
+        command_and_args = (char **) run_interactive_shell;
     }
   else
     {

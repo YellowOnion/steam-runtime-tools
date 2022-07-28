@@ -26,12 +26,7 @@ steam-runtime-launch-client - client to launch processes in a container
 [**--verbose**]
 {**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
 [**--**]
-*COMMAND* [*ARGUMENTS...*]
-
-**steam-runtime-launch-client**
-[**--verbose**]
-{**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
-**--terminate**
+[*COMMAND* [*ARGUMENTS...*]]
 
 **steam-runtime-launch-client**
 [**--verbose**]
@@ -42,6 +37,11 @@ steam-runtime-launch-client - client to launch processes in a container
 **steam-runtime-launch-client** connects to an `AF_UNIX` socket established
 by **steam-runtime-launcher-service**(1), and executes an arbitrary command
 as a subprocess of **steam-runtime-launcher-service**.
+
+If no *COMMAND* is specified, and the **--terminate** option is not given,
+then the default is to run an interactive shell.
+This uses **$SHELL** if available in the container, falling back to
+**bash**(1) or **sh**(1) if necessary.
 
 # OPTIONS
 
@@ -227,6 +227,10 @@ Some variables affect the behaviour of **steam-runtime-launch-client**:
 `PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
 :   If set to `1`, prepend the log entries with a timestamp.
     If set to `0`, no effect.
+
+`SHELL`
+:   If set to a non-empty value, it is used as the default shell when
+    no *COMMAND* is provided.
 
 # OUTPUT
 

@@ -118,6 +118,11 @@ as a subprocess of **steam-runtime-launcher-service**.
     (standard input, standard output and standard error) are always
     forwarded.
 
+    If *FD* is a terminal, **steam-runtime-launch-client** will allocate
+    a pseudo-terminal (pty) and pass the terminal end of the pty to the
+    *COMMAND*, forwarding input and output between *FD* and the ptmx
+    end of the pty.
+
 **--list**
 :   Instead of running a *COMMAND*, list the services that
     **steam-runtime-launch-client** could connect to.

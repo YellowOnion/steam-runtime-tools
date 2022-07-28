@@ -29,6 +29,12 @@ steam-runtime-launch-client - client to launch processes in a container
 [*COMMAND* [*ARGUMENTS...*]]
 
 **steam-runtime-launch-client**
+*OPTIONS*
+**-c** *SHELL_COMMAND*
+[**--**]
+[*$0* *ARGUMENTS...*]
+
+**steam-runtime-launch-client**
 [**--verbose**]
 **--list**
 
@@ -99,6 +105,15 @@ This uses **$SHELL** if available in the container, falling back to
     If this option is not used, instead it inherits environment variables
     from **steam-runtime-launcher-service**, with **--env** and
     similar options overriding or unsetting individual variables.
+
+**-c** *SHELL_COMMAND*, **--shell-command** *SHELL_COMMAND*
+:   Run the *SHELL_COMMAND* using **sh**(1).
+    If additional arguments are given, the first is used to set **$0**
+    in the resulting shell, and the remaining arguments are the
+    shell's positional parameters **$@**.
+    This is a shortcut for using
+    **-- sh -c** *SHELL_COMMAND* [*$0* [*ARGUMENT*...]]
+    as the command and arguments.
 
 **--directory** *DIR*
 :   Arrange for the *COMMAND* to run with *DIR* as its current working

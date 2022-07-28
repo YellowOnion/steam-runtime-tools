@@ -238,8 +238,7 @@ class TestLauncher(BaseTest):
                         '--env=PV_TEST_VAR=nope',
                         '--pass-env=PV_TEST_VAR',
                         '--socket', socket,
-                        '--',
-                        'sh', '-euc', 'printf \'%s\' "${PV_TEST_VAR-cleared}"',
+                        '-c', 'printf \'%s\' "${PV_TEST_VAR-cleared}"',
                     ],
                     check=True,
                     stdin=subprocess.DEVNULL,
@@ -335,10 +334,12 @@ class TestLauncher(BaseTest):
                 logger.debug('Checking we can terminate the server')
                 completed = run_subprocess(
                     self.launch + [
+                        '--shell-command=echo "$0 ($1)"',
                         '--socket', socket,
                         '--terminate',
                         '--',
-                        'sh', '-euc', 'echo Goodbye',
+                        'Goodbye',
+                        'terminating',
                     ],
                     check=True,
                     stdin=subprocess.DEVNULL,
@@ -346,7 +347,7 @@ class TestLauncher(BaseTest):
                     stderr=2,
                 )
                 need_terminate = False
-                self.assertEqual(completed.stdout, b'Goodbye\n')
+                self.assertEqual(completed.stdout, b'Goodbye (terminating)\n')
             finally:
                 if need_terminate:
                     proc.terminate()

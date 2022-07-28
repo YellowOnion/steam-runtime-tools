@@ -641,6 +641,7 @@ static gboolean opt_clear_env = FALSE;
 static gchar *opt_dbus_address = NULL;
 static gchar *opt_directory = NULL;
 static gboolean opt_list = FALSE;
+static gchar *opt_shell_command = NULL;
 static gchar *opt_socket = NULL;
 static GHashTable *opt_env = NULL;
 static GHashTable *opt_unsetenv = NULL;
@@ -780,6 +781,10 @@ static const GOptionEntry options[] =
   { "share-pids", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_share_pids,
     "Use same pid namespace as calling sandbox.", NULL },
+  { "shell-command", 'c',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_shell_command,
+    "Run this command via /bin/sh, with COMMAND as $0 and ARG... as $@.",
+    "SHELL_COMMAND" },
   { "usr-path", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_usr_path,
     "Use DIR as the /usr for a Flatpak sub-sandbox. "
@@ -813,6 +818,7 @@ main (int argc,
   g_autoptr(GMainLoop) loop = NULL;
   g_autoptr(GOptionContext) context = NULL;
   g_autoptr(GPtrArray) replacement_command_and_args = NULL;
+  g_autoptr(GPtrArray) shell_argv = NULL;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
   char **command_and_args;
@@ -971,9 +977,22 @@ main (int argc,
       argc--;
     }
 
-  if (argc < 2)
+  if (opt_shell_command)
     {
+      shell_argv = g_ptr_array_new_with_free_func (g_free);
 
+      g_ptr_array_add (shell_argv, g_strdup ("sh"));
+      g_ptr_array_add (shell_argv, g_strdup ("-c"));
+      g_ptr_array_add (shell_argv, g_strdup (opt_shell_command));
+
+      for (i = 1; i < (gsize) argc; i++)
+        g_ptr_array_add (shell_argv, g_strdup (argv[i]));
+
+      g_ptr_array_add (shell_argv, NULL);
+      command_and_args = (char **) shell_argv->pdata;
+    }
+  else if (argc < 2)
+    {
       if (opt_terminate)
         command_and_args = NULL;
       else
@@ -1523,6 +1542,7 @@ out:
 
   g_strfreev (forward_fds);
   g_free (opt_app_path);
+  g_free (opt_shell_command);
   g_free (opt_directory);
   g_free (opt_socket);
   g_hash_table_unref (opt_env);

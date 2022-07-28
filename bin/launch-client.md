@@ -101,9 +101,16 @@ as a subprocess of **steam-runtime-launcher-service**.
     similar options overriding or unsetting individual variables.
 
 **--directory** *DIR*
-:   Arrange for the *COMMAND* to run in *DIR*.
-    By default, it inherits the current working directory from
-    **steam-runtime-launcher-service**.
+:   Arrange for the *COMMAND* to run with *DIR* as its current working
+    directory.
+
+    An empty string (typically written as **--directory=**) results in
+    inheriting the current working directory from the service that
+    will run the *COMMAND*.
+
+    The default is to attempt to use the same working directory from
+    which **steam-runtime-launch-client**(1) was run, similar to the
+    effect of using **--directory="$(pwd)"** in a shell.
 
 **--forward-fd** *FD*
 :   Arrange for the *COMMAND* to receive file descriptor number *FD*

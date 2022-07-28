@@ -1635,6 +1635,12 @@ main (int argc,
   /* Exit with this status until we know otherwise */
   server->exit_status = EX_UNAVAILABLE;
 
+  if (opt_socket != NULL)
+    g_warning ("The --socket option is deprecated. Prefer to use --session or --bus-name.");
+
+  if (opt_socket_directory != NULL)
+    g_warning ("The --socket-directory option is deprecated. Prefer to use --session or --bus-name.");
+
   /* This emits SrtPortalListener::ready if we were not asked to listen
    * on any bus names but are now successfully listening on a socket.
    * If that has happened, then pv_launcher_server_finish_startup()

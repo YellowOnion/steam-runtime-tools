@@ -55,6 +55,9 @@ unless prevented by **--no-stop-on-exit** or
     the same network namespace, and cannot be shared across network
     namespace boundaries.
 
+    This option is deprecated. Using **--session** or **--bus-name** is
+    preferred.
+
 **--socket-directory** *PATH*
 :   Create a filesystem-based socket with an arbitrary name in the
     given directory and listen on that. Clients can use the information
@@ -62,6 +65,9 @@ unless prevented by **--no-stop-on-exit** or
     limitations of `AF_UNIX` socket addresses, the absolute path to the
     directory must be no more than 64 bytes. It must not contain ASCII
     control characters.
+
+    This option is deprecated. Using **--session** or **--bus-name** is
+    preferred.
 
 **--bus-name** *NAME*
 :   Connect to the well-known D-Bus session bus, request the given name

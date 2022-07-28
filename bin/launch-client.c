@@ -768,6 +768,81 @@ opt_env_cb (const char *option_name,
   g_return_val_if_reached (FALSE);
 }
 
+static gboolean
+option_env_fd_cb (G_GNUC_UNUSED const gchar *option_name,
+                  const gchar *value,
+                  G_GNUC_UNUSED gpointer data,
+                  GError **error)
+{
+  g_autofree gchar *proc_filename = NULL;
+  g_autofree gchar *env_block = NULL;
+  gsize remaining;
+  const char *p;
+  guint64 fd;
+  gchar *endptr;
+
+  g_assert (opt_env != NULL);
+  g_assert (opt_unsetenv != NULL);
+
+  fd = g_ascii_strtoull (value, &endptr, 10);
+
+  if (endptr == NULL || *endptr != '\0' || fd > G_MAXINT)
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                   "Not a valid file descriptor: %s", value);
+      return FALSE;
+    }
+
+  proc_filename = g_strdup_printf ("/proc/self/fd/%d", (int) fd);
+
+  if (!g_file_get_contents (proc_filename, &env_block, &remaining, error))
+    return FALSE;
+
+  p = env_block;
+
+  while (remaining > 0)
+    {
+      g_autofree gchar *var = NULL;
+      g_autofree gchar *val = NULL;
+      size_t len = strnlen (p, remaining);
+      const char *equals;
+
+      g_assert (len <= remaining);
+
+      equals = memchr (p, '=', len);
+
+      if (equals == NULL || equals == p)
+        {
+          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                       "Environment variable must be given in the form VARIABLE=VALUE, not %.*s",
+                       (int) len, p);
+          return FALSE;
+        }
+
+      var = g_strndup (p, equals - p);
+      val = g_strndup (equals + 1, len - (equals - p) - 1);
+      g_hash_table_remove (opt_unsetenv, var);
+      g_hash_table_replace (opt_env,
+                            g_steal_pointer (&var),
+                            g_steal_pointer (&val));
+
+      p += len;
+      remaining -= len;
+
+      if (remaining > 0)
+        {
+          g_assert (*p == '\0');
+          p += 1;
+          remaining -= 1;
+        }
+    }
+
+  if (fd >= 3)
+    close (fd);
+
+  return TRUE;
+}
+
 static const GOptionEntry options[] =
 {
   { "app-path", '\0',
@@ -792,6 +867,9 @@ static const GOptionEntry options[] =
   { "env", '\0',
     G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
     "Set environment variable.", "VAR=VALUE" },
+  { "env-fd", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, option_env_fd_cb,
+    "Read environment variables in env -0 format from FD", "FD" },
   { "forward-fd", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &forward_fds,
     "Connect a file descriptor to the launched process. "

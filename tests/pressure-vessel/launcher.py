@@ -230,6 +230,32 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'clearedonetwo')
 
+                logger.debug('Checking --env-fd')
+                read_end, write_end = os.pipe2(os.O_CLOEXEC)
+
+                with open(write_end, 'wb') as writer:
+                    writer.write(b'PV_TEST_VAR_ONE=one\n\0PV_TEST_VAR_TWO=two')
+
+                completed = run_subprocess(
+                    self.launch + [
+                        '--env-fd=%d' % read_end,
+                        '--socket', socket,
+                        '--',
+                        'sh', '-euc',
+                        'printf \'%s\' '
+                        '"'
+                        '>>${PV_TEST_VAR_ONE}<<'
+                        '>>${PV_TEST_VAR_TWO}<<'
+                        '"',
+                    ],
+                    check=True,
+                    pass_fds=[read_end],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                self.assertEqual(completed.stdout, b'>>one\n<<>>two<<')
+
                 logger.debug('Checking precedence of environment options')
                 completed = run_subprocess(
                     [

@@ -92,12 +92,12 @@ as a subprocess of **steam-runtime-launcher-service**.
     Flatpak 1.12 or later.
 
 **--clear-env**
-:   The *COMMAND* runs in an empty environment, apart from any environment
+:   Run the *COMMAND* in an empty environment, apart from any environment
     variables set by **--env** and similar options, and environment
     variables such as `PWD` that are set programmatically (see
     **ENVIRONMENT** section, below).
-    By default, it inherits environment variables from
-    **steam-runtime-launcher-service**, with **--env** and
+    If this option is not used, instead it inherits environment variables
+    from **steam-runtime-launcher-service**, with **--env** and
     similar options overriding or unsetting individual variables.
 
 **--directory** *DIR*

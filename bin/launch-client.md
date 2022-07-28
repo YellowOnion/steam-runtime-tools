@@ -87,29 +87,41 @@ as a subprocess of **steam-runtime-launcher-service**.
     the new subsandbox. If *PATH* is specified as the empty string,
     place an empty directory at `/app`.
 
-    This experimental option is only valid when used with
-    **--bus-name=org.freedesktop.portal.Flatpak**, and requires a
-    Flatpak branch that has not yet been merged.
+    This option is only valid when used with
+    **--bus-name=org.freedesktop.portal.Flatpak**, and requires
+    Flatpak 1.12 or later.
 
 **--clear-env**
-:   The *COMMAND* runs in an empty environment, apart from any environment
+:   Run the *COMMAND* in an empty environment, apart from any environment
     variables set by **--env** and similar options, and environment
     variables such as `PWD` that are set programmatically (see
     **ENVIRONMENT** section, below).
-    By default, it inherits environment variables from
-    **steam-runtime-launcher-service**, with **--env** and
+    If this option is not used, instead it inherits environment variables
+    from **steam-runtime-launcher-service**, with **--env** and
     similar options overriding or unsetting individual variables.
 
 **--directory** *DIR*
-:   Arrange for the *COMMAND* to run in *DIR*.
-    By default, it inherits the current working directory from
-    **steam-runtime-launcher-service**.
+:   Arrange for the *COMMAND* to run with *DIR* as its current working
+    directory.
+
+    An empty string (typically written as **--directory=**) results in
+    inheriting the current working directory from the service that
+    will run the *COMMAND*.
+
+    The default is to attempt to use the same working directory from
+    which **steam-runtime-launch-client**(1) was run, similar to the
+    effect of using **--directory="$(pwd)"** in a shell.
 
 **--forward-fd** *FD*
 :   Arrange for the *COMMAND* to receive file descriptor number *FD*
     from outside the container. File descriptors 0, 1 and 2
     (standard input, standard output and standard error) are always
     forwarded.
+
+    If *FD* is a terminal, **steam-runtime-launch-client** will allocate
+    a pseudo-terminal (pty) and pass the terminal end of the pty to the
+    *COMMAND*, forwarding input and output between *FD* and the ptmx
+    end of the pty.
 
 **--list**
 :   Instead of running a *COMMAND*, list the services that
@@ -140,9 +152,9 @@ as a subprocess of **steam-runtime-launcher-service**.
 :   When creating a Flatpak subsandbox, mount *PATH* as the `/usr` in
     the new subsandbox.
 
-    This experimental option is only valid when used with
-    **--bus-name=org.freedesktop.portal.Flatpak**, and requires a
-    Flatpak branch that has not yet been merged.
+    This option is only valid when used with
+    **--bus-name=org.freedesktop.portal.Flatpak**, and requires
+    Flatpak 1.12 or later.
 
 **--verbose**
 :   Be more verbose.
@@ -262,6 +274,55 @@ Any value less than 128
 
 # EXAMPLES
 
-See **steam-runtime-launcher-service**(1).
+For a Steam game that runs under Proton, if you set its Steam
+Launch Options to
+
+    STEAM_COMPAT_LAUNCHER_SERVICE=proton %command%
+
+then you can run commands in its execution environment with commands
+like:
+
+    $ steam-runtime-launch-client --list
+    --bus-name=com.steampowered.App312990
+    --bus-name=com.steampowered.App312990.Instance123
+
+    $ steam-runtime-launch-client \
+        --bus-name=com.steampowered.App312990 \
+        --directory="" \
+        -- \
+        wine winedbg notepad.exe
+
+(As of July 2022, this requires configuring it to run under
+**Proton - Experimental** and selecting the **bleeding-edge** beta branch,
+and also changing the options of **Steam Linux Runtime - soldier** to
+select the **client_beta** branch.)
+
+Similarly, for a Steam game that runs under the "Steam Linux Runtime"
+compatibility tool, if you set its Steam Launch Options to
+
+    STEAM_COMPAT_LAUNCHER_SERVICE=scout-in-container %command%
+
+then you can attach a debugger with commands like:
+
+    $ steam-runtime-launch-client --list
+    --bus-name=com.steampowered.App440
+    --bus-name=com.steampowered.App440.Instance54321
+
+    $ pgrep hl2_linux
+    12345
+
+    $ gdb ./hl2_linux
+    (gdb) set sysroot /proc/12345/root
+    (gdb) target remote | \
+        steam-runtime-launch-client \
+        --bus-name=com.steampowered.App440 \
+        -- gdbserver --attach - 12345
+    (gdb) thread apply all bt
+    (gdb) detach
+
+(As of July 2022, this requires configuring it to run under
+**Steam Linux Runtime** and selecting the **client_beta** beta branch,
+and also changing the options of **Steam Linux Runtime - soldier** to
+select the **client_beta** branch.)
 
 <!-- vim:set sw=4 sts=4 et: -->

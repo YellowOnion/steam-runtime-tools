@@ -19,6 +19,8 @@ steam-runtime-launch-client - client to launch processes in a container
 [**--directory** *DIR*]
 [**--env** _VAR_**=**_VALUE_]
 [**--forward-fd** *FD*]
+[**--inherit-env** *VAR*]
+[**--inherit-env-matching** *WILDCARD*]
 [**--pass-env** *VAR*]
 [**--pass-env-matching** *WILDCARD*]
 [**--unset-env** *VAR*]
@@ -188,6 +190,18 @@ it set, and pass through **FONTS** from the caller.
     This is mostly equivalent to using
     **env** _VAR=VALUE_ *COMMAND* *ARGUMENTS...*
     as the command.
+
+**--inherit-env** *VAR*
+:   Undo the effect of a previous **--env**, **--unset-env**, **--pass-env**
+    or similar, returning to the default behaviour of inheriting *VAR*
+    from the execution environment of the service that is used to run
+    the *COMMAND* (unless **--clear-env** was used).
+
+**--inherit-env-matching** *WILDCARD*
+:   Do the same as for **--inherit-env** for any environment variable
+    whose name matches *WILDCARD*.
+    If this command is run from a shell, the wildcard will usually need
+    to be quoted, for example **--inherit-env-matching="FOO&#x2a;"**.
 
 **--pass-env** *VAR*
 :   If the environment variable *VAR* is set, pass its current value

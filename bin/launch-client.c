@@ -651,6 +651,22 @@ static gchar *opt_usr_path = NULL;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
 
+static void
+remove_keys_matching_pattern (GHashTable *table,
+                              const char *pattern)
+{
+  GHashTableIter iter;
+  gpointer k;
+
+  g_hash_table_iter_init (&iter, table);
+
+  while (g_hash_table_iter_next (&iter, &k, NULL))
+    {
+      if (fnmatch (pattern, k, 0) == 0)
+        g_hash_table_iter_remove (&iter);
+    }
+}
+
 static gboolean
 opt_env_cb (const char *option_name,
             const gchar *value,
@@ -681,6 +697,13 @@ opt_env_cb (const char *option_name,
       return TRUE;
     }
 
+  if (g_strcmp0 (option_name, "--inherit-env") == 0)
+    {
+      g_hash_table_remove (opt_env, value);
+      g_hash_table_remove (opt_unsetenv, value);
+      return TRUE;
+    }
+
   if (g_strcmp0 (option_name, "--pass-env") == 0)
     {
       const gchar *env = g_getenv (value);
@@ -696,6 +719,13 @@ opt_env_cb (const char *option_name,
           g_hash_table_add (opt_unsetenv, g_strdup (value));
         }
 
+      return TRUE;
+    }
+
+  if (g_strcmp0 (option_name, "--inherit-env-matching") == 0)
+    {
+      remove_keys_matching_pattern (opt_env, value);
+      remove_keys_matching_pattern (opt_unsetenv, value);
       return TRUE;
     }
 
@@ -767,6 +797,13 @@ static const GOptionEntry options[] =
     "Connect a file descriptor to the launched process. "
     "fds 0, 1 and 2 are automatically forwarded.",
     "FD" },
+  { "inherit-env", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
+    "Undo a previous --env, --unset-env, --pass-env, etc.", "VAR" },
+  { "inherit-env-matching", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
+    "Undo previous --env, --unset-env, etc. matching a shell-style wildcard",
+    "WILDCARD" },
   { "list", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_list,
     "List some of the available servers and then exit.",

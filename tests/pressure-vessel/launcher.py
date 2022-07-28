@@ -313,6 +313,48 @@ class TestLauncher(BaseTest):
                 )
                 self.assertEqual(completed.stdout, b'overridden')
 
+                logger.debug('Checking --inherit-env')
+                completed = run_subprocess(
+                    [
+                        'env',
+                        'PV_TEST_VAR=not-inherited',
+                    ] + self.launch + [
+                        '--pass-env=PV_TEST_VAR',
+                        '--env=PV_TEST_VAR=overridden',
+                        '--inherit-env=PV_TEST_VAR',
+                        '--socket', socket,
+                        '--',
+                        'sh', '-euc', 'printf \'%s\' "$PV_TEST_VAR"',
+                    ],
+                    check=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                self.assertEqual(completed.stdout, b'from-launcher')
+
+                logger.debug('Checking --inherit-env-matching')
+                completed = run_subprocess(
+                    [
+                        'env',
+                        'PV_TEST_VAR=not-inherited',
+                    ] + self.launch + [
+                        '--pass-env=PV_TEST_VAR',
+                        '--env=PV_TEST_VAR=overridden',
+                        '--env=PV_TEST_VAR2=overridden',
+                        '--inherit-env-matching=PV_*_VAR',
+                        '--socket', socket,
+                        '--',
+                        'sh', '-euc',
+                        'printf \'%s\' "$PV_TEST_VAR/$PV_TEST_VAR2"',
+                    ],
+                    check=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=2,
+                )
+                self.assertEqual(completed.stdout, b'from-launcher/overridden')
+
                 logger.debug('Checking we can deliver a signal')
                 launch = subprocess.Popen(
                     self.launch + [

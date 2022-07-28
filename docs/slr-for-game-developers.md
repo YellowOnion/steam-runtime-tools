@@ -406,6 +406,8 @@ of the compatibility tool used to run a game:
     branch of these compatibility tools)
 
 * `proton` for any version of Proton
+    (as of July 2022, this feature is available in the `bleeding-edge`
+    branch of "Proton - Experimental")
 
 * `scout-in-container` for "Steam Linux Runtime"
     (as of July 2022, this feature is available in the `client_beta`

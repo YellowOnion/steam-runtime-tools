@@ -19,6 +19,7 @@ steam-runtime-launcher-service - server to launch processes in a container
 [**--exit-on-readable**] *FD*
 [**--info-fd**] *N*
 [**--replace**]
+[**--[no-]stop-on-exit**]
 [**--[no-]stop-on-name-loss**]
 [**--verbose**]
 {**--session**|**--bus-name** *NAME*...|**--socket** *SOCKET*|**--socket-directory** *PATH*}
@@ -34,7 +35,9 @@ It inherits standard input, standard output and standard error
 from **steam-runtime-launcher-service** itself.
 
 If the *COMMAND* exits, then the launcher will also exit (as though the
-*COMMAND* had been started via **steam-runtime-launch-client --terminate**).
+*COMMAND* had been started via **steam-runtime-launch-client --terminate**),
+unless prevented by **--no-stop-on-exit** or
+**SRT_LAUNCHER_SERVICE_STOP_ON_EXIT=0**.
 
 # OPTIONS
 

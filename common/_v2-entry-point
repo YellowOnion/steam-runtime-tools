@@ -22,13 +22,6 @@ ld_preload=
 # Arguments for pressure-vessel-wrap
 declare -a container_args=()
 
-# Will be edited by a script, be careful
-this_compat_tool_appid=
-
-if [ -f "${here}/steam_appid.txt" ]; then
-    this_compat_tool_appid="$(< "${here}/steam_appid.txt")"
-fi
-
 if [ -n "${LD_PRELOAD-}" ]; then
     container_args+=("--env-if-host=LD_PRELOAD=$LD_PRELOAD")
     ld_preload="$LD_PRELOAD"
@@ -289,10 +282,7 @@ IFS="$old_IFS"
 # s-r-l-i-0 is in the public stable Steam Runtime or the public stable
 # SLR_soldier/pressure-vessel/bin
 case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
-    ("")
-        ;;
-
-    ("$this_compat_tool_appid" | container-runtime)
+    (container-runtime)
         launcher_service=yes
         ;;
 esac
@@ -300,12 +290,12 @@ esac
 if [ -x "$here/pressure-vessel/bin/steam-runtime-launcher-interface-0" ]; then
     set -- \
         "$here/pressure-vessel/bin/steam-runtime-launcher-interface-0" \
-        "container-runtime:$this_compat_tool_appid" \
+        container-runtime \
         "$@"
 elif command -v steam-runtime-launcher-interface-0 >/dev/null; then
     set -- \
         steam-runtime-launcher-interface-0 \
-        "container-runtime:$this_compat_tool_appid" \
+        container-runtime \
         "$@"
 # TODO: Remove this elif block when s-r-l-i-0 is in the public stable
 # Steam Runtime or the public stable SLR_soldier/pressure-vessel/bin

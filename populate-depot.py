@@ -793,30 +793,9 @@ class Main:
                 'Cannot use --unpack-source with --layered'
             )
 
-        source_dir = os.path.join(
-            self.source_dir,
-            'runtimes',
-            'scout-on-soldier',
+        self.merge_dir_into_depot(
+            os.path.join(self.source_dir, 'runtimes', 'scout-on-soldier')
         )
-        self.merge_dir_into_depot(source_dir)
-
-        if self.steam_app_id:
-            with open(
-                os.path.join(source_dir, 'scout-on-soldier-entry-point-v2')
-            ) as text_reader, open(
-                os.path.join(self.depot, 'scout-on-soldier-entry-point-v2'),
-                'w',
-            ) as text_writer:
-                for line in text_reader:
-                    if line.startswith('this_compat_tool_appid='):
-                        line = f'this_compat_tool_appid={self.steam_app_id}\n'
-
-                    text_writer.write(line)
-
-            os.chmod(
-                os.path.join(self.depot, 'scout-on-soldier-entry-point-v2'),
-                0o755,
-            )
 
         if self.runtime.version:
             self.unpack_ld_library_path = self.depot
@@ -910,24 +889,6 @@ class Main:
 
         if os.path.exists(root):
             self.merge_dir_into_depot(root)
-
-        if self.steam_app_id:
-            with open(
-                os.path.join(self.source_dir, 'common', '_v2-entry-point')
-            ) as text_reader, open(
-                os.path.join(self.depot, '_v2-entry-point'),
-                'w',
-            ) as text_writer:
-                for line in text_reader:
-                    if line.startswith('this_compat_tool_appid='):
-                        line = f'this_compat_tool_appid={self.steam_app_id}\n'
-
-                    text_writer.write(line)
-
-            os.chmod(
-                os.path.join(self.depot, '_v2-entry-point'),
-                0o755,
-            )
 
         pressure_vessel_runtime = self.pressure_vessel_runtime
 
@@ -1916,6 +1877,9 @@ def main() -> None:
             'Source directory for files to include in the depot'
         )
     )
+    # Not actually used for anything at the moment, but kept for
+    # CLI backwards-compat. We could potentially use it to select
+    # depot configuration in steampipe/
     parser.add_argument(
         '--steam-app-id', default='',
         help='Set Steam app ID for the depot',

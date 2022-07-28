@@ -12,9 +12,6 @@ unset LD_PRELOAD
 me="$(readlink -f "$0")"
 here="${me%/*}"
 
-# Will be edited by a script, be careful
-this_compat_tool_appid=
-
 log () {
     printf '%s\n' "${me}[$$]: $*" >&2 || :
 }
@@ -105,17 +102,10 @@ main () {
         esac
     done
 
-    if [ -f "${here}/steam_appid.txt" ]; then
-        this_compat_tool_appid="$(< "${here}/steam_appid.txt")"
-    fi
-
     # TODO: Remove this block and the launcher_service* variables when
     # s-r-l-i-0 is in the public stable SLR_soldier container
     case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
-        ("")
-            ;;
-
-        ("$this_compat_tool_appid" | scout-in-container | scout-on-soldier)
+        (scout-in-container | scout-on-soldier)
             launcher_service=yes
             ;;
     esac
@@ -268,7 +258,7 @@ main () {
     if command -v steam-runtime-launcher-interface-0 >/dev/null; then
         set -- \
             steam-runtime-launcher-interface-0 \
-            "scout-in-container:scout-on-soldier:$this_compat_tool_appid" \
+            scout-in-container:scout-on-soldier \
             "$@"
     # TODO: Remove this block and the launcher_service* variables when
     # s-r-l-i-0 is in the public stable SLR_soldier container

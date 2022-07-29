@@ -124,9 +124,8 @@ This uses **$SHELL** if available in the container, falling back to
     An empty string (typically written as **--directory=**) results in
     inheriting the current working directory from the service that
     will run the *COMMAND*.
-    This is now the default when communicating with
-    **steam-runtime-launcher-service**, but can be specified explicitly for
-    compatibility with older versions of **steam-runtime-launch-client**.
+    This is the default when communicating with
+    **steam-runtime-launcher-service**.
 
     When communicating with
     **--bus-name=org.freedesktop.portal.Flatpak** or
@@ -135,8 +134,6 @@ This uses **$SHELL** if available in the container, falling back to
     which **steam-runtime-launch-client**(1) was run, similar to the
     effect of using **--directory="$(pwd)"** in a shell.
     This matches the behaviour of **flatpak-spawn**(1).
-    In older versions of **steam-runtime-launch-client**,
-    this was also the default for **steam-runtime-launcher-service**.
 
 **--forward-fd** *FD*
 :   Arrange for the *COMMAND* to receive file descriptor number *FD*

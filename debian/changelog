@@ -1,3 +1,23 @@
+steam-runtime-tools (0.20220726.1) UNRELEASED; urgency=medium
+
+  * s-r-launch-client, s-r-launcher-service improvements:
+    - s-r-launch-client now defaults to --directory="" (inherit directory
+      from server) unless talking to Flatpak services (steamrt/tasks#145)
+    - s-r-launch-client automatically overrides $TERM if stdin, stdout or
+      stderr is a terminal, unless disabled with --inherit-env=TERM
+    - s-r-launch-client defaults to running a shell if no command
+      is specified
+    - Add s-r-launch-client -c COMMAND, a CLI shortcut for
+      s-r-launch-client ... -- sh -c COMMAND
+    - Add s-r-launch-client --inherit-env[-matching]=VAR
+    - Add s-r-launch-client --env-fd=FD
+    - Deprecate s-r-l-s --socket[-directory]
+    - Documentation improvements
+  * tests: More strict machine-readable TAP output
+  * tests: Avoid s-r-launch-client altering controlling terminal settings
+
+ -- Simon McVittie <smcv@collabora.com>  Fri, 29 Jul 2022 10:34:35 +0100
+
 steam-runtime-tools (0.20220726.0) steamrt; urgency=medium
 
   * s-r-launch-client, s-r-launcher-service improvements:

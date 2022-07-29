@@ -63,6 +63,7 @@ typedef struct
   const char *exit_signal;
   const char *launch_method;
   guint clear_env_flag;
+  gboolean default_dir_is_cwd;
 } Api;
 
 static Api launcher_api =
@@ -74,6 +75,7 @@ static Api launcher_api =
   .exit_signal = "ProcessExited",
   .launch_method = "Launch",
   .clear_env_flag = PV_LAUNCH_FLAGS_CLEAR_ENV,
+  .default_dir_is_cwd = FALSE,
 };
 
 static const Api host_api =
@@ -85,6 +87,7 @@ static const Api host_api =
   .exit_signal = "HostCommandExited",
   .launch_method = "HostCommand",
   .clear_env_flag = FLATPAK_HOST_COMMAND_FLAGS_CLEAR_ENV,
+  .default_dir_is_cwd = TRUE,
 };
 
 static const Api subsandbox_api =
@@ -96,6 +99,7 @@ static const Api subsandbox_api =
   .exit_signal = "SpawnExited",
   .launch_method = "Spawn",
   .clear_env_flag = FLATPAK_SPAWN_FLAGS_CLEAR_ENV,
+  .default_dir_is_cwd = TRUE,
 };
 
 static const Api *api = NULL;
@@ -1475,7 +1479,10 @@ main (int argc,
 
   if (!opt_directory)
     {
-      opt_directory = g_get_current_dir ();
+      if (api->default_dir_is_cwd)
+        opt_directory = g_get_current_dir ();
+      else
+        opt_directory = g_strdup ("");
     }
 
   if (session_bus != NULL)

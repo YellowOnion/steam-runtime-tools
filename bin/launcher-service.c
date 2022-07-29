@@ -953,7 +953,11 @@ pv_launcher_server_finish_startup (PvLauncherServer *self,
           g_printerr ("\t(launcher address here) \\\n");
         }
 
-      /* --directory='' means keep using the game's working directory */
+      /* --directory='' means keep using the game's working directory.
+       * TODO: This is the default for newer versions of
+       * s-r-launch-client. When suitable versions get into stable releases
+       * of Steam and the various container runtimes, we can reduce
+       * visual noise by removing this option from the hint. */
       g_printerr ("\t--directory='' \\\n");
       g_printerr ("\t-- \\\n");
       g_printerr ("\tbash\n");

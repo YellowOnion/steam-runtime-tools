@@ -19,6 +19,8 @@ steam-runtime-launch-client - client to launch processes in a container
 [**--directory** *DIR*]
 [**--env** _VAR_**=**_VALUE_]
 [**--forward-fd** *FD*]
+[**--inherit-env** *VAR*]
+[**--inherit-env-matching** *WILDCARD*]
 [**--pass-env** *VAR*]
 [**--pass-env-matching** *WILDCARD*]
 [**--unset-env** *VAR*]
@@ -26,12 +28,13 @@ steam-runtime-launch-client - client to launch processes in a container
 [**--verbose**]
 {**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
 [**--**]
-*COMMAND* [*ARGUMENTS...*]
+[*COMMAND* [*ARGUMENTS...*]]
 
 **steam-runtime-launch-client**
-[**--verbose**]
-{**--bus-name** *NAME*|**--dbus-address** *ADDRESS*|**--socket** *SOCKET*}
-**--terminate**
+*OPTIONS*
+**-c** *SHELL_COMMAND*
+[**--**]
+[*$0* *ARGUMENTS...*]
 
 **steam-runtime-launch-client**
 [**--verbose**]
@@ -42,6 +45,11 @@ steam-runtime-launch-client - client to launch processes in a container
 **steam-runtime-launch-client** connects to an `AF_UNIX` socket established
 by **steam-runtime-launcher-service**(1), and executes an arbitrary command
 as a subprocess of **steam-runtime-launcher-service**.
+
+If no *COMMAND* is specified, and the **--terminate** option is not given,
+then the default is to run an interactive shell.
+This uses **$SHELL** if available in the container, falling back to
+**bash**(1) or **sh**(1) if necessary.
 
 # OPTIONS
 
@@ -99,6 +107,15 @@ as a subprocess of **steam-runtime-launcher-service**.
     If this option is not used, instead it inherits environment variables
     from **steam-runtime-launcher-service**, with **--env** and
     similar options overriding or unsetting individual variables.
+
+**-c** *SHELL_COMMAND*, **--shell-command** *SHELL_COMMAND*
+:   Run the *SHELL_COMMAND* using **sh**(1).
+    If additional arguments are given, the first is used to set **$0**
+    in the resulting shell, and the remaining arguments are the
+    shell's positional parameters **$@**.
+    This is a shortcut for using
+    **-- sh -c** *SHELL_COMMAND* [*$0* [*ARGUMENT*...]]
+    as the command and arguments.
 
 **--directory** *DIR*
 :   Arrange for the *COMMAND* to run with *DIR* as its current working
@@ -168,11 +185,29 @@ For example,
 will set **FOO** to **bar**, unset **FOCUS** even if the caller has
 it set, and pass through **FONTS** from the caller.
 
+If standard input, standard output or standard error is a terminal, then
+the **TERM** environment variable is passed through by default, as if
+**--pass-env=TERM** had been used at the beginning of the command line.
+This behaviour can be overridden by other options that affect **TERM**,
+or disabled with **--inherit-env=TERM**.
+
 **--env** _VAR=VALUE_
 :   Set environment variable _VAR_ to _VALUE_.
     This is mostly equivalent to using
     **env** _VAR=VALUE_ *COMMAND* *ARGUMENTS...*
     as the command.
+
+**--inherit-env** *VAR*
+:   Undo the effect of a previous **--env**, **--unset-env**, **--pass-env**
+    or similar, returning to the default behaviour of inheriting *VAR*
+    from the execution environment of the service that is used to run
+    the *COMMAND* (unless **--clear-env** was used).
+
+**--inherit-env-matching** *WILDCARD*
+:   Do the same as for **--inherit-env** for any environment variable
+    whose name matches *WILDCARD*.
+    If this command is run from a shell, the wildcard will usually need
+    to be quoted, for example **--inherit-env-matching="FOO&#x2a;"**.
 
 **--pass-env** *VAR*
 :   If the environment variable *VAR* is set, pass its current value
@@ -227,6 +262,14 @@ Some variables affect the behaviour of **steam-runtime-launch-client**:
 `PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
 :   If set to `1`, prepend the log entries with a timestamp.
     If set to `0`, no effect.
+
+`SHELL`
+:   If set to a non-empty value, it is used as the default shell when
+    no *COMMAND* is provided.
+
+`TERM`
+:   If standard input, standard output or standard error is a terminal,
+    then this environment variable is passed to the *COMMAND* by default.
 
 # OUTPUT
 

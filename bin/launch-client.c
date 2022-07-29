@@ -641,6 +641,7 @@ static gboolean opt_clear_env = FALSE;
 static gchar *opt_dbus_address = NULL;
 static gchar *opt_directory = NULL;
 static gboolean opt_list = FALSE;
+static gchar *opt_shell_command = NULL;
 static gchar *opt_socket = NULL;
 static GHashTable *opt_env = NULL;
 static GHashTable *opt_unsetenv = NULL;
@@ -649,6 +650,22 @@ static gboolean opt_terminate = FALSE;
 static gchar *opt_usr_path = NULL;
 static gboolean opt_verbose = FALSE;
 static gboolean opt_version = FALSE;
+
+static void
+remove_keys_matching_pattern (GHashTable *table,
+                              const char *pattern)
+{
+  GHashTableIter iter;
+  gpointer k;
+
+  g_hash_table_iter_init (&iter, table);
+
+  while (g_hash_table_iter_next (&iter, &k, NULL))
+    {
+      if (fnmatch (pattern, k, 0) == 0)
+        g_hash_table_iter_remove (&iter);
+    }
+}
 
 static gboolean
 opt_env_cb (const char *option_name,
@@ -680,6 +697,13 @@ opt_env_cb (const char *option_name,
       return TRUE;
     }
 
+  if (g_strcmp0 (option_name, "--inherit-env") == 0)
+    {
+      g_hash_table_remove (opt_env, value);
+      g_hash_table_remove (opt_unsetenv, value);
+      return TRUE;
+    }
+
   if (g_strcmp0 (option_name, "--pass-env") == 0)
     {
       const gchar *env = g_getenv (value);
@@ -695,6 +719,13 @@ opt_env_cb (const char *option_name,
           g_hash_table_add (opt_unsetenv, g_strdup (value));
         }
 
+      return TRUE;
+    }
+
+  if (g_strcmp0 (option_name, "--inherit-env-matching") == 0)
+    {
+      remove_keys_matching_pattern (opt_env, value);
+      remove_keys_matching_pattern (opt_unsetenv, value);
       return TRUE;
     }
 
@@ -737,6 +768,81 @@ opt_env_cb (const char *option_name,
   g_return_val_if_reached (FALSE);
 }
 
+static gboolean
+option_env_fd_cb (G_GNUC_UNUSED const gchar *option_name,
+                  const gchar *value,
+                  G_GNUC_UNUSED gpointer data,
+                  GError **error)
+{
+  g_autofree gchar *proc_filename = NULL;
+  g_autofree gchar *env_block = NULL;
+  gsize remaining;
+  const char *p;
+  guint64 fd;
+  gchar *endptr;
+
+  g_assert (opt_env != NULL);
+  g_assert (opt_unsetenv != NULL);
+
+  fd = g_ascii_strtoull (value, &endptr, 10);
+
+  if (endptr == NULL || *endptr != '\0' || fd > G_MAXINT)
+    {
+      g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                   "Not a valid file descriptor: %s", value);
+      return FALSE;
+    }
+
+  proc_filename = g_strdup_printf ("/proc/self/fd/%d", (int) fd);
+
+  if (!g_file_get_contents (proc_filename, &env_block, &remaining, error))
+    return FALSE;
+
+  p = env_block;
+
+  while (remaining > 0)
+    {
+      g_autofree gchar *var = NULL;
+      g_autofree gchar *val = NULL;
+      size_t len = strnlen (p, remaining);
+      const char *equals;
+
+      g_assert (len <= remaining);
+
+      equals = memchr (p, '=', len);
+
+      if (equals == NULL || equals == p)
+        {
+          g_set_error (error, G_OPTION_ERROR, G_OPTION_ERROR_BAD_VALUE,
+                       "Environment variable must be given in the form VARIABLE=VALUE, not %.*s",
+                       (int) len, p);
+          return FALSE;
+        }
+
+      var = g_strndup (p, equals - p);
+      val = g_strndup (equals + 1, len - (equals - p) - 1);
+      g_hash_table_remove (opt_unsetenv, var);
+      g_hash_table_replace (opt_env,
+                            g_steal_pointer (&var),
+                            g_steal_pointer (&val));
+
+      p += len;
+      remaining -= len;
+
+      if (remaining > 0)
+        {
+          g_assert (*p == '\0');
+          p += 1;
+          remaining -= 1;
+        }
+    }
+
+  if (fd >= 3)
+    close (fd);
+
+  return TRUE;
+}
+
 static const GOptionEntry options[] =
 {
   { "app-path", '\0',
@@ -761,11 +867,21 @@ static const GOptionEntry options[] =
   { "env", '\0',
     G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
     "Set environment variable.", "VAR=VALUE" },
+  { "env-fd", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, option_env_fd_cb,
+    "Read environment variables in env -0 format from FD", "FD" },
   { "forward-fd", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING_ARRAY, &forward_fds,
     "Connect a file descriptor to the launched process. "
     "fds 0, 1 and 2 are automatically forwarded.",
     "FD" },
+  { "inherit-env", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
+    "Undo a previous --env, --unset-env, --pass-env, etc.", "VAR" },
+  { "inherit-env-matching", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, opt_env_cb,
+    "Undo previous --env, --unset-env, etc. matching a shell-style wildcard",
+    "WILDCARD" },
   { "list", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_list,
     "List some of the available servers and then exit.",
@@ -780,6 +896,10 @@ static const GOptionEntry options[] =
   { "share-pids", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_share_pids,
     "Use same pid namespace as calling sandbox.", NULL },
+  { "shell-command", 'c',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_STRING, &opt_shell_command,
+    "Run this command via /bin/sh, with COMMAND as $0 and ARG... as $@.",
+    "SHELL_COMMAND" },
   { "usr-path", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_FILENAME, &opt_usr_path,
     "Use DIR as the /usr for a Flatpak sub-sandbox. "
@@ -813,6 +933,7 @@ main (int argc,
   g_autoptr(GMainLoop) loop = NULL;
   g_autoptr(GOptionContext) context = NULL;
   g_autoptr(GPtrArray) replacement_command_and_args = NULL;
+  g_autoptr(GPtrArray) shell_argv = NULL;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
   char **command_and_args;
@@ -836,6 +957,23 @@ main (int argc,
   g_autofree char *home_realpath = NULL;
   g_autofree char *service_unique_name = NULL;
   const char *flatpak_id = NULL;
+  static const char * const run_interactive_shell[] =
+  {
+    "sh",
+    "-euc",
+    ("if [ -n \"${SHELL-}\" ]; then\n"
+     "  if command -v \"$SHELL\" >/dev/null; then\n"
+     "    exec \"$SHELL\"\n"
+     "  fi\n"
+     "  echo \"Shell '$SHELL' not available, falling back to bash\" >&2\n"
+     "fi\n"
+     "if command -v bash >/dev/null; then\n"
+     "  exec bash\n"
+     "fi\n"
+     "echo 'bash not available, falling back to sh' >&2\n"
+     "exec sh"),
+    NULL
+  };
 
   setlocale (LC_ALL, "");
 
@@ -856,6 +994,17 @@ main (int argc,
   opt_env = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
   opt_unsetenv = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   opt_verbose = _srt_boolean_environment ("PRESSURE_VESSEL_VERBOSE", FALSE);
+
+  for (i = 0; i <= 2; i++)
+    {
+      if (isatty (i))
+        {
+          g_debug ("Passing through TERM environment variable because "
+                   "fd %zu is a terminal", i);
+          opt_env_cb ("--pass-env", "TERM", NULL, NULL);
+          break;
+        }
+    }
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
@@ -954,16 +1103,26 @@ main (int argc,
       argc--;
     }
 
-  if (argc < 2)
+  if (opt_shell_command)
     {
-      if (!opt_terminate)
-        {
-          glnx_throw (error, "Usage: %s [OPTIONS] COMMAND [ARG...]",
-                      g_get_prgname ());
-          goto out;
-        }
+      shell_argv = g_ptr_array_new_with_free_func (g_free);
 
-      command_and_args = NULL;
+      g_ptr_array_add (shell_argv, g_strdup ("sh"));
+      g_ptr_array_add (shell_argv, g_strdup ("-c"));
+      g_ptr_array_add (shell_argv, g_strdup (opt_shell_command));
+
+      for (i = 1; i < (gsize) argc; i++)
+        g_ptr_array_add (shell_argv, g_strdup (argv[i]));
+
+      g_ptr_array_add (shell_argv, NULL);
+      command_and_args = (char **) shell_argv->pdata;
+    }
+  else if (argc < 2)
+    {
+      if (opt_terminate)
+        command_and_args = NULL;
+      else
+        command_and_args = (char **) run_interactive_shell;
     }
   else
     {
@@ -1509,6 +1668,7 @@ out:
 
   g_strfreev (forward_fds);
   g_free (opt_app_path);
+  g_free (opt_shell_command);
   g_free (opt_directory);
   g_free (opt_socket);
   g_hash_table_unref (opt_env);

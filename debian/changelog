@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220726.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220802.0) steamrt; urgency=medium
 
   * s-r-launch-client, s-r-launcher-service improvements:
     - s-r-launch-client now defaults to --directory="" (inherit directory
@@ -16,7 +16,7 @@ steam-runtime-tools (0.20220726.1) UNRELEASED; urgency=medium
   * tests: More strict machine-readable TAP output
   * tests: Avoid s-r-launch-client altering controlling terminal settings
 
- -- Simon McVittie <smcv@collabora.com>  Fri, 29 Jul 2022 10:34:35 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 02 Aug 2022 16:36:35 +0100
 
 steam-runtime-tools (0.20220726.0) steamrt; urgency=medium
 

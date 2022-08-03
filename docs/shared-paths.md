@@ -263,9 +263,26 @@ directories that are required for Steam to function correctly are
 [Similar to the home directory]: #similar-to-the-home-directory
 [Follows the home directory]: #similar-to-the-home-directory
 
+The configuration option for whether [the home directory][] is shared
+also affects several non-home locations for which similar behaviour is
+desired.
+
+If the home directory is shared, then the following locations are also
+shared read/write:
+
+* `/media`: FHS parent directory for removable media
+* `/mnt`: Legacy mount point for removable media
+* `/run/media`: Widely-used parent directory for removable media
+* `/var/tmp`: Medium-term temporary directory
+
+(Note that this changed in pressure-vessel 0.202208xx.x.
+In older versions, only `/var/tmp` follows the home directory.)
+
+If the home directory is not shared, then those locations are not
+share either.
+
 `/var/tmp` is treated specially.
-If [the home directory][] is shared, then so is `/var/tmp`.
-If not, then `/var/tmp` is a bind-mount or symbolic link pointing to
+If it is not shared, then it is a bind-mount or symbolic link pointing to
 a medium-term temporary directory in the game-specific private home
 directory, such as `~/.var/app/com.steampowered.App1234/.cache/tmp`
 (this is consistent with Flatpak's behaviour).
@@ -279,7 +296,6 @@ not shared with the container. This includes:
 
 * Users' home directories in `/home`, apart from
     [the current user's home directory][the home directory]
-* Removable media, typically mounted in `/media`, `/mnt` or `/run/media`
 * The FHS third-party software directory `/opt`
 * The FHS server-data directory `/srv`
 * Any custom top-level directory such as `/large-disk-drive`
@@ -305,8 +321,8 @@ This assumes Steam is not running [under Flatpak][].
     * The current user's [home directory][] is usually shared
     * The rest of `/home` is [usually not shared][]
 * `/lib`, `/libQUAL`: part of [the runtime][]
-* `/media`: [usually not shared][]
-* `/mnt`: [usually not shared][]
+* `/media`: [follows the home directory][]
+* `/mnt`: [follows the home directory][]
 * `/opt`: [usually not shared][]
 * `/proc`: [always shared][]
 * `/sbin`: part of [the runtime][]
@@ -317,6 +333,7 @@ This assumes Steam is not running [under Flatpak][].
 * `/var/tmp`: [follows the home directory][]
 * `/root`: [never shared][]
 * `/run`: [never shared][] in general, but many locations inside it are shared
+* `/run/media`: [follows the home directory][]
 * `/sbin`: part of [the runtime][]
 * `/srv`: [usually not shared][]
 * `/sys`: [always shared][]

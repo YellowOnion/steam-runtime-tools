@@ -270,9 +270,16 @@ desired.
 If the home directory is shared, then the following locations are also
 shared read/write:
 
+* `/home`: Other users' home directories (if accessible by the current user),
+    sometimes also sed to contain mount points for non-system partitions
+    or drives (for example `/home/shared/large-disk-drive`)
+* `/opt`: FHS directory for third-party software
 * `/media`: FHS parent directory for removable media
 * `/mnt`: Legacy mount point for removable media
 * `/run/media`: Widely-used parent directory for removable media
+* `/srv`: FHS directory for site-specific data,
+    sometimes used to contain mount points for non-system partitions or drives
+    (for example `/srv/bulk-data-drive`)
 * `/var/tmp`: Medium-term temporary directory
 
 (Note that this changed in pressure-vessel 0.202208xx.x.
@@ -292,13 +299,8 @@ directory, such as `~/.var/app/com.steampowered.App1234/.cache/tmp`
 [Usually not shared]: #usually-not-shared
 
 All top-level directories that are not otherwise mentioned are generally
-not shared with the container. This includes:
-
-* Users' home directories in `/home`, apart from
-    [the current user's home directory][the home directory]
-* The FHS third-party software directory `/opt`
-* The FHS server-data directory `/srv`
-* Any custom top-level directory such as `/large-disk-drive`
+not shared with the container. This includes any custom top-level
+directory such as `/large-disk-drive`.
 
 Users can instruct the container runtime framework to share locations
 in this category between the host system and the container by setting
@@ -319,11 +321,11 @@ This assumes Steam is not running [under Flatpak][].
 * `/etc`: managed by [the runtime][], some files come from the host
 * `/home`
     * The current user's [home directory][] is usually shared
-    * The rest of `/home` is [usually not shared][]
+    * The rest of `/home` [follows the home directory][]
 * `/lib`, `/libQUAL`: part of [the runtime][]
 * `/media`: [follows the home directory][]
 * `/mnt`: [follows the home directory][]
-* `/opt`: [usually not shared][]
+* `/opt`: [follows the home directory][]
 * `/proc`: [always shared][]
 * `/sbin`: part of [the runtime][]
 * `/usr`: part of [the runtime][]
@@ -335,7 +337,7 @@ This assumes Steam is not running [under Flatpak][].
 * `/run`: [never shared][] in general, but many locations inside it are shared
 * `/run/media`: [follows the home directory][]
 * `/sbin`: part of [the runtime][]
-* `/srv`: [usually not shared][]
+* `/srv`: [follows the home directory][]
 * `/sys`: [always shared][]
 * `/tmp`:
     * `/tmp/.X11-unix` is [never shared][], but individual sockets appear there

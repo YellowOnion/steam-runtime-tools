@@ -258,6 +258,11 @@ Even if the home directory is generally unshared, some individual
 directories that are required for Steam to function correctly are
 [always shared][].
 
+## Similar to the home directory
+
+[Similar to the home directory]: #similar-to-the-home-directory
+[Follows the home directory]: #similar-to-the-home-directory
+
 `/var/tmp` is treated specially.
 If [the home directory][] is shared, then so is `/var/tmp`.
 If not, then `/var/tmp` is a bind-mount pointing to a medium-term temporary
@@ -302,7 +307,7 @@ This assumes Steam is not running [under Flatpak][].
 * `/usr/local`: [never shared][] (technically part of the runtime)
 * `/var`: managed by [the runtime][], some files come from the host
 * `/var/run`: managed by [the runtime][] which makes it a symbolic link to `/run`
-* `/var/tmp`: [usually not shared][]
+* `/var/tmp`: [follows the home directory][]
 * `/root`: [never shared][]
 * `/run`: [never shared][] in general, but many locations inside it are shared
 * `/sbin`: part of [the runtime][]

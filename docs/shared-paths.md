@@ -265,10 +265,10 @@ directories that are required for Steam to function correctly are
 
 `/var/tmp` is treated specially.
 If [the home directory][] is shared, then so is `/var/tmp`.
-If not, then `/var/tmp` is a bind-mount pointing to a medium-term temporary
-directory in the game-specific private home directory, such as
-`~/.var/app/com.steampowered.App1234/.cache/tmp` (this is consistent
-with Flatpak's behaviour).
+If not, then `/var/tmp` is a bind-mount or symbolic link pointing to
+a medium-term temporary directory in the game-specific private home
+directory, such as `~/.var/app/com.steampowered.App1234/.cache/tmp`
+(this is consistent with Flatpak's behaviour).
 
 ## Usually not shared
 

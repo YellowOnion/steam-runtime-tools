@@ -297,6 +297,18 @@ pv_wrap_use_home (PvHomeMode mode,
                                          FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                          "/run/media");
 
+        /* If we are sharing the home directory with the host, also share
+         * typical FHS directories that do not have any other mapping. */
+        flatpak_exports_add_path_expose (exports,
+                                         FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                         "/home");
+        flatpak_exports_add_path_expose (exports,
+                                         FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                         "/opt");
+        flatpak_exports_add_path_expose (exports,
+                                         FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                         "/srv");
+
         /* We always export /tmp for now (see below) and it seems odd
          * to share /tmp with the host, but not /var/tmp.
          * We don't do this when not sharing the home directory, since

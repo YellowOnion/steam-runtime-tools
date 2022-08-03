@@ -284,6 +284,13 @@ not shared with the container. This includes:
 * The FHS server-data directory `/srv`
 * Any custom top-level directory such as `/large-disk-drive`
 
+Users can instruct the container runtime framework to share locations
+in this category between the host system and the container by setting
+the `STEAM_COMPAT_MOUNTS`, `PRESSURE_VESSEL_FILESYSTEMS_RW` and/or
+`PRESSURE_VESSEL_FILESYSTEMS_RO` environment variables.
+These environment variables cannot be used for locations that are
+[never shared][].
+
 ## Summary
 
 This assumes Steam is not running [under Flatpak][].

@@ -1,3 +1,22 @@
+steam-runtime-tools (0.20220803.0) steamrt; urgency=medium
+
+  * pressure-vessel: Share more paths with the container by default
+    (steamrt/tasks#149, steam-runtime#334, steam-runtime#393,
+    steam-runtime#429, steam-runtime#470, Proton#5102,
+    steam-runtime-tools#18)
+    - If the user's real home directory is shared with the container,
+      also share the typical paths for removable media: /run/media,
+      /media, /mnt.
+    - If the user's real home directory is shared with the container,
+      also share FHS 3.0 top-level directories /home, /opt and /srv.
+  * Locally-created top-level directories that don't follow any particular
+    specification (for example /storage, /files, /games) continue to not be
+    shared by default. They can still be shared by setting the
+    STEAM_COMPAT_MOUNTS environment variable.
+  * A new document docs/shared-paths.md describes what is and isn't shared.
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 03 Aug 2022 17:38:10 +0100
+
 steam-runtime-tools (0.20220802.0) steamrt; urgency=medium
 
   * s-r-launch-client, s-r-launcher-service improvements:

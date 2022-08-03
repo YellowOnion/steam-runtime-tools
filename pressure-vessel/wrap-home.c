@@ -284,8 +284,13 @@ pv_wrap_use_home (PvHomeMode mode,
         flatpak_exports_add_path_expose (exports,
                                          FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                          real_home);
+
         /* We always export /tmp for now (see below) and it seems odd
-         * to share /tmp with the host, but not /var/tmp. */
+         * to share /tmp with the host, but not /var/tmp.
+         * We don't do this when not sharing the home directory, since
+         * in that case the replacement home directory provides /var/tmp
+         * as a symlink or bind-mount pointing to its .cache/tmp,
+         * consistent with Flatpak. */
         flatpak_exports_add_path_expose (exports,
                                          FLATPAK_FILESYSTEM_MODE_READ_WRITE,
                                          "/var/tmp");

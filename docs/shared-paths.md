@@ -258,12 +258,17 @@ Even if the home directory is generally unshared, some individual
 directories that are required for Steam to function correctly are
 [always shared][].
 
+## Similar to the home directory
+
+[Similar to the home directory]: #similar-to-the-home-directory
+[Follows the home directory]: #similar-to-the-home-directory
+
 `/var/tmp` is treated specially.
 If [the home directory][] is shared, then so is `/var/tmp`.
-If not, then `/var/tmp` is a bind-mount pointing to a medium-term temporary
-directory in the game-specific private home directory, such as
-`~/.var/app/com.steampowered.App1234/.cache/tmp` (this is consistent
-with Flatpak's behaviour).
+If not, then `/var/tmp` is a bind-mount or symbolic link pointing to
+a medium-term temporary directory in the game-specific private home
+directory, such as `~/.var/app/com.steampowered.App1234/.cache/tmp`
+(this is consistent with Flatpak's behaviour).
 
 ## Usually not shared
 
@@ -278,6 +283,13 @@ not shared with the container. This includes:
 * The FHS third-party software directory `/opt`
 * The FHS server-data directory `/srv`
 * Any custom top-level directory such as `/large-disk-drive`
+
+Users can instruct the container runtime framework to share locations
+in this category between the host system and the container by setting
+the `STEAM_COMPAT_MOUNTS`, `PRESSURE_VESSEL_FILESYSTEMS_RW` and/or
+`PRESSURE_VESSEL_FILESYSTEMS_RO` environment variables.
+These environment variables cannot be used for locations that are
+[never shared][].
 
 ## Summary
 
@@ -302,7 +314,7 @@ This assumes Steam is not running [under Flatpak][].
 * `/usr/local`: [never shared][] (technically part of the runtime)
 * `/var`: managed by [the runtime][], some files come from the host
 * `/var/run`: managed by [the runtime][] which makes it a symbolic link to `/run`
-* `/var/tmp`: [usually not shared][]
+* `/var/tmp`: [follows the home directory][]
 * `/root`: [never shared][]
 * `/run`: [never shared][] in general, but many locations inside it are shared
 * `/sbin`: part of [the runtime][]

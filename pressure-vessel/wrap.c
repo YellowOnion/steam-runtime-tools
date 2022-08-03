@@ -1667,9 +1667,9 @@ main (int argc,
 
   /* Protect other users' homes (but guard against the unlikely
    * situation that they don't exist). We use the FlatpakExports for this
-   * so that it can be overridden by --filesystem=/home, and so that it
-   * is sorted correctly with respect to all the other
-   * home-directory-related exports. */
+   * so that it can be overridden by --filesystem=/home or
+   * pv_wrap_use_home(), and so that it is sorted correctly with
+   * respect to all the other home-directory-related exports. */
   if (exports != NULL
       && g_file_test ("/home", G_FILE_TEST_EXISTS))
     flatpak_exports_add_path_tmpfs (exports, "/home");

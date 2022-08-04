@@ -282,9 +282,6 @@ shared read/write:
     (for example `/srv/bulk-data-drive`)
 * `/var/tmp`: Medium-term temporary directory
 
-(Note that this changed in pressure-vessel 0.20220803.0.
-In older versions, only `/var/tmp` follows the home directory.)
-
 If the home directory is not shared, then those locations are not
 share either.
 

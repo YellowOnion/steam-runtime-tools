@@ -8,7 +8,7 @@ strip = '/usr/bin/strip'
 pkgconfig = '/usr/bin/i686-linux-gnu-pkg-config'
 exe_wrapper = '/usr/bin/env'
 
-[properties]
+[built-in options]
 c_args = ['-m32']
 cpp_args = ['-m32']
 c_link_args = ['-m32']

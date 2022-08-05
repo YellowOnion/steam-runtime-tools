@@ -207,8 +207,8 @@ if get_option('srcdir') != ''
   conf_data = configuration_data()
   conf_data.set('prefix', get_option('prefix'))
   conf_data.set('pv_dir', pv_dir)
-  conf_data.set('python', python.path())
-  conf_data.set('sh', sh.path())
+  conf_data.set('python', python.full_path())
+  conf_data.set('sh', sh.full_path())
   conf_data.set('srcdir', get_option('srcdir'))
   conf_data.set('version', version)
   install_data(
@@ -221,9 +221,9 @@ if get_option('srcdir') != ''
     install_mode : 'rwxr-xr-x',
   )
   meson.add_install_script(
-    python.path(),
+    python.full_path(),
     meson.current_source_dir() / 'copy-source-code.py',
-    '--srcdir', meson.source_root(),
+    '--srcdir', meson.project_source_root(),
     '--prefix', get_option('prefix'),
     '--pressure-vessel-dir', pv_dir,
     '--set-version', version,

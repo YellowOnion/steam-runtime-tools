@@ -28,23 +28,24 @@ project(
     'c_std=c99',
     'warning_level=2',
   ],
-  meson_version : '>=0.49.0',
+  meson_version : '>=0.56.2',
 )
 
 api_major = '0'
 abi_major = '0'
 abi_minor = '20220803.0'
 
-pkg = import('pkgconfig')
 gnome = import('gnome')
+pkg = import('pkgconfig')
+python_module = import('python')
 
-# We'd like to use import('python').find_installation(), but before
-# Meson 0.50 there was a bug where it didn't have a path() method,
-# making it useless to us here.
 if get_option('python') == ''
-  python = find_program('python3.5', 'python3', required : true)
+  python = python_module.find_installation('python3.5', required : false)
+  if not python.found()
+    python = python_module.find_installation('python3')
+  endif
 else
-  python = find_program(get_option('python'), required : true)
+  python = python_module.find_installation(get_option('python'))
 endif
 
 if get_option('fully_featured_python') == ''
@@ -92,7 +93,6 @@ build_gir = gobject_introspection_dep.found()
 
 dbus_run_session = find_program('dbus-run-session', required : false)
 glslang_validator = find_program('glslangValidator', required : true)
-prove = find_program('prove', required : false)
 sh = find_program('sh', required : true)
 
 version = get_option('version')

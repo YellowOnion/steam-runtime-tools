@@ -229,13 +229,6 @@ elif multiarch == 'x86_64-linux-gnu'
 endif
 
 if multiarch != ''
-  if meson.version().version_compare('>=0.58.0')
-    # replaces deprecated source_root()
-    libcapsule_srcdir = meson.global_source_root() / 'subprojects' / 'libcapsule'
-  else
-    libcapsule_srcdir = meson.source_root() / 'subprojects' / 'libcapsule'
-  endif
-
   # libcapsule doesn't currently have a Meson build system, so instead
   # of building it as a subproject, we build our own source file that
   # #includes everything we need from it.

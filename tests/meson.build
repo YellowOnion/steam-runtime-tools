@@ -29,6 +29,13 @@ test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
 
 no_activation_session_conf = files('session.conf')
 
+if meson.version().version_compare('>=0.63')
+    # Work around https://github.com/mesonbuild/meson/issues/10577
+    tap_test_protocol = 'exitcode'
+else
+    tap_test_protocol = 'tap'
+endif
+
 tests = [
   {'name': 'architecture'},
   {'name': 'container'},
@@ -70,7 +77,7 @@ test_utils = static_library(
     'test-utils.c',
   ],
   c_args : [
-    '-D_SRT_PYTHON="' + python.path() + '"',
+    '-D_SRT_PYTHON="' + python.full_path() + '"',
   ],
   dependencies : [
     glib,
@@ -191,9 +198,21 @@ foreach test_info : tests
   endif
 
   if glib_tap_support.found()
-    test(test_name, exe, args : ['--tap'], env : test_env, timeout : timeout)
+    test(
+      test_name,
+      exe,
+      args : ['--tap'],
+      env : test_env,
+      protocol : tap_test_protocol,
+      timeout : timeout,
+    )
   else
-    test(test_name, exe, env : test_env, timeout : timeout)
+    test(
+      test_name,
+      exe,
+      env : test_env,
+      timeout : timeout,
+    )
   endif
 endforeach
 
@@ -423,22 +442,13 @@ lint_scripts = [
 foreach test_name : lint_scripts
   timeout = 30
 
-  if meson.version().version_compare('>=0.50')
-    test(
-      test_name, files(test_name),
-      env : test_env,
-      suite : 'lint',
-      protocol : 'tap',
-      timeout : timeout,
-    )
-  else
-    test(
-      test_name, files(test_name),
-      env : test_env,
-      suite : 'lint',
-      timeout : timeout,
-    )
-  endif
+  test(
+    test_name, files(test_name),
+    env : test_env,
+    suite : 'lint',
+    protocol : tap_test_protocol,
+    timeout : timeout,
+  )
 endforeach
 
 if get_option('pressure_vessel') and get_option('bin')

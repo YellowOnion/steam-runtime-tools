@@ -74,21 +74,13 @@ foreach test_name : compiled_tests
   )
 
   if glib_tap_support.found()
-    if prove.found()
-      test(
-        test_name, prove,
-        args : ['-v', '-e', '', exe, '::', '--tap'],
-        env : test_env,
-        suite : ['pressure-vessel'],
-      )
-    else
-      test(
-        test_name, exe,
-        args : ['--tap'],
-        env : test_env,
-        suite : ['pressure-vessel'],
-      )
-    endif
+    test(
+      test_name, exe,
+      args : ['--tap'],
+      env : test_env,
+      protocol : tap_test_protocol,
+      suite : ['pressure-vessel'],
+    )
   else
     test(
       test_name, exe,
@@ -100,12 +92,14 @@ foreach test_name : compiled_tests
 endforeach
 
 foreach test_name : tests
-  test_args = ['-v', files(test_name)]
+  test_argv = []
   timeout = 30
 
   if test_name.endswith('.py')
-    test_args += ['-e', python.path()]
+    test_argv += [python.full_path()]
   endif
+
+  test_argv += [files(test_name)]
 
   if test_name in ['test-locale-gen.sh', 'launcher.py']
     timeout = 90
@@ -115,42 +109,31 @@ foreach test_name : tests
     timeout = 300
   endif
 
-  if prove.found()
-    if dbus_run_session.found()
+  if dbus_run_session.found()
+    test(
+      test_name, dbus_run_session,
+      args : [
+        '--config-file', no_activation_session_conf,
+        '--',
+      ] + test_argv,
+      env : test_env,
+      protocol : tap_test_protocol,
+      suite : ['pressure-vessel'],
+      timeout : timeout,
+    )
+    # Re-run launcher.py with the default python3 version (if any)
+    # to try the code path involving gi.repository.Gio
+    if test_name == 'launcher.py' and full_python.found()
       test(
-        test_name, dbus_run_session,
+        'full-python-' + test_name,
+        dbus_run_session,
         args : [
-          '--config-file', no_activation_session_conf,
           '--',
-          'prove',
-        ] + test_args,
+          full_python.full_path(),
+          files(test_name),
+        ],
         env : test_env,
-        suite : ['pressure-vessel'],
-        timeout : timeout,
-      )
-
-      # Re-run launcher.py with the default python3 version (if any)
-      # to try the code path involving gi.repository.Gio
-      if test_name == 'launcher.py' and full_python.found()
-        test(
-          'full-python-' + test_name,
-          dbus_run_session,
-          args : [
-            '--',
-            'prove',
-            '-v', files(test_name),
-            '-e', full_python.path(),
-          ],
-          env : test_env,
-          suite : ['pressure-vessel'],
-          timeout : timeout,
-        )
-      endif
-    else
-      test(
-        test_name, prove,
-        args : test_args,
-        env : test_env,
+        protocol : tap_test_protocol,
         suite : ['pressure-vessel'],
         timeout : timeout,
       )

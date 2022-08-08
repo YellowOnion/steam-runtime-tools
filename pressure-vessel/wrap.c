@@ -1097,7 +1097,7 @@ main (int argc,
   if (opt_verbose)
     _srt_util_set_glib_log_handler (G_LOG_DOMAIN, opt_verbose);
 
-  interpreter_root = pv_wrap_detect_interpreter_root ();
+  pv_wrap_detect_virtualization (&interpreter_root, NULL);
 
   /* Specifying either one of these mutually-exclusive options as a
    * command-line option disables use of the environment variable for

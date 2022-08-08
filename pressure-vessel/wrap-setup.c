@@ -1064,30 +1064,38 @@ pv_wrap_maybe_load_nvidia_modules (GError **error)
 }
 
 /**
- * pv_wrap_detect_interpreter_root:
- *
- * If we appear to be running under an interpreter/emulator like FEX-Emu
- * that uses an overlay to provide x86 libraries, then return the absolute
- * path to that overlay. Otherwise, return %NULL.
+ * pv_wrap_detect_virtualization:
+ * @interpreter_root_out: (out) (optional): Used to return the absolute path
+ *  to the overlay, if we are running under an interpreter/emulator like FEX.
+ *  Otherwise, return %NULL.
+ * @host_machine_out: (out) (optional): Used to return the host machine type, if
+ *  an emulator is in use, or %SRT_MACHINE_TYPE_UNKNOWN if unknown or not
+ *  applicable.
  */
-gchar *
-pv_wrap_detect_interpreter_root (void)
+void
+pv_wrap_detect_virtualization (gchar **interpreter_root_out,
+                               SrtMachineType *host_machine_out)
 {
   g_autoptr(SrtVirtualizationInfo) virt_info = NULL;
   const char *val;
+
+  g_return_if_fail (interpreter_root_out == NULL || *interpreter_root_out == NULL);
 
   /* At the moment we only care about FEX-Emu here, which we happen to
    * know implements CPUID, so it's faster to skip the filesystem-based
    * checks */
   virt_info = _srt_check_virtualization (NULL, -1);
 
-  val = srt_virtualization_info_get_interpreter_root (virt_info);
+  if (host_machine_out != NULL)
+    *host_machine_out = srt_virtualization_info_get_host_machine (virt_info);
 
-  /* We happen to know that the way _srt_check_virtualization() gets
-   * this information guarantees a canonicalized path, so we don't need
-   * to canonicalize it again. */
-  if (val != NULL)
-    return g_strdup (val);
+  if (interpreter_root_out != NULL)
+    {
+      val = srt_virtualization_info_get_interpreter_root (virt_info);
 
-  return NULL;
+      /* We happen to know that the way _srt_check_virtualization() gets
+       * this information guarantees a canonicalized path, so we don't need
+       * to canonicalize it again. */
+      *interpreter_root_out = g_strdup (val);
+    }
 }

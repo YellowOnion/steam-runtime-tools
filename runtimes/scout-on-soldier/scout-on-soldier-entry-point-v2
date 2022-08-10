@@ -39,18 +39,13 @@ usage () {
 }
 
 main () {
-    local appid="${STEAM_COMPAT_APP_ID-"${SteamAppId-0}"}"
     local getopt_temp="help"
-    local launch_client
-    local launcher_service=
-    local launcher_service_address
     local ours
     local runtime
     local src
     local theirs
     local theirs_should_be
     local verbose=
-    local -a launcher_args=()
 
     if [ "${STEAM_LINUX_RUNTIME_VERBOSE-}" = 1 ]; then
         verbose=yes
@@ -101,14 +96,6 @@ main () {
                 ;;
         esac
     done
-
-    # TODO: Remove this block and the launcher_service* variables when
-    # s-r-l-i-0 is in the public stable SLR_soldier container
-    case "${STEAM_COMPAT_LAUNCHER_SERVICE-}" in
-        (scout-in-container | scout-on-soldier)
-            launcher_service=yes
-            ;;
-    esac
 
     if [ "$#" -eq 0 ] || [ "$1" = -- ]; then
         log "Error: A command to run is required"
@@ -260,42 +247,6 @@ main () {
             steam-runtime-launcher-interface-0 \
             scout-in-container:scout-on-soldier \
             "$@"
-    # TODO: Remove this block and the launcher_service* variables when
-    # s-r-l-i-0 is in the public stable SLR_soldier container
-    elif [ -n "$launcher_service" ]; then
-        unset STEAM_COMPAT_LAUNCHER_SERVICE
-        launcher_service_address="--bus-name=com.steampowered.App${appid}"
-        launcher_args+=("$launcher_service_address")
-        launcher_args+=("--replace")
-
-        # We find steam-runtime-launcher-service in PATH. soldier and
-        # sniper since 0.20220428.x have this available.
-        set -- steam-runtime-launcher-service "${launcher_args[@]}" -- "$@"
-
-        # TODO: Looking next to PRESSURE_VESSEL_RUNTIME_BASE is taking
-        # advantage of an implementation detail of how SLR is put together.
-        # Ideally we would use $runtime/amd64/bin/s-r-l-c unconditionally,
-        # but we can't rely on that until it's included in the GA Steam Client.
-        for launch_client in \
-            "$runtime/amd64/bin/steam-runtime-launch-client" \
-            "${PRESSURE_VESSEL_RUNTIME_BASE-}/pressure-vessel/bin/steam-runtime-launch-client" \
-        ; do
-            if [ -x "$launch_client" ]; then
-                break
-            fi
-        done
-
-        echo "Starting program with command-launcher service." >&2
-        echo >&2
-        echo "To inject commands into the container, use a command like:" >&2
-        echo >&2
-        echo "$launch_client \\" >&2
-        echo "    $launcher_service_address \\" >&2
-        # --directory='' means keep using the game's working directory
-        echo "    --directory='' \\"
-        echo "    -- \\"
-        echo "    xterm"
-        echo >&2
     fi
 
     if [ -n "$saved_ld_preload" ]; then

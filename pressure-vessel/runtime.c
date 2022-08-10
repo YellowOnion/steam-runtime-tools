@@ -6433,6 +6433,34 @@ pv_enumerate_vulkan_layer_details (SrtSystemInfo *system_info,
   pv_append_vulkan_layers_details (vulkan_imp_layers, "implicit", *vulkan_imp_layer_details);
 }
 
+typedef struct
+{
+  GPtrArray *egl_icd_details;   /* (element-type IcdDetails) */
+  GPtrArray *egl_ext_platform_details;   /* (element-type IcdDetails) */
+  GPtrArray *vulkan_icd_details;   /* (element-type IcdDetails) */
+  GPtrArray *vulkan_exp_layer_details;   /* (element-type IcdDetails) */
+  GPtrArray *vulkan_imp_layer_details;   /* (element-type IcdDetails) */
+} IcdStack;
+
+static IcdStack *
+icd_stack_new (void)
+{
+  return g_slice_new0 (IcdStack);
+}
+
+static void
+icd_stack_free (IcdStack *self)
+{
+  g_clear_pointer (&self->egl_icd_details, g_ptr_array_unref);
+  g_clear_pointer (&self->egl_ext_platform_details, g_ptr_array_unref);
+  g_clear_pointer (&self->vulkan_icd_details, g_ptr_array_unref);
+  g_clear_pointer (&self->vulkan_exp_layer_details, g_ptr_array_unref);
+  g_clear_pointer (&self->vulkan_imp_layer_details, g_ptr_array_unref);
+  g_slice_free (IcdStack, self);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdStack, icd_stack_free)
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -6451,11 +6479,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GString) va_api_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
   g_autoptr(SrtSystemInfo) system_info = NULL;
-  g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) egl_ext_platform_details = NULL;   /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) vulkan_exp_layer_details = NULL;   /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) vulkan_imp_layer_details = NULL;   /* (element-type IcdDetails) */
+  g_autoptr(IcdStack) provider_stack = icd_stack_new ();
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autoptr(SrtProfilingTimer) part_timer = NULL;
   gboolean all_libglx_from_provider = TRUE;
@@ -6490,16 +6514,20 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   else
     system_info = g_object_ref (enumeration_thread_join (&self->indep_thread));
 
-  egl_icd_details = pv_enumerate_egl_icds (system_info, pv_multiarch_tuples);
+  provider_stack->egl_icd_details = pv_enumerate_egl_icds (system_info,
+                                                           pv_multiarch_tuples);
 
-  egl_ext_platform_details = pv_enumerate_egl_ext_platforms (system_info, pv_multiarch_tuples);
+  provider_stack->egl_ext_platform_details = pv_enumerate_egl_ext_platforms (system_info,
+                                                                             pv_multiarch_tuples);
 
-  vulkan_icd_details = pv_enumerate_vulkan_icds (system_info, pv_multiarch_tuples);
+  provider_stack->vulkan_icd_details = pv_enumerate_vulkan_icds (system_info,
+                                                                 pv_multiarch_tuples);
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
-      pv_enumerate_vulkan_layer_details (system_info, &vulkan_exp_layer_details,
-                                         &vulkan_imp_layer_details);
+      pv_enumerate_vulkan_layer_details (system_info,
+                                         &provider_stack->vulkan_exp_layer_details,
+                                         &provider_stack->vulkan_imp_layer_details);
     }
 
   /* We set this FALSE later if we decide not to use the provider libc
@@ -6563,27 +6591,28 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           collect_core_libraries_patterns (patterns);
           collect_graphics_libraries_patterns (patterns);
 
-          if (!collect_egl_drivers (self, arch, egl_icd_details, patterns,
-                                    error))
+          if (!collect_egl_drivers (self, arch, provider_stack->egl_icd_details,
+                                    patterns, error))
             return FALSE;
 
-          if (!collect_egl_ext_platforms (self, arch, egl_ext_platform_details,
+          if (!collect_egl_ext_platforms (self, arch,
+                                          provider_stack->egl_ext_platform_details,
                                           patterns, error))
             return FALSE;
 
-          if (!collect_vulkan_icds (self, arch, vulkan_icd_details,
+          if (!collect_vulkan_icds (self, arch, provider_stack->vulkan_icd_details,
                                     patterns, error))
             return FALSE;
 
           if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
             {
               g_debug ("Collecting Vulkan explicit layers from provider...");
-              if (!collect_vulkan_layers (self, vulkan_exp_layer_details,
+              if (!collect_vulkan_layers (self, provider_stack->vulkan_exp_layer_details,
                                           patterns, arch, "vulkan_exp_layer", error))
                 return FALSE;
 
               g_debug ("Collecting Vulkan implicit layers from provider...");
-              if (!collect_vulkan_layers (self, vulkan_imp_layer_details,
+              if (!collect_vulkan_layers (self, provider_stack->vulkan_imp_layer_details,
                                           patterns, arch, "vulkan_imp_layer", error))
                 return FALSE;
             }
@@ -6668,8 +6697,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               all_libglx_from_provider = FALSE;
             }
 
-          collect_mesa_drirc (self, arch,
-                              egl_icd_details, vulkan_icd_details, system_info,
+          collect_mesa_drirc (self, arch, provider_stack->egl_icd_details,
+                              provider_stack->vulkan_icd_details, system_info,
                               drirc_data_in_provider);
 
           libglx_nvidia = g_build_filename (arch->libdir_in_current_namespace, "libGLX_nvidia.so.0", NULL);
@@ -6796,30 +6825,30 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_debug ("Setting up EGL ICD JSON...");
 
   if (!setup_each_json_manifest (self, bwrap, "glvnd/egl_vendor.d",
-                                 egl_icd_details, egl_path, error))
+                                 provider_stack->egl_icd_details, egl_path, error))
     return FALSE;
 
   if (!setup_each_json_manifest (self, bwrap, "egl/egl_external_platform.d",
-                                 egl_ext_platform_details,
+                                 provider_stack->egl_ext_platform_details,
                                  egl_ext_platform_path, error))
     return FALSE;
 
   g_debug ("Setting up Vulkan ICD JSON...");
   if (!setup_each_json_manifest (self, bwrap, "vulkan/icd.d",
-                                 vulkan_icd_details, vulkan_path, error))
+                                 provider_stack->vulkan_icd_details, vulkan_path, error))
     return FALSE;
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
       g_debug ("Setting up Vulkan explicit layer JSON...");
       if (!setup_each_json_manifest (self, bwrap, "vulkan/explicit_layer.d",
-                                     vulkan_exp_layer_details,
+                                     provider_stack->vulkan_exp_layer_details,
                                      vulkan_exp_layer_path, error))
         return FALSE;
 
       g_debug ("Setting up Vulkan implicit layer JSON...");
       if (!setup_each_json_manifest (self, bwrap, "vulkan/implicit_layer.d",
-                                     vulkan_imp_layer_details,
+                                     provider_stack->vulkan_imp_layer_details,
                                      vulkan_imp_layer_path, error))
         return FALSE;
     }

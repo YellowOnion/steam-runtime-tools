@@ -442,6 +442,101 @@ test_bind_usr (Fixture *f,
   assert_bwrap_does_not_contain (f->bwrap, "/usr/share");
 }
 
+/*
+ * Test that pv_export_root_dirs_like_filesystem_host() behaves the same
+ * as Flatpak --filesystem=host.
+ */
+static void
+test_export_root_dirs (Fixture *f,
+                       gconstpointer context)
+{
+  static const char * const paths[] =
+  {
+    "boot/",
+    "bin>usr/bin",
+    "dev/pts/",
+    "etc/hosts",
+    "games/SteamLibrary/",
+    "home/user/.steam",
+    "lib>usr/lib",
+    "lib32>usr/lib32",
+    "lib64>usr/lib",
+    "libexec>usr/libexec",
+    "opt/extras/kde/",
+    "proc/1/fd/",
+    "root/",
+    "run/dbus/",
+    "run/gfx/",
+    "run/host/",
+    "run/media/",
+    "run/pressure-vessel/",
+    "run/systemd/",
+    "tmp/",
+    "sbin>usr/bin",
+    "sys/",
+    "usr/local/",
+    "var/tmp/",
+  };
+  g_autoptr(FlatpakExports) exports = fixture_create_exports (f);
+  g_autoptr(GError) local_error = NULL;
+  gboolean ret;
+
+  fixture_populate_dir (f, f->mock_host_fd, paths, G_N_ELEMENTS (paths));
+  ret = pv_export_root_dirs_like_filesystem_host (f->mock_host_fd, exports,
+                                                  FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                                  &local_error);
+  g_assert_no_error (local_error);
+  g_assert_true (ret);
+  flatpak_exports_append_bwrap_args (exports, f->bwrap);
+
+  dump_bwrap (f->bwrap);
+
+  /* We don't export mutable OS state in this particular function,
+   * for parity with Flatpak --filesystem=host (which does not imply
+   * --filesystem=/tmp or --filesystem=/var) */
+  assert_bwrap_does_not_contain (f->bwrap, "/etc");
+  assert_bwrap_does_not_contain (f->bwrap, "/tmp");
+  assert_bwrap_does_not_contain (f->bwrap, "/var");
+
+  /* We do export miscellaneous top-level directories */
+  assert_bwrap_contains (f->bwrap, "--bind", "/games", "/games");
+  assert_bwrap_contains (f->bwrap, "--bind", "/home", "/home");
+  assert_bwrap_contains (f->bwrap, "--bind", "/opt", "/opt");
+
+  /* /run/media gets a special case here for parity with Flatpak's
+   * --filesystem=host, even though it's not top-level */
+  assert_bwrap_contains (f->bwrap, "--bind", "/run/media", "/run/media");
+
+  /* We don't export /usr and friends in this particular function
+   * (flatpak --filesystem=host would mount them in /run/host instead) */
+  assert_bwrap_does_not_contain (f->bwrap, "/bin");
+  assert_bwrap_does_not_contain (f->bwrap, "/lib");
+  assert_bwrap_does_not_contain (f->bwrap, "/lib32");
+  assert_bwrap_does_not_contain (f->bwrap, "/lib64");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr");
+  assert_bwrap_does_not_contain (f->bwrap, "/sbin");
+
+  /* We don't export these for various reasons */
+  assert_bwrap_does_not_contain (f->bwrap, "/app");
+  assert_bwrap_does_not_contain (f->bwrap, "/boot");
+  assert_bwrap_does_not_contain (f->bwrap, "/dev");
+  assert_bwrap_does_not_contain (f->bwrap, "/dev/pts");
+  assert_bwrap_does_not_contain (f->bwrap, "/libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "/proc");
+  assert_bwrap_does_not_contain (f->bwrap, "/root");
+  assert_bwrap_does_not_contain (f->bwrap, "/run");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/dbus");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/gfx");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/host");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/pressure-vessel");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/systemd");
+  assert_bwrap_does_not_contain (f->bwrap, "/sys");
+
+  /* We would export these if they existed, but they don't */
+  assert_bwrap_does_not_contain (f->bwrap, "/mnt");
+  assert_bwrap_does_not_contain (f->bwrap, "/srv");
+}
+
 static void
 populate_ld_preload (Fixture *f,
                      GPtrArray *argv,
@@ -789,6 +884,96 @@ test_remap_ld_preload_flatpak_no_runtime (Fixture *f,
     }
 }
 
+/*
+ * Test that pv_wrap_use_host_os() makes nearly everything from the host OS
+ * available. (This is what we do if run with no runtime, although
+ * SteamLinuxRuntime_* never actually does this.)
+ */
+static void
+test_use_host_os (Fixture *f,
+                  gconstpointer context)
+{
+  static const char * const paths[] =
+  {
+    "boot/",
+    "bin>usr/bin",
+    "dev/pts/",
+    "etc/hosts",
+    "games/SteamLibrary/",
+    "home/user/.steam",
+    "lib>usr/lib",
+    "lib32>usr/lib32",
+    "lib64>usr/lib",
+    "libexec>usr/libexec",
+    "opt/extras/kde/",
+    "proc/1/fd/",
+    "root/",
+    "run/dbus/",
+    "run/gfx/",
+    "run/host/",
+    "run/media/",
+    "run/pressure-vessel/",
+    "run/systemd/",
+    "tmp/",
+    "sbin>usr/bin",
+    "sys/",
+    "usr/local/",
+    "var/tmp/",
+  };
+  g_autoptr(FlatpakExports) exports = fixture_create_exports (f);
+  g_autoptr(GError) local_error = NULL;
+  gboolean ret;
+
+  fixture_populate_dir (f, f->mock_host_fd, paths, G_N_ELEMENTS (paths));
+  ret = pv_wrap_use_host_os (f->mock_host_fd, exports, f->bwrap, &local_error);
+  g_assert_no_error (local_error);
+  g_assert_true (ret);
+  flatpak_exports_append_bwrap_args (exports, f->bwrap);
+
+  dump_bwrap (f->bwrap);
+
+  /* We do export /usr and friends */
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/bin", "/bin");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/lib", "/lib");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/lib", "/lib64");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/lib32", "/lib32");
+  assert_bwrap_contains (f->bwrap, "--ro-bind", "/usr", "/usr");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/bin", "/sbin");
+
+  /* We do export mutable OS state */
+  assert_bwrap_contains (f->bwrap, "--bind", "/etc", "/etc");
+  assert_bwrap_contains (f->bwrap, "--bind", "/tmp", "/tmp");
+  assert_bwrap_contains (f->bwrap, "--bind", "/var", "/var");
+
+  /* We do export miscellaneous top-level directories */
+  assert_bwrap_contains (f->bwrap, "--bind", "/games", "/games");
+  assert_bwrap_contains (f->bwrap, "--bind", "/home", "/home");
+  assert_bwrap_contains (f->bwrap, "--bind", "/opt", "/opt");
+
+  /* We do export most of the contents of /run, but not /run itself */
+  assert_bwrap_contains (f->bwrap, "--bind", "/run/dbus", "/run/dbus");
+  assert_bwrap_contains (f->bwrap, "--bind", "/run/media", "/run/media");
+  assert_bwrap_contains (f->bwrap, "--bind", "/run/systemd", "/run/systemd");
+
+  /* We don't export these in pv_wrap_use_host_os() for various reasons */
+  assert_bwrap_does_not_contain (f->bwrap, "/app");
+  assert_bwrap_does_not_contain (f->bwrap, "/boot");
+  assert_bwrap_does_not_contain (f->bwrap, "/dev");
+  assert_bwrap_does_not_contain (f->bwrap, "/dev/pts");
+  assert_bwrap_does_not_contain (f->bwrap, "/libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "/proc");
+  assert_bwrap_does_not_contain (f->bwrap, "/root");
+  assert_bwrap_does_not_contain (f->bwrap, "/run");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/gfx");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/host");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/pressure-vessel");
+  assert_bwrap_does_not_contain (f->bwrap, "/sys");
+
+  /* We would export these if they existed, but they don't */
+  assert_bwrap_does_not_contain (f->bwrap, "/mnt");
+  assert_bwrap_does_not_contain (f->bwrap, "/srv");
+}
+
 int
 main (int argc,
       char **argv)
@@ -803,6 +988,8 @@ main (int argc,
               setup, test_bind_unmerged_usr, teardown);
   g_test_add ("/bind-usr", Fixture, NULL,
               setup, test_bind_usr, teardown);
+  g_test_add ("/export-root-dirs", Fixture, NULL,
+              setup, test_export_root_dirs, teardown);
   g_test_add ("/remap-ld-preload", Fixture, NULL,
               setup_ld_preload, test_remap_ld_preload, teardown);
   g_test_add ("/remap-ld-preload-flatpak", Fixture, NULL,
@@ -811,6 +998,8 @@ main (int argc,
               setup_ld_preload, test_remap_ld_preload_no_runtime, teardown);
   g_test_add ("/remap-ld-preload-flatpak-no-runtime", Fixture, NULL,
               setup_ld_preload, test_remap_ld_preload_flatpak_no_runtime, teardown);
+  g_test_add ("/use-host-os", Fixture, NULL,
+              setup, test_use_host_os, teardown);
 
   return g_test_run ();
 }

@@ -45,6 +45,11 @@ gboolean pv_wrap_use_host_os (int root_fd,
                               FlatpakBwrap *bwrap,
                               GError **error);
 
+gboolean pv_export_root_dirs_like_filesystem_host (int root_fd,
+                                                   FlatpakExports *exports,
+                                                   FlatpakFilesystemMode mode,
+                                                   GError **error);
+
 void pv_wrap_move_into_scope (const char *steam_app_id);
 
 /**

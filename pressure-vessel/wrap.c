@@ -1441,6 +1441,12 @@ main (int argc,
       goto out;
     }
 
+  /* FEX-Emu transparently rewrites most file I/O to check its "rootfs"
+   * first, and only use the real root if the corresponding file
+   * doesn't exist in the "rootfs". In many places we actively don't want
+   * this, because we're inspecting paths in order to pass them to bwrap,
+   * which will use them to set up bind-mounts, which are not subject to
+   * FEX-Emu's rewriting; so bypass it here. */
   if (!glnx_opendirat (-1, "/proc/self/root", TRUE, &root_fd, error))
     return FALSE;
 

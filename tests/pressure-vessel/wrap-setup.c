@@ -35,6 +35,7 @@
 
 #include "tests/test-utils.h"
 
+#include "bwrap.h"
 #include "supported-architectures.h"
 #include "wrap-setup.h"
 #include "utils.h"
@@ -57,11 +58,16 @@
 typedef struct
 {
   TestsOpenFdSet old_fds;
+  FlatpakBwrap *bwrap;
   gchar *tmpdir;
   gchar *mock_host;
   gchar *mock_runtime;
   gchar *var;
   GStrv env;
+  int tmpdir_fd;
+  int mock_host_fd;
+  int mock_runtime_fd;
+  int var_fd;
 } Fixture;
 
 typedef struct
@@ -80,6 +86,55 @@ open_or_die (const char *path,
     return glnx_steal_fd (&fd);
   else
     g_error ("open(%s, 0x%x): %s", path, flags, g_strerror (errno));
+}
+
+/*
+ * Populate root_fd with the given directories and symlinks.
+ * The paths use a simple domain-specific language:
+ * - symlinks are given as "link>target"
+ * - directories are given as "dir/"
+ * - any other string is created as a regular 0-byte file
+ */
+static void
+fixture_populate_dir (Fixture *f,
+                      int root_fd,
+                      const char * const *paths,
+                      gsize n_paths)
+{
+  g_autoptr(GError) local_error = NULL;
+  gsize i;
+
+  for (i = 0; i < n_paths; i++)
+    {
+      if (strchr (paths[i], '>'))
+        {
+          g_auto(GStrv) pieces = g_strsplit (paths[i], ">", 2);
+
+          g_test_message ("Creating symlink %s -> %s", pieces[0], pieces[1]);
+          g_assert_no_errno (TEMP_FAILURE_RETRY (symlinkat (pieces[1], root_fd, pieces[0])));
+        }
+      else if (g_str_has_suffix (paths[i], "/"))
+        {
+          g_test_message ("Creating directory %s", paths[i]);
+
+          glnx_shutil_mkdir_p_at (root_fd, paths[i], 0755, NULL, &local_error);
+          g_assert_no_error (local_error);
+        }
+      else
+        {
+          g_autofree char *dir = g_path_get_dirname (paths[i]);
+
+          g_test_message ("Creating directory %s", dir);
+          glnx_shutil_mkdir_p_at (root_fd, dir, 0755, NULL, &local_error);
+          g_assert_no_error (local_error);
+
+          g_test_message ("Creating file %s", paths[i]);
+          glnx_file_replace_contents_at (root_fd, paths[i],
+                                         (const guint8 *) "", 0, 0, NULL,
+                                         &local_error);
+          g_assert_no_error (local_error);
+        }
+    }
 }
 
 static FlatpakExports *
@@ -130,6 +185,35 @@ static void
 setup (Fixture *f,
        gconstpointer context)
 {
+  g_autoptr(GError) local_error = NULL;
+
+  f->old_fds = tests_check_fd_leaks_enter ();
+  f->tmpdir = g_dir_make_tmp ("pressure-vessel-tests.XXXXXX", &local_error);
+  g_assert_no_error (local_error);
+  glnx_opendirat (AT_FDCWD, f->tmpdir, TRUE, &f->tmpdir_fd, &local_error);
+  g_assert_no_error (local_error);
+
+  f->mock_host = g_build_filename (f->tmpdir, "host", NULL);
+  f->mock_runtime = g_build_filename (f->tmpdir, "runtime", NULL);
+  f->var = g_build_filename (f->tmpdir, "var", NULL);
+  g_assert_no_errno (g_mkdir (f->mock_host, 0755));
+  g_assert_no_errno (g_mkdir (f->mock_runtime, 0755));
+  g_assert_no_errno (g_mkdir (f->var, 0755));
+  glnx_opendirat (AT_FDCWD, f->mock_host, TRUE, &f->mock_host_fd, &local_error);
+  g_assert_no_error (local_error);
+  glnx_opendirat (AT_FDCWD, f->mock_runtime, TRUE, &f->mock_runtime_fd, &local_error);
+  g_assert_no_error (local_error);
+  glnx_opendirat (AT_FDCWD, f->var, TRUE, &f->var_fd, &local_error);
+  g_assert_no_error (local_error);
+
+  f->bwrap = flatpak_bwrap_new (flatpak_bwrap_empty_env);
+  f->env = g_get_environ ();
+}
+
+static void
+setup_ld_preload (Fixture *f,
+                  gconstpointer context)
+{
   static const char * const touch[] =
   {
     "app/lib/libpreloadA.so",
@@ -151,34 +235,9 @@ setup (Fixture *f,
     "platform/plat-" MOCK_PLATFORM_GENERIC "/libpreloadP.so",
 #endif
   };
-  g_autoptr(GError) local_error = NULL;
-  gsize i;
 
-  f->old_fds = tests_check_fd_leaks_enter ();
-
-  f->tmpdir = g_dir_make_tmp ("pressure-vessel-tests.XXXXXX", &local_error);
-  g_assert_no_error (local_error);
-  f->mock_host = g_build_filename (f->tmpdir, "host", NULL);
-  f->mock_runtime = g_build_filename (f->tmpdir, "runtime", NULL);
-  f->var = g_build_filename (f->tmpdir, "var", NULL);
-  g_assert_no_errno (g_mkdir (f->mock_host, 0755));
-  g_assert_no_errno (g_mkdir (f->mock_runtime, 0755));
-  g_assert_no_errno (g_mkdir (f->var, 0755));
-
-  for (i = 0; i < G_N_ELEMENTS (touch); i++)
-    {
-      g_autofree char *dir = g_path_get_dirname (touch[i]);
-      g_autofree char *full_dir = g_build_filename (f->mock_host, dir, NULL);
-      g_autofree char *full_path = g_build_filename (f->mock_host, touch[i], NULL);
-
-      g_test_message ("Creating %s", full_dir);
-      g_assert_no_errno (g_mkdir_with_parents (full_dir, 0755));
-      g_test_message ("Creating %s", full_path);
-      g_file_set_contents (full_path, "", 0, &local_error);
-      g_assert_no_error (local_error);
-    }
-
-  f->env = g_get_environ ();
+  setup (f, context);
+  fixture_populate_dir (f, f->mock_host_fd, touch, G_N_ELEMENTS (touch));
   f->env = g_environ_setenv (f->env, "STEAM_COMPAT_CLIENT_INSTALL_PATH",
                              "/steam", TRUE);
 }
@@ -189,18 +248,198 @@ teardown (Fixture *f,
 {
   g_autoptr(GError) local_error = NULL;
 
+  glnx_close_fd (&f->tmpdir_fd);
+  glnx_close_fd (&f->mock_host_fd);
+  glnx_close_fd (&f->mock_runtime_fd);
+  glnx_close_fd (&f->var_fd);
+
   if (f->tmpdir != NULL)
     {
       glnx_shutil_rm_rf_at (-1, f->tmpdir, NULL, &local_error);
       g_assert_no_error (local_error);
     }
 
-  tests_check_fd_leaks_leave (f->old_fds);
   g_clear_pointer (&f->mock_host, g_free);
   g_clear_pointer (&f->mock_runtime, g_free);
   g_clear_pointer (&f->tmpdir, g_free);
   g_clear_pointer (&f->var, g_free);
   g_clear_pointer (&f->env, g_strfreev);
+  g_clear_pointer (&f->bwrap, flatpak_bwrap_free);
+
+  tests_check_fd_leaks_leave (f->old_fds);
+}
+
+static void
+dump_bwrap (FlatpakBwrap *bwrap)
+{
+  guint i;
+
+  g_test_message ("FlatpakBwrap object:");
+
+  for (i = 0; i < bwrap->argv->len; i++)
+    {
+      const char *arg = g_ptr_array_index (bwrap->argv, i);
+
+      g_test_message ("\t%s", arg);
+    }
+}
+
+/* For simplicity we look for argument sequences of length exactly 3:
+ * everything we're interested in for this test-case meets that description */
+static void
+assert_bwrap_contains (FlatpakBwrap *bwrap,
+                       const char *one,
+                       const char *two,
+                       const char *three)
+{
+  guint i;
+
+  g_assert_cmpuint (bwrap->argv->len, >=, 3);
+
+  for (i = 0; i < bwrap->argv->len - 2; i++)
+    {
+      if (g_str_equal (g_ptr_array_index (bwrap->argv, i), one)
+          && g_str_equal (g_ptr_array_index (bwrap->argv, i + 1), two)
+          && g_str_equal (g_ptr_array_index (bwrap->argv, i + 2), three))
+        return;
+    }
+
+  dump_bwrap (bwrap);
+  g_error ("Expected to find: %s %s %s", one, two, three);
+}
+
+static void
+assert_bwrap_does_not_contain (FlatpakBwrap *bwrap,
+                               const char *path)
+{
+  guint i;
+
+  for (i = 0; i < bwrap->argv->len; i++)
+    {
+      const char *arg = g_ptr_array_index (bwrap->argv, i);
+
+      g_assert_cmpstr (arg, !=, NULL);
+      g_assert_cmpstr (arg, !=, path);
+    }
+}
+
+static void
+test_bind_merged_usr (Fixture *f,
+                      gconstpointer context)
+{
+  static const char * const paths[] =
+  {
+    "bin>usr/bin",
+    "home/",
+    "lib>usr/lib",
+    "lib32>usr/lib32",
+    "lib64>usr/lib",
+    "libexec>usr/libexec",
+    "opt/",
+    "sbin>usr/bin",
+    "usr/",
+  };
+  g_autoptr(GError) local_error = NULL;
+  gboolean ret;
+
+  fixture_populate_dir (f, f->mock_host_fd, paths, G_N_ELEMENTS (paths));
+  ret = pv_bwrap_bind_usr (f->bwrap, "/provider", f->mock_host_fd, "/run/gfx",
+                           &local_error);
+  g_assert_no_error (local_error);
+  g_assert_true (ret);
+  dump_bwrap (f->bwrap);
+
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/bin", "/run/gfx/bin");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/lib", "/run/gfx/lib");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/lib", "/run/gfx/lib64");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/lib32", "/run/gfx/lib32");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/bin", "/run/gfx/sbin");
+  assert_bwrap_contains (f->bwrap, "--ro-bind", "/provider/usr", "/run/gfx/usr");
+  assert_bwrap_does_not_contain (f->bwrap, "home");
+  assert_bwrap_does_not_contain (f->bwrap, "/home");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr/home");
+  assert_bwrap_does_not_contain (f->bwrap, "libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "/libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr/libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "opt");
+  assert_bwrap_does_not_contain (f->bwrap, "/opt");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr/opt");
+}
+
+static void
+test_bind_unmerged_usr (Fixture *f,
+                        gconstpointer context)
+{
+  static const char * const paths[] =
+  {
+    "bin/",
+    "home/",
+    "lib/",
+    "lib64/",
+    "libexec/",
+    "opt/",
+    "sbin/",
+    "usr/",
+  };
+  g_autoptr(GError) local_error = NULL;
+  gboolean ret;
+
+  fixture_populate_dir (f, f->mock_host_fd, paths, G_N_ELEMENTS (paths));
+  ret = pv_bwrap_bind_usr (f->bwrap, "/provider", f->mock_host_fd, "/run/gfx",
+                           &local_error);
+  g_assert_no_error (local_error);
+  g_assert_true (ret);
+  dump_bwrap (f->bwrap);
+
+  assert_bwrap_contains (f->bwrap, "--ro-bind", "/provider/bin", "/run/gfx/bin");
+  assert_bwrap_contains (f->bwrap, "--ro-bind", "/provider/lib", "/run/gfx/lib");
+  assert_bwrap_contains (f->bwrap, "--ro-bind", "/provider/lib64", "/run/gfx/lib64");
+  assert_bwrap_contains (f->bwrap, "--ro-bind", "/provider/sbin", "/run/gfx/sbin");
+  assert_bwrap_contains (f->bwrap, "--ro-bind", "/provider/usr", "/run/gfx/usr");
+  assert_bwrap_does_not_contain (f->bwrap, "home");
+  assert_bwrap_does_not_contain (f->bwrap, "/home");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr/home");
+  assert_bwrap_does_not_contain (f->bwrap, "libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "/libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr/libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "opt");
+  assert_bwrap_does_not_contain (f->bwrap, "/opt");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr/opt");
+}
+
+static void
+test_bind_usr (Fixture *f,
+               gconstpointer context)
+{
+  static const char * const paths[] =
+  {
+    "bin/",
+    "lib/",
+    "lib64/",
+    "libexec/",
+    "local/",
+    "share/",
+  };
+  g_autoptr(GError) local_error = NULL;
+  gboolean ret;
+
+  fixture_populate_dir (f, f->mock_host_fd, paths, G_N_ELEMENTS (paths));
+  ret = pv_bwrap_bind_usr (f->bwrap, "/provider", f->mock_host_fd, "/run/gfx",
+                           &local_error);
+  g_assert_no_error (local_error);
+  g_assert_true (ret);
+  dump_bwrap (f->bwrap);
+
+  assert_bwrap_contains (f->bwrap, "--ro-bind", "/provider", "/run/gfx/usr");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/bin", "/run/gfx/bin");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/lib", "/run/gfx/lib");
+  assert_bwrap_contains (f->bwrap, "--symlink", "usr/lib64", "/run/gfx/lib64");
+  assert_bwrap_does_not_contain (f->bwrap, "local");
+  assert_bwrap_does_not_contain (f->bwrap, "/local");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr/local");
+  assert_bwrap_does_not_contain (f->bwrap, "share");
+  assert_bwrap_does_not_contain (f->bwrap, "/share");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr/share");
 }
 
 static void
@@ -557,14 +796,21 @@ main (int argc,
   _srt_setenv_disable_gio_modules ();
 
   _srt_tests_init (&argc, &argv, NULL);
+
+  g_test_add ("/bind-merged-usr", Fixture, NULL,
+              setup, test_bind_merged_usr, teardown);
+  g_test_add ("/bind-unmerged-usr", Fixture, NULL,
+              setup, test_bind_unmerged_usr, teardown);
+  g_test_add ("/bind-usr", Fixture, NULL,
+              setup, test_bind_usr, teardown);
   g_test_add ("/remap-ld-preload", Fixture, NULL,
-              setup, test_remap_ld_preload, teardown);
+              setup_ld_preload, test_remap_ld_preload, teardown);
   g_test_add ("/remap-ld-preload-flatpak", Fixture, NULL,
-              setup, test_remap_ld_preload_flatpak, teardown);
+              setup_ld_preload, test_remap_ld_preload_flatpak, teardown);
   g_test_add ("/remap-ld-preload-no-runtime", Fixture, NULL,
-              setup, test_remap_ld_preload_no_runtime, teardown);
+              setup_ld_preload, test_remap_ld_preload_no_runtime, teardown);
   g_test_add ("/remap-ld-preload-flatpak-no-runtime", Fixture, NULL,
-              setup, test_remap_ld_preload_flatpak_no_runtime, teardown);
+              setup_ld_preload, test_remap_ld_preload_flatpak_no_runtime, teardown);
 
   return g_test_run ();
 }

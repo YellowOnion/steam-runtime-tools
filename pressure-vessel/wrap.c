@@ -179,6 +179,12 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
       canon = g_canonicalize_filename (values[i], NULL);
       value_host = pv_current_namespace_path_to_host_path (canon);
 
+      if (flatpak_has_path_prefix (canon, "/overrides"))
+        {
+          g_warning_once ("The path \"/overrides/\" is reserved and cannot be shared");
+          continue;
+        }
+
       if (flatpak_has_path_prefix (canon, "/usr"))
         g_warning_once ("Binding directories that are located under \"/usr/\" is not supported!");
 
@@ -1832,6 +1838,13 @@ main (int argc,
               g_assert (g_path_is_absolute (opt_filesystems[i]));
 
               g_info ("Bind-mounting \"%s\"", opt_filesystems[i]);
+
+              if (flatpak_has_path_prefix (opt_filesystems[i], "/overrides"))
+                {
+                  g_warning_once ("The path \"/overrides/\" is reserved and cannot be shared");
+                  continue;
+                }
+
               if (flatpak_has_path_prefix (opt_filesystems[i], "/usr"))
                 g_warning_once ("Binding directories that are located under \"/usr/\" "
                                 "is not supported!");

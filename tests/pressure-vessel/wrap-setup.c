@@ -1006,6 +1006,7 @@ test_use_host_os (Fixture *f,
     "lib64>usr/lib",
     "libexec>usr/libexec",
     "opt/extras/kde/",
+    "overrides/",
     "proc/1/fd/",
     "root/",
     "run/dbus/",
@@ -1061,6 +1062,7 @@ test_use_host_os (Fixture *f,
   assert_bwrap_does_not_contain (f->bwrap, "/dev");
   assert_bwrap_does_not_contain (f->bwrap, "/dev/pts");
   assert_bwrap_does_not_contain (f->bwrap, "/libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "/overrides");
   assert_bwrap_does_not_contain (f->bwrap, "/proc");
   assert_bwrap_does_not_contain (f->bwrap, "/root");
   assert_bwrap_does_not_contain (f->bwrap, "/run");

@@ -59,6 +59,8 @@
    flatpak_abs_usrmerged_dirs get the same treatment without having to be listed
    here. */
 const char *dont_export_in[] = {
+  /* /overrides is pressure-vessel-specific */
+  "/overrides",
   "/usr", "/etc", "/app", "/dev", "/proc", NULL
 };
 

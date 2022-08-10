@@ -545,6 +545,7 @@ pv_wrap_use_host_os (int root_fd,
    * /boot (should be unnecessary)
    * /dev (handled by pv_bwrap_add_api_filesystems())
    * /etc (handled by export_os_mutable above)
+   * /overrides (used internally by PvRuntime)
    * /proc (handled by pv_bwrap_add_api_filesystems())
    * /root (should be unnecessary)
    * /run (handled by export_contents_of_run() above)

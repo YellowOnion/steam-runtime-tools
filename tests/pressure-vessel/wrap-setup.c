@@ -37,6 +37,7 @@
 
 #include "bwrap.h"
 #include "supported-architectures.h"
+#include "wrap-home.h"
 #include "wrap-setup.h"
 #include "utils.h"
 
@@ -885,6 +886,105 @@ test_remap_ld_preload_flatpak_no_runtime (Fixture *f,
 }
 
 /*
+ * Test that pv_wrap_use_home(PV_HOME_MODE_SHARED) makes nearly everything
+ * available.
+ */
+static void
+test_use_home_shared (Fixture *f,
+                      gconstpointer context)
+{
+  static const char * const paths[] =
+  {
+    "app/",
+    "bin>usr/bin",
+    "dev/pts/",
+    "etc/hosts",
+    "games/SteamLibrary/",
+    "home/user/.steam",
+    "lib>usr/lib",
+    "lib32>usr/lib32",
+    "lib64>usr/lib",
+    "libexec>usr/libexec",
+    "media/",
+    "mnt/",
+    "proc/1/fd/",
+    "root/",
+    "run/dbus/",
+    "run/gfx/",
+    "run/host/",
+    "run/pressure-vessel/",
+    "run/systemd/",
+    "sbin>usr/bin",
+    "srv/data/",
+    "sys/",
+    "tmp/",
+    "usr/local/",
+    "var/tmp/",
+  };
+  g_autoptr(FlatpakExports) exports = fixture_create_exports (f);
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(PvEnviron) container_env = pv_environ_new ();
+  gboolean ret;
+
+  fixture_populate_dir (f, f->mock_host_fd, paths, G_N_ELEMENTS (paths));
+  ret = pv_wrap_use_home (PV_HOME_MODE_SHARED, "/home/user", NULL, exports,
+                          f->bwrap, container_env, &local_error);
+  g_assert_no_error (local_error);
+  g_assert_true (ret);
+  flatpak_exports_append_bwrap_args (exports, f->bwrap);
+
+  dump_bwrap (f->bwrap);
+
+  /* /usr and friends are out of scope here */
+  assert_bwrap_does_not_contain (f->bwrap, "/bin");
+  assert_bwrap_does_not_contain (f->bwrap, "/lib");
+  assert_bwrap_does_not_contain (f->bwrap, "/lib32");
+  assert_bwrap_does_not_contain (f->bwrap, "/lib64");
+  assert_bwrap_does_not_contain (f->bwrap, "/usr");
+  assert_bwrap_does_not_contain (f->bwrap, "/sbin");
+
+  /* Various FHS and FHS-adjacent directories go along with the home
+   * directory */
+  assert_bwrap_contains (f->bwrap, "--bind", "/home", "/home");
+  assert_bwrap_contains (f->bwrap, "--bind", "/media", "/media");
+  assert_bwrap_contains (f->bwrap, "--bind", "/mnt", "/mnt");
+  assert_bwrap_contains (f->bwrap, "--bind", "/srv", "/srv");
+  assert_bwrap_contains (f->bwrap, "--bind", "/var/tmp", "/var/tmp");
+
+  /* Mutable OS state is not tied to the home directory */
+  assert_bwrap_does_not_contain (f->bwrap, "/etc");
+  assert_bwrap_does_not_contain (f->bwrap, "/var");
+
+  /* We do share /tmp, but this particular function is not responsible
+   * for it */
+  assert_bwrap_does_not_contain (f->bwrap, "/tmp");
+
+  /* We don't currently export miscellaneous top-level directories */
+  assert_bwrap_does_not_contain (f->bwrap, "/games");
+
+  /* /run is out of scope */
+  assert_bwrap_does_not_contain (f->bwrap, "/run/dbus");
+
+  /* We don't export these here for various reasons */
+  assert_bwrap_does_not_contain (f->bwrap, "/app");
+  assert_bwrap_does_not_contain (f->bwrap, "/boot");
+  assert_bwrap_does_not_contain (f->bwrap, "/dev");
+  assert_bwrap_does_not_contain (f->bwrap, "/dev/pts");
+  assert_bwrap_does_not_contain (f->bwrap, "/libexec");
+  assert_bwrap_does_not_contain (f->bwrap, "/proc");
+  assert_bwrap_does_not_contain (f->bwrap, "/root");
+  assert_bwrap_does_not_contain (f->bwrap, "/run");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/gfx");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/host");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/pressure-vessel");
+  assert_bwrap_does_not_contain (f->bwrap, "/sys");
+
+  /* We would export these if they existed, but they don't */
+  assert_bwrap_does_not_contain (f->bwrap, "/opt");
+  assert_bwrap_does_not_contain (f->bwrap, "/run/media");
+}
+
+/*
  * Test that pv_wrap_use_host_os() makes nearly everything from the host OS
  * available. (This is what we do if run with no runtime, although
  * SteamLinuxRuntime_* never actually does this.)
@@ -998,6 +1098,8 @@ main (int argc,
               setup_ld_preload, test_remap_ld_preload_no_runtime, teardown);
   g_test_add ("/remap-ld-preload-flatpak-no-runtime", Fixture, NULL,
               setup_ld_preload, test_remap_ld_preload_flatpak_no_runtime, teardown);
+  g_test_add ("/use-home/shared", Fixture, NULL,
+              setup, test_use_home_shared, teardown);
   g_test_add ("/use-host-os", Fixture, NULL,
               setup, test_use_host_os, teardown);
 

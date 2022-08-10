@@ -103,6 +103,8 @@ struct _PvRuntime
   int variable_dir_fd;
   int mutable_sysroot_fd;
   int host_fd;
+  int root_fd;
+  int runtime_files_fd;
   gboolean any_libc_from_provider;
   gboolean all_libc_from_provider;
   gboolean runtime_is_just_usr;
@@ -1850,9 +1852,14 @@ pv_runtime_initable_init (GInitable *initable,
         }
     }
 
+  /* Opening /proc/self/root rather than / lets us bypass FEX-Emu's
+   * redirection from the real root filesystem into its "rootfs". */
+  if (!glnx_opendirat (-1, "/proc/self/root", TRUE, &self->root_fd, error))
+    return FALSE;
+
   /* If we are in a Flatpak environment we expect to have the host system
    * mounted in `/run/host`. Otherwise we assume that the host system, in the
-   * current namespace, is the root - but use /proc/self/root to bypass
+   * current namespace, is the root - but again use /proc/self/root to bypass
    * FEX-Emu's redirection. */
   if (g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR))
     self->host_in_current_namespace = "/run/host";
@@ -1861,6 +1868,10 @@ pv_runtime_initable_init (GInitable *initable,
 
   if (!glnx_opendirat (-1, self->host_in_current_namespace, TRUE,
                        &self->host_fd, error))
+    return FALSE;
+
+  if (!glnx_opendirat (-1, self->runtime_files, TRUE,
+                       &self->runtime_files_fd, error))
     return FALSE;
 
   return TRUE;
@@ -1914,8 +1925,10 @@ pv_runtime_finalize (GObject *object)
   g_free (self->variable_dir);
   glnx_close_fd (&self->mutable_sysroot_fd);
   g_free (self->mutable_sysroot);
+  glnx_close_fd (&self->root_fd);
   g_free (self->runtime_files_on_host);
   g_free (self->runtime_app);
+  glnx_close_fd (&self->runtime_files_fd);
   g_free (self->runtime_usr);
   g_free (self->source);
   g_free (self->source_files);
@@ -2245,7 +2258,7 @@ pv_runtime_provide_container_access (PvRuntime *self,
 
       if (!pv_bwrap_bind_usr (self->container_access_adverb,
                               self->runtime_files_on_host,
-                              self->runtime_files,
+                              self->runtime_files_fd,
                               self->container_access,
                               error))
         return FALSE;
@@ -2941,7 +2954,7 @@ bind_gfx_provider (PvRuntime *self,
 
   if (!pv_bwrap_bind_usr (bwrap,
                           self->provider->path_in_host_ns,
-                          self->provider->path_in_current_ns,
+                          self->provider->fd,
                           mount_point,
                           error))
     return FALSE;
@@ -3033,7 +3046,7 @@ bind_runtime_base (PvRuntime *self,
        * OS's /usr as our real root directory, and set the runtime up
        * in a different directory. */
 
-      if (!pv_bwrap_bind_usr (bwrap, "/", "/proc/self/root", "/", error))
+      if (!pv_bwrap_bind_usr (bwrap, "/", self->root_fd, "/", error))
         return FALSE;
 
       /* We need at least a subset of the host's /etc, for ld.so.cache
@@ -3049,7 +3062,7 @@ bind_runtime_base (PvRuntime *self,
 
       if (!pv_bwrap_bind_usr (bwrap,
                               self->runtime_files_on_host,
-                              self->runtime_files,
+                              self->runtime_files_fd,
                               PV_RUNTIME_PATH_INTERPRETER_ROOT, error))
         return FALSE;
 
@@ -3072,7 +3085,7 @@ bind_runtime_base (PvRuntime *self,
     {
       if (!pv_bwrap_bind_usr (bwrap,
                               self->runtime_files_on_host,
-                              self->runtime_files,
+                              self->runtime_files_fd,
                               "/", error))
         return FALSE;
     }
@@ -4798,7 +4811,7 @@ pv_runtime_get_ld_so (PvRuntime *self,
 
       if (!pv_bwrap_bind_usr (temp_bwrap,
                               self->runtime_files_on_host,
-                              self->runtime_files,
+                              self->runtime_files_fd,
                               "/",
                               error))
         return FALSE;
@@ -4818,7 +4831,7 @@ pv_runtime_get_ld_so (PvRuntime *self,
 
           if (!pv_bwrap_bind_usr (temp_bwrap,
                                   self->provider->path_in_host_ns,
-                                  self->provider->path_in_current_ns,
+                                  self->provider->fd,
                                   self->provider->path_in_container_ns,
                                   error))
             return FALSE;

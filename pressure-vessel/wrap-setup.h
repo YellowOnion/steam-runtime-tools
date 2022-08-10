@@ -40,7 +40,8 @@ FlatpakBwrap *pv_wrap_share_sockets (PvEnviron *container_env,
 void pv_wrap_set_icons_env_vars (PvEnviron *container_env,
                                  const GStrv original_environ);
 
-gboolean pv_wrap_use_host_os (FlatpakExports *exports,
+gboolean pv_wrap_use_host_os (int root_fd,
+                              FlatpakExports *exports,
                               FlatpakBwrap *bwrap,
                               GError **error);
 

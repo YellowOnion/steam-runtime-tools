@@ -995,6 +995,7 @@ main (int argc,
   g_autoptr(GPtrArray) adverb_preload_argv = NULL;
   int result;
   PvAppendPreloadFlags append_preload_flags = PV_APPEND_PRELOAD_FLAGS_NONE;
+  glnx_autofd int root_fd = -1;
 
   setlocale (LC_ALL, "");
 
@@ -1440,6 +1441,9 @@ main (int argc,
       goto out;
     }
 
+  if (!glnx_opendirat (-1, "/proc/self/root", TRUE, &root_fd, error))
+    return FALSE;
+
   /* Invariant: we are in exactly one of these two modes */
   g_assert (((flatpak_subsandbox != NULL)
              + (!is_flatpak_env))
@@ -1661,7 +1665,7 @@ main (int argc,
       g_assert (bwrap_filesystem_arguments != NULL);
       g_assert (exports != NULL);
 
-      if (!pv_wrap_use_host_os (exports, bwrap_filesystem_arguments, error))
+      if (!pv_wrap_use_host_os (root_fd, exports, bwrap_filesystem_arguments, error))
         goto out;
     }
 

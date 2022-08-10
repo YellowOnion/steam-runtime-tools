@@ -500,18 +500,20 @@ export_contents_of_run (FlatpakBwrap *bwrap,
  * pv_bwrap_add_api_filesystems() already.
  */
 gboolean
-pv_wrap_use_host_os (FlatpakExports *exports,
+pv_wrap_use_host_os (int root_fd,
+                     FlatpakExports *exports,
                      FlatpakBwrap *bwrap,
                      GError **error)
 {
   static const char * const export_os_mutable[] = { "/etc", "/tmp", "/var" };
   gsize i;
 
+  g_return_val_if_fail (root_fd >= 0, FALSE);
   g_return_val_if_fail (exports != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!pv_bwrap_bind_usr (bwrap, "/", "/", "/", error))
+  if (!pv_bwrap_bind_usr (bwrap, "/", root_fd, "/", error))
     return FALSE;
 
   for (i = 0; i < G_N_ELEMENTS (export_os_mutable); i++)

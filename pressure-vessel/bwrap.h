@@ -36,7 +36,7 @@ gboolean pv_bwrap_execve (FlatpakBwrap *bwrap,
                           GError **error);
 gboolean pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
                             const char *provider_in_host_namespace,
-                            const char *provider_in_current_namespace,
+                            int provider_fd,
                             const char *provider_in_container_namespace,
                             GError **error);
 void pv_bwrap_copy_tree (FlatpakBwrap *bwrap,

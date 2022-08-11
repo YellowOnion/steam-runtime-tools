@@ -40,9 +40,15 @@ FlatpakBwrap *pv_wrap_share_sockets (PvEnviron *container_env,
 void pv_wrap_set_icons_env_vars (PvEnviron *container_env,
                                  const GStrv original_environ);
 
-gboolean pv_wrap_use_host_os (FlatpakExports *exports,
+gboolean pv_wrap_use_host_os (int root_fd,
+                              FlatpakExports *exports,
                               FlatpakBwrap *bwrap,
                               GError **error);
+
+gboolean pv_export_root_dirs_like_filesystem_host (int root_fd,
+                                                   FlatpakExports *exports,
+                                                   FlatpakFilesystemMode mode,
+                                                   GError **error);
 
 void pv_wrap_move_into_scope (const char *steam_app_id);
 

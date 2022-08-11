@@ -179,6 +179,12 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
       canon = g_canonicalize_filename (values[i], NULL);
       value_host = pv_current_namespace_path_to_host_path (canon);
 
+      if (flatpak_has_path_prefix (canon, "/overrides"))
+        {
+          g_warning_once ("The path \"/overrides/\" is reserved and cannot be shared");
+          continue;
+        }
+
       if (flatpak_has_path_prefix (canon, "/usr"))
         g_warning_once ("Binding directories that are located under \"/usr/\" is not supported!");
 
@@ -995,6 +1001,7 @@ main (int argc,
   g_autoptr(GPtrArray) adverb_preload_argv = NULL;
   int result;
   PvAppendPreloadFlags append_preload_flags = PV_APPEND_PRELOAD_FLAGS_NONE;
+  glnx_autofd int root_fd = -1;
 
   setlocale (LC_ALL, "");
 
@@ -1440,6 +1447,15 @@ main (int argc,
       goto out;
     }
 
+  /* FEX-Emu transparently rewrites most file I/O to check its "rootfs"
+   * first, and only use the real root if the corresponding file
+   * doesn't exist in the "rootfs". In many places we actively don't want
+   * this, because we're inspecting paths in order to pass them to bwrap,
+   * which will use them to set up bind-mounts, which are not subject to
+   * FEX-Emu's rewriting; so bypass it here. */
+  if (!glnx_opendirat (-1, "/proc/self/root", TRUE, &root_fd, error))
+    return FALSE;
+
   /* Invariant: we are in exactly one of these two modes */
   g_assert (((flatpak_subsandbox != NULL)
              + (!is_flatpak_env))
@@ -1661,7 +1677,7 @@ main (int argc,
       g_assert (bwrap_filesystem_arguments != NULL);
       g_assert (exports != NULL);
 
-      if (!pv_wrap_use_host_os (exports, bwrap_filesystem_arguments, error))
+      if (!pv_wrap_use_host_os (root_fd, exports, bwrap_filesystem_arguments, error))
         goto out;
     }
 
@@ -1822,6 +1838,13 @@ main (int argc,
               g_assert (g_path_is_absolute (opt_filesystems[i]));
 
               g_info ("Bind-mounting \"%s\"", opt_filesystems[i]);
+
+              if (flatpak_has_path_prefix (opt_filesystems[i], "/overrides"))
+                {
+                  g_warning_once ("The path \"/overrides/\" is reserved and cannot be shared");
+                  continue;
+                }
+
               if (flatpak_has_path_prefix (opt_filesystems[i], "/usr"))
                 g_warning_once ("Binding directories that are located under \"/usr/\" "
                                 "is not supported!");

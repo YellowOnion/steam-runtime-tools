@@ -400,34 +400,35 @@ pv_wrap_set_icons_env_vars (PvEnviron *container_env,
  * came in via --filesystem=host or similar and matches its equivalent
  * on the real root filesystem.
  */
-static gboolean
-export_root_dirs_like_filesystem_host (FlatpakExports *exports,
-                                       FlatpakFilesystemMode mode,
-                                       GError **error)
+gboolean
+pv_export_root_dirs_like_filesystem_host (int root_fd,
+                                          FlatpakExports *exports,
+                                          FlatpakFilesystemMode mode,
+                                          GError **error)
 {
-  g_autoptr(GDir) dir = NULL;
+  g_auto(GLnxDirFdIterator) iter = { .initialized = FALSE };
   const char *member = NULL;
 
+  g_return_val_if_fail (root_fd >= 0, FALSE);
   g_return_val_if_fail (exports != NULL, FALSE);
   g_return_val_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  /* FEX-Emu transparently rewrites most file I/O to check its "rootfs"
-   * first, and only use the real root if the corresponding file
-   * doesn't exist in the "rootfs". We actively don't want this, because
-   * we're inspecting these paths here in order to pass them to bwrap,
-   * which will use them to set up bind-mounts, which are not subject to
-   * FEX-Emu's rewriting; so bypass it here. */
-  dir = g_dir_open ("/proc/self/root", 0, error);
-
-  if (dir == NULL)
+  if (!glnx_dirfd_iterator_init_at (root_fd, ".", TRUE, &iter, error))
     return FALSE;
 
-  for (member = g_dir_read_name (dir);
-       member != NULL;
-       member = g_dir_read_name (dir))
+  while (TRUE)
     {
       g_autofree gchar *path = NULL;
+      struct dirent *dent;
+
+      if (!glnx_dirfd_iterator_next_dent (&iter, &dent, NULL, error))
+        return FALSE;
+
+      if (dent == NULL)
+        break;
+
+      member = dent->d_name;
 
       if (g_strv_contains (dont_mount_in_root, member))
         continue;
@@ -447,7 +448,8 @@ export_root_dirs_like_filesystem_host (FlatpakExports *exports,
  * current namespace, so it won't work in Flatpak.
  */
 static gboolean
-export_contents_of_run (FlatpakBwrap *bwrap,
+export_contents_of_run (int root_fd,
+                        FlatpakBwrap *bwrap,
                         GError **error)
 {
   static const char *ignore[] =
@@ -458,25 +460,30 @@ export_contents_of_run (FlatpakBwrap *bwrap,
     "pressure-vessel",  /* created by pressure-vessel */
     NULL
   };
-  g_autoptr(GDir) dir = NULL;
+  g_auto(GLnxDirFdIterator) iter = { .initialized = FALSE };
   const char *member = NULL;
 
+  g_return_val_if_fail (root_fd >= 0, FALSE);
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
   g_return_val_if_fail (!g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR),
                         FALSE);
 
-  /* Avoid FEX-Emu's path rewriting: see export_root_dirs_like_filesystem_host() */
-  dir = g_dir_open ("/proc/self/root/run", 0, error);
-
-  if (dir == NULL)
+  if (!glnx_dirfd_iterator_init_at (root_fd, "run", TRUE, &iter, error))
     return FALSE;
 
-  for (member = g_dir_read_name (dir);
-       member != NULL;
-       member = g_dir_read_name (dir))
+  while (TRUE)
     {
       g_autofree gchar *path = NULL;
+      struct dirent *dent;
+
+      if (!glnx_dirfd_iterator_next_dent (&iter, &dent, NULL, error))
+        return FALSE;
+
+      if (dent == NULL)
+        break;
+
+      member = dent->d_name;
 
       if (g_strv_contains (ignore, member))
         continue;
@@ -500,33 +507,36 @@ export_contents_of_run (FlatpakBwrap *bwrap,
  * pv_bwrap_add_api_filesystems() already.
  */
 gboolean
-pv_wrap_use_host_os (FlatpakExports *exports,
+pv_wrap_use_host_os (int root_fd,
+                     FlatpakExports *exports,
                      FlatpakBwrap *bwrap,
                      GError **error)
 {
   static const char * const export_os_mutable[] = { "/etc", "/tmp", "/var" };
   gsize i;
 
+  g_return_val_if_fail (root_fd >= 0, FALSE);
   g_return_val_if_fail (exports != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!pv_bwrap_bind_usr (bwrap, "/", "/", "/", error))
+  if (!pv_bwrap_bind_usr (bwrap, "/", root_fd, "/", error))
     return FALSE;
 
   for (i = 0; i < G_N_ELEMENTS (export_os_mutable); i++)
     {
       const char *dir = export_os_mutable[i];
-      /* Avoid FEX-Emu's path rewriting: see export_contents_of_run() */
-      g_autofree char *really = g_strdup_printf ("/proc/self/root%s", dir);
+      struct stat stat_buf;
 
-      if (g_file_test (really, G_FILE_TEST_EXISTS))
+      g_assert (dir[0] == '/');
+
+      if (TEMP_FAILURE_RETRY (fstatat (root_fd, dir + 1, &stat_buf, 0)) == 0)
         flatpak_bwrap_add_args (bwrap, "--bind", dir, dir, NULL);
     }
 
   /* We do each subdirectory of /run separately, so that we can
    * always create /run/host and /run/pressure-vessel. */
-  if (!export_contents_of_run (bwrap, error))
+  if (!export_contents_of_run (root_fd, bwrap, error))
     return FALSE;
 
   /* This handles everything except:
@@ -535,6 +545,7 @@ pv_wrap_use_host_os (FlatpakExports *exports,
    * /boot (should be unnecessary)
    * /dev (handled by pv_bwrap_add_api_filesystems())
    * /etc (handled by export_os_mutable above)
+   * /overrides (used internally by PvRuntime)
    * /proc (handled by pv_bwrap_add_api_filesystems())
    * /root (should be unnecessary)
    * /run (handled by export_contents_of_run() above)
@@ -544,9 +555,10 @@ pv_wrap_use_host_os (FlatpakExports *exports,
    *  (all handled by pv_bwrap_bind_usr() above)
    * /var (handled by export_os_mutable above)
    */
-  if (!export_root_dirs_like_filesystem_host (exports,
-                                              FLATPAK_FILESYSTEM_MODE_READ_WRITE,
-                                              error))
+  if (!pv_export_root_dirs_like_filesystem_host (root_fd,
+                                                 exports,
+                                                 FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                                 error))
     return FALSE;
 
   return TRUE;

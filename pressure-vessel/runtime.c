@@ -1407,6 +1407,63 @@ out:
   return g_steal_pointer (&system_info);
 }
 
+static void
+cache_indep_graphics_stack (SrtSystemInfo *system_info,
+                            PvRuntimeFlags flags,
+                            const char * const *multiarch_tuples,
+                            GCancellable *cancellable)
+{
+  if (g_cancellable_is_cancelled (cancellable))
+    return;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating EGL ICDs in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
+
+      drivers = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
+    }
+
+  if (g_cancellable_is_cancelled (cancellable))
+    return;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating EGL external platforms in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
+
+      drivers = srt_system_info_list_egl_external_platforms (system_info, multiarch_tuples);
+    }
+
+  if (g_cancellable_is_cancelled (cancellable))
+    return;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating Vulkan ICDs in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
+
+      drivers = srt_system_info_list_vulkan_icds (system_info, multiarch_tuples);
+    }
+
+  if (g_cancellable_is_cancelled (cancellable))
+    return;
+
+  if (flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating Vulkan layers in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) exp_layers = NULL;
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) imp_layers = NULL;
+
+      exp_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
+      imp_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
+    }
+}
+
 /* Called in enumeration thread */
 static gpointer
 enumerate_indep (gpointer data)
@@ -1417,57 +1474,9 @@ enumerate_indep (gpointer data)
   g_autoptr(SrtSystemInfo) system_info =
     pv_graphics_provider_create_system_info (inputs->provider);
 
-  if (g_cancellable_is_cancelled (inputs->cancellable))
-    goto out;
+  cache_indep_graphics_stack (system_info, inputs->flags, pv_multiarch_tuples,
+                              inputs->cancellable);
 
-  if (TRUE)
-    {
-      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
-        _srt_profiling_start ("Enumerating EGL ICDs in thread");
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
-
-      drivers = srt_system_info_list_egl_icds (system_info, pv_multiarch_tuples);
-    }
-
-  if (g_cancellable_is_cancelled (inputs->cancellable))
-    goto out;
-
-  if (TRUE)
-    {
-      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
-        _srt_profiling_start ("Enumerating EGL external platforms in thread");
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
-
-      drivers = srt_system_info_list_egl_external_platforms (system_info, pv_multiarch_tuples);
-    }
-
-  if (g_cancellable_is_cancelled (inputs->cancellable))
-    goto out;
-
-  if (TRUE)
-    {
-      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
-        _srt_profiling_start ("Enumerating Vulkan ICDs in thread");
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
-
-      drivers = srt_system_info_list_vulkan_icds (system_info, pv_multiarch_tuples);
-    }
-
-  if (g_cancellable_is_cancelled (inputs->cancellable))
-    goto out;
-
-  if (inputs->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
-    {
-      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
-        _srt_profiling_start ("Enumerating Vulkan layers in thread");
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) exp_layers = NULL;
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) imp_layers = NULL;
-
-      exp_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
-      imp_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
-    }
-
-out:
   enumeration_thread_inputs_free (inputs);
   return g_steal_pointer (&system_info);
 }

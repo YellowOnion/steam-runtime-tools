@@ -6229,6 +6229,51 @@ collect_dri_drivers (PvRuntime *self,
   return TRUE;
 }
 
+/*
+ * Returns: (element-type IcdDetails):
+ */
+static GPtrArray *
+pv_enumerate_vulkan_icds (SrtSystemInfo *system_info,
+                          const char * const *multiarch_tuples)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
+  g_autoptr(SrtObjectList) vulkan_icds = NULL;
+  g_autoptr(GPtrArray) vulkan_icd_details = NULL;
+  gsize i;
+  const GList *icd_iter;
+
+  timer = _srt_profiling_start ("Enumerating Vulkan ICDs");
+  g_debug ("Enumerating Vulkan ICDs on provider system...");
+  vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
+                                                  multiarch_tuples);
+  vulkan_icd_details = g_ptr_array_new_full (g_list_length (vulkan_icds),
+                                             (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = vulkan_icds, i = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, i++)
+    {
+      SrtVulkanIcd *icd = icd_iter->data;
+      const gchar *path = srt_vulkan_icd_get_json_path (icd);
+      GError *local_error = NULL;
+
+      if (!srt_vulkan_icd_check_error (icd, &local_error))
+        {
+          g_info ("Failed to load Vulkan ICD #%" G_GSIZE_FORMAT " from %s: %s",
+                  i, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_info ("Vulkan ICD #%" G_GSIZE_FORMAT " at %s: %s",
+              i, path, srt_vulkan_icd_get_library_path (icd));
+
+      g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
+    }
+
+  return g_steal_pointer (&vulkan_icd_details);
+}
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -6249,7 +6294,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(SrtSystemInfo) system_info = NULL;
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) egl_ext_platforms = NULL;
-  g_autoptr(SrtObjectList) vulkan_icds = NULL;
   g_autoptr(SrtObjectList) vulkan_explicit_layers = NULL;
   g_autoptr(SrtObjectList) vulkan_implicit_layers = NULL;
   g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
@@ -6261,7 +6305,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(SrtProfilingTimer) part_timer = NULL;
   guint n_egl_icds;
   guint n_egl_ext_platforms;
-  guint n_vulkan_icds;
   const GList *icd_iter;
   gboolean all_libglx_from_provider = TRUE;
   gboolean all_libdrm_from_provider = TRUE;
@@ -6360,38 +6403,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   g_clear_pointer (&part_timer, _srt_profiling_end);
 
-  part_timer = _srt_profiling_start ("Enumerating Vulkan ICDs");
-  g_debug ("Enumerating Vulkan ICDs on provider system...");
-  vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
-                                                  pv_multiarch_tuples);
-  n_vulkan_icds = g_list_length (vulkan_icds);
-
-  vulkan_icd_details = g_ptr_array_new_full (n_vulkan_icds,
-                                             (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-  for (icd_iter = vulkan_icds, j = 0;
-       icd_iter != NULL;
-       icd_iter = icd_iter->next, j++)
-    {
-      SrtVulkanIcd *icd = icd_iter->data;
-      const gchar *path = srt_vulkan_icd_get_json_path (icd);
-      GError *local_error = NULL;
-
-      if (!srt_vulkan_icd_check_error (icd, &local_error))
-        {
-          g_info ("Failed to load Vulkan ICD #%" G_GSIZE_FORMAT " from %s: %s",
-                  j, path, local_error->message);
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      g_info ("Vulkan ICD #%" G_GSIZE_FORMAT " at %s: %s",
-              j, path, srt_vulkan_icd_get_library_path (icd));
-
-      g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
-    }
-
-  g_clear_pointer (&part_timer, _srt_profiling_end);
+  vulkan_icd_details = pv_enumerate_vulkan_icds (system_info, pv_multiarch_tuples);
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {

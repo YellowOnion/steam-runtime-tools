@@ -6233,6 +6233,50 @@ collect_dri_drivers (PvRuntime *self,
  * Returns: (element-type IcdDetails):
  */
 static GPtrArray *
+pv_enumerate_egl_icds (SrtSystemInfo *system_info,
+                       const char * const *multiarch_tuples)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
+  g_autoptr(SrtObjectList) egl_icds = NULL;
+  g_autoptr(GPtrArray) egl_icd_details = NULL;
+  gsize i;
+  const GList *icd_iter;
+
+  timer = _srt_profiling_start ("Enumerating EGL ICDs");
+  g_debug ("Enumerating EGL ICDs on provider system...");
+  egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
+  egl_icd_details = g_ptr_array_new_full (g_list_length (egl_icds),
+                                          (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = egl_icds, i = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, i++)
+    {
+      SrtEglIcd *icd = icd_iter->data;
+      const gchar *path = srt_egl_icd_get_json_path (icd);
+      GError *local_error = NULL;
+
+      if (!srt_egl_icd_check_error (icd, &local_error))
+        {
+          g_info ("Failed to load EGL ICD #%" G_GSIZE_FORMAT  " from %s: %s",
+                  i, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_info ("EGL ICD #%" G_GSIZE_FORMAT " at %s: %s",
+              i, path, srt_egl_icd_get_library_path (icd));
+
+      g_ptr_array_add (egl_icd_details, icd_details_new (icd));
+    }
+
+  return g_steal_pointer (&egl_icd_details);
+}
+
+/*
+ * Returns: (element-type IcdDetails):
+ */
+static GPtrArray *
 pv_enumerate_vulkan_icds (SrtSystemInfo *system_info,
                           const char * const *multiarch_tuples)
 {
@@ -6362,7 +6406,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GString) va_api_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
   g_autoptr(SrtSystemInfo) system_info = NULL;
-  g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) egl_ext_platforms = NULL;
   g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) egl_ext_platform_details = NULL;   /* (element-type IcdDetails) */
@@ -6371,7 +6414,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GPtrArray) vulkan_imp_layer_details = NULL;   /* (element-type IcdDetails) */
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autoptr(SrtProfilingTimer) part_timer = NULL;
-  guint n_egl_icds;
   guint n_egl_ext_platforms;
   const GList *icd_iter;
   gboolean all_libglx_from_provider = TRUE;
@@ -6406,37 +6448,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   else
     system_info = g_object_ref (enumeration_thread_join (&self->indep_thread));
 
-  part_timer = _srt_profiling_start ("Enumerating EGL ICDs");
-  g_debug ("Enumerating EGL ICDs on provider system...");
-  egl_icds = srt_system_info_list_egl_icds (system_info, pv_multiarch_tuples);
-  n_egl_icds = g_list_length (egl_icds);
-
-  egl_icd_details = g_ptr_array_new_full (n_egl_icds,
-                                          (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-  for (icd_iter = egl_icds, j = 0;
-       icd_iter != NULL;
-       icd_iter = icd_iter->next, j++)
-    {
-      SrtEglIcd *icd = icd_iter->data;
-      const gchar *path = srt_egl_icd_get_json_path (icd);
-      GError *local_error = NULL;
-
-      if (!srt_egl_icd_check_error (icd, &local_error))
-        {
-          g_info ("Failed to load EGL ICD #%" G_GSIZE_FORMAT  " from %s: %s",
-                  j, path, local_error->message);
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      g_info ("EGL ICD #%" G_GSIZE_FORMAT " at %s: %s",
-              j, path, srt_egl_icd_get_library_path (icd));
-
-      g_ptr_array_add (egl_icd_details, icd_details_new (icd));
-    }
-
-  g_clear_pointer (&part_timer, _srt_profiling_end);
+  egl_icd_details = pv_enumerate_egl_icds (system_info, pv_multiarch_tuples);
 
   part_timer = _srt_profiling_start ("Enumerating EGL external platforms");
   g_debug ("Enumerating EGL external platforms on provider system...");

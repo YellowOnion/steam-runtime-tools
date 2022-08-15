@@ -6274,6 +6274,76 @@ pv_enumerate_vulkan_icds (SrtSystemInfo *system_info,
   return g_steal_pointer (&vulkan_icd_details);
 }
 
+/*
+ * @vulkan_layer_details: (inout) (element-type IcdDetails):
+ */
+static void
+pv_append_vulkan_layers_details (GList *vulkan_layers,
+                                 const gchar *which,
+                                 GPtrArray *vulkan_layer_details)
+{
+  gsize i;
+  const GList *icd_i;
+
+  for (icd_i = vulkan_layers, i = 0; icd_i != NULL; icd_i = icd_i->next, i++)
+    {
+      SrtVulkanLayer *layer = icd_i->data;
+      const gchar *path = srt_vulkan_layer_get_json_path (layer);
+      GError *local_error = NULL;
+
+      if (!srt_vulkan_layer_check_error (layer, &local_error))
+        {
+          g_info ("Failed to load Vulkan %s layer #%" G_GSIZE_FORMAT
+                  " from %s: %s", which, i, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      const gchar *description = srt_vulkan_layer_get_library_path (layer);
+
+      if (description == NULL)
+        description = "meta-layer";
+
+      g_info ("Vulkan %s layer #%" G_GSIZE_FORMAT " at %s: %s",
+              which, i, path, description);
+
+      g_ptr_array_add (vulkan_layer_details, icd_details_new (layer));
+    }
+}
+
+/*
+ * @vulkan_exp_layer_details: (out) (element-type IcdDetails):
+ * @vulkan_imp_layer_details: (out) (element-type IcdDetails):
+ */
+static void
+pv_enumerate_vulkan_layer_details (SrtSystemInfo *system_info,
+                                   GPtrArray **vulkan_exp_layer_details,
+                                   GPtrArray **vulkan_imp_layer_details)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
+  g_autoptr(SrtObjectList) vulkan_exp_layers = NULL;
+  g_autoptr(SrtObjectList) vulkan_imp_layers = NULL;
+
+  g_return_if_fail (vulkan_exp_layer_details != NULL);
+  g_return_if_fail (*vulkan_exp_layer_details == NULL);
+  g_return_if_fail (vulkan_imp_layer_details != NULL);
+  g_return_if_fail (*vulkan_imp_layer_details == NULL);
+
+  timer = _srt_profiling_start ("Enumerating Vulkan layers");
+
+  g_debug ("Enumerating Vulkan explicit layers on provider system...");
+  vulkan_exp_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
+  *vulkan_exp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_exp_layers),
+                                                    (GDestroyNotify) G_CALLBACK (icd_details_free));
+  pv_append_vulkan_layers_details (vulkan_exp_layers, "explicit", *vulkan_exp_layer_details);
+
+  g_debug ("Enumerating Vulkan implicit layers on provider system...");
+  vulkan_imp_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
+  *vulkan_imp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_imp_layers),
+                                                    (GDestroyNotify) G_CALLBACK (icd_details_free));
+  pv_append_vulkan_layers_details (vulkan_imp_layers, "implicit", *vulkan_imp_layer_details);
+}
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -6294,8 +6364,6 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(SrtSystemInfo) system_info = NULL;
   g_autoptr(SrtObjectList) egl_icds = NULL;
   g_autoptr(SrtObjectList) egl_ext_platforms = NULL;
-  g_autoptr(SrtObjectList) vulkan_explicit_layers = NULL;
-  g_autoptr(SrtObjectList) vulkan_implicit_layers = NULL;
   g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) egl_ext_platform_details = NULL;   /* (element-type IcdDetails) */
   g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
@@ -6407,67 +6475,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
-      part_timer = _srt_profiling_start ("Enumerating Vulkan layers");
-      g_debug ("Enumerating Vulkan explicit layers on provider system...");
-      vulkan_explicit_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
-
-      vulkan_exp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_explicit_layers),
-                                                       (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-      for (icd_iter = vulkan_explicit_layers, j = 0;
-          icd_iter != NULL;
-          icd_iter = icd_iter->next, j++)
-        {
-          SrtVulkanLayer *layer = icd_iter->data;
-          const gchar *path = srt_vulkan_layer_get_json_path (layer);
-          GError *local_error = NULL;
-
-          if (!srt_vulkan_layer_check_error (layer, &local_error))
-            {
-              g_info ("Failed to load Vulkan explicit layer #%" G_GSIZE_FORMAT
-                      " from %s: %s", j, path, local_error->message);
-              g_clear_error (&local_error);
-              continue;
-            }
-
-          g_info ("Vulkan explicit layer #%" G_GSIZE_FORMAT " at %s: %s",
-                  j, path, srt_vulkan_layer_get_library_path (layer));
-
-          g_ptr_array_add (vulkan_exp_layer_details, icd_details_new (layer));
-        }
-
-      g_debug ("Enumerating Vulkan implicit layers on provider system...");
-      vulkan_implicit_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
-
-      vulkan_imp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_implicit_layers),
-                                                       (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-      for (icd_iter = vulkan_implicit_layers, j = 0;
-          icd_iter != NULL;
-          icd_iter = icd_iter->next, j++)
-        {
-          SrtVulkanLayer *layer = icd_iter->data;
-          const gchar *path = srt_vulkan_layer_get_json_path (layer);
-          const gchar *library_path = NULL;
-          GError *local_error = NULL;
-
-          if (!srt_vulkan_layer_check_error (layer, &local_error))
-            {
-              g_info ("Failed to load Vulkan implicit layer #%" G_GSIZE_FORMAT
-                      " from %s: %s", j, path, local_error->message);
-              g_clear_error (&local_error);
-              continue;
-            }
-
-          library_path = srt_vulkan_layer_get_library_path (layer);
-
-          g_info ("Vulkan implicit layer #%" G_GSIZE_FORMAT " at %s: %s",
-                  j, path, library_path != NULL ? library_path : "meta-layer");
-
-          g_ptr_array_add (vulkan_imp_layer_details, icd_details_new (layer));
-        }
-
-      g_clear_pointer (&part_timer, _srt_profiling_end);
+      pv_enumerate_vulkan_layer_details (system_info, &vulkan_exp_layer_details,
+                                         &vulkan_imp_layer_details);
     }
 
   /* We set this FALSE later if we decide not to use the provider libc

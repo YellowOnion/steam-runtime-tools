@@ -6243,7 +6243,8 @@ collect_dri_drivers (PvRuntime *self,
  */
 static GPtrArray *
 pv_enumerate_egl_ext_platforms (SrtSystemInfo *system_info,
-                                const char * const *multiarch_tuples)
+                                const char * const *multiarch_tuples,
+                                const gchar *which_system)
 {
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autoptr(SrtObjectList) egl_ext_platforms = NULL;
@@ -6251,8 +6252,9 @@ pv_enumerate_egl_ext_platforms (SrtSystemInfo *system_info,
   gsize i;
   const GList *icd_iter;
 
-  timer = _srt_profiling_start ("Enumerating EGL external platforms");
-  g_debug ("Enumerating EGL external platforms on provider system...");
+  timer = _srt_profiling_start ("Enumerating EGL external platforms on %s system",
+                                which_system);
+  g_debug ("Enumerating EGL external platforms on %s system...", which_system);
   egl_ext_platforms = srt_system_info_list_egl_external_platforms (system_info,
                                                                    multiarch_tuples);
   egl_ext_platform_details = g_ptr_array_new_full (g_list_length (egl_ext_platforms),
@@ -6288,7 +6290,8 @@ pv_enumerate_egl_ext_platforms (SrtSystemInfo *system_info,
  */
 static GPtrArray *
 pv_enumerate_egl_icds (SrtSystemInfo *system_info,
-                       const char * const *multiarch_tuples)
+                       const char * const *multiarch_tuples,
+                       const gchar *which_system)
 {
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autoptr(SrtObjectList) egl_icds = NULL;
@@ -6296,8 +6299,8 @@ pv_enumerate_egl_icds (SrtSystemInfo *system_info,
   gsize i;
   const GList *icd_iter;
 
-  timer = _srt_profiling_start ("Enumerating EGL ICDs");
-  g_debug ("Enumerating EGL ICDs on provider system...");
+  timer = _srt_profiling_start ("Enumerating EGL ICDs on %s system", which_system);
+  g_debug ("Enumerating EGL ICDs on %s system...", which_system);
   egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
   egl_icd_details = g_ptr_array_new_full (g_list_length (egl_icds),
                                           (GDestroyNotify) G_CALLBACK (icd_details_free));
@@ -6332,7 +6335,8 @@ pv_enumerate_egl_icds (SrtSystemInfo *system_info,
  */
 static GPtrArray *
 pv_enumerate_vulkan_icds (SrtSystemInfo *system_info,
-                          const char * const *multiarch_tuples)
+                          const char * const *multiarch_tuples,
+                          const gchar *which_system)
 {
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autoptr(SrtObjectList) vulkan_icds = NULL;
@@ -6340,8 +6344,8 @@ pv_enumerate_vulkan_icds (SrtSystemInfo *system_info,
   gsize i;
   const GList *icd_iter;
 
-  timer = _srt_profiling_start ("Enumerating Vulkan ICDs");
-  g_debug ("Enumerating Vulkan ICDs on provider system...");
+  timer = _srt_profiling_start ("Enumerating Vulkan ICDs on %s system", which_system);
+  g_debug ("Enumerating Vulkan ICDs on %s system...", which_system);
   vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
                                                   multiarch_tuples);
   vulkan_icd_details = g_ptr_array_new_full (g_list_length (vulkan_icds),
@@ -6415,6 +6419,7 @@ pv_append_vulkan_layers_details (GList *vulkan_layers,
  */
 static void
 pv_enumerate_vulkan_layer_details (SrtSystemInfo *system_info,
+                                   const gchar *which_system,
                                    GPtrArray **vulkan_exp_layer_details,
                                    GPtrArray **vulkan_imp_layer_details)
 {
@@ -6427,15 +6432,15 @@ pv_enumerate_vulkan_layer_details (SrtSystemInfo *system_info,
   g_return_if_fail (vulkan_imp_layer_details != NULL);
   g_return_if_fail (*vulkan_imp_layer_details == NULL);
 
-  timer = _srt_profiling_start ("Enumerating Vulkan layers");
+  timer = _srt_profiling_start ("Enumerating Vulkan layers on %s system", which_system);
 
-  g_debug ("Enumerating Vulkan explicit layers on provider system...");
+  g_debug ("Enumerating Vulkan explicit layers on %s system...", which_system);
   vulkan_exp_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
   *vulkan_exp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_exp_layers),
                                                     (GDestroyNotify) G_CALLBACK (icd_details_free));
   pv_append_vulkan_layers_details (vulkan_exp_layers, "explicit", *vulkan_exp_layer_details);
 
-  g_debug ("Enumerating Vulkan implicit layers on provider system...");
+  g_debug ("Enumerating Vulkan implicit layers on %s system...", which_system);
   vulkan_imp_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
   *vulkan_imp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_imp_layers),
                                                     (GDestroyNotify) G_CALLBACK (icd_details_free));
@@ -6503,7 +6508,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                                          g_str_equal,
                                                                          g_free, NULL);
   g_autoptr(GHashTable) gconv_in_provider = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                                     g_free, NULL);
+                                                                   g_free, NULL);
+  const gchar *provider = "provider";
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (self->provider != NULL, FALSE);
@@ -6524,17 +6530,17 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     system_info = g_object_ref (enumeration_thread_join (&self->indep_thread));
 
   provider_stack->egl_icd_details = pv_enumerate_egl_icds (system_info,
-                                                           pv_multiarch_tuples);
-
+                                                           pv_multiarch_tuples, provider);
   provider_stack->egl_ext_platform_details = pv_enumerate_egl_ext_platforms (system_info,
-                                                                             pv_multiarch_tuples);
-
+                                                                             pv_multiarch_tuples,
+                                                                             provider);
   provider_stack->vulkan_icd_details = pv_enumerate_vulkan_icds (system_info,
-                                                                 pv_multiarch_tuples);
-
+                                                                 pv_multiarch_tuples,
+                                                                 provider);
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
       pv_enumerate_vulkan_layer_details (system_info,
+                                         provider,
                                          &provider_stack->vulkan_exp_layer_details,
                                          &provider_stack->vulkan_imp_layer_details);
     }

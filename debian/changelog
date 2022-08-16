@@ -7,7 +7,6 @@ steam-runtime-tools (0.20220803.1) UNRELEASED; urgency=medium
     (steamrt/tasks#149)
   * pressure-vessel: Avoid startup failure with --filesystem=/overrides
   * build: Require Meson 0.56.2 backport, update build system accordingly
-  * tests: Work around a Meson 0.63 regression
 
  -- Simon McVittie <smcv@collabora.com>  Thu, 11 Aug 2022 20:10:59 +0100
 

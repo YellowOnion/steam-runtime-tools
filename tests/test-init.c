@@ -25,7 +25,9 @@
 
 #include "tests/test-utils.h"
 
+#include <fcntl.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include <glib.h>
 #include <glib-object.h>
@@ -59,6 +61,11 @@ static gboolean global_debug_log_to_stderr = FALSE;
 void
 _srt_tests_global_debug_log_to_stderr (void)
 {
+#if !GLIB_CHECK_VERSION(2, 68, 0)
+  int original_stdout_fd;
+  int flags;
+#endif
+
   g_return_if_fail (!global_debug_log_to_stderr);
   global_debug_log_to_stderr = TRUE;
 
@@ -66,14 +73,13 @@ _srt_tests_global_debug_log_to_stderr (void)
   /* Send g_debug() and g_info() to stderr instead of the default stdout. */
   g_log_writer_default_set_use_stderr (TRUE);
 #else
-  /* This is less thorough than the tricks with dup2() that are used
-   * in _srt_divert_stdout_to_stderr(), but it's enough to divert GLib
-   * logging without having to write a new GLogFunc or GLogWriterFunc,
-   * which would be GLib-version-dependent. Not diverting them at the
-   * file descriptor level also means our tests implicitly assert that
-   * we don't leak unstructured output onto stdout. */
-  original_stdout = stdout;
-  stdout = stderr;
+  /* This is a mini version of _srt_divert_stdout_to_stderr(), with
+   * more fragile error handling since this is only test code */
+  g_assert_no_errno ((original_stdout_fd = dup (STDOUT_FILENO)));
+  g_assert_no_errno ((flags = fcntl (original_stdout_fd, F_GETFD, 0)));
+  g_assert_no_errno (fcntl (original_stdout_fd, F_SETFD, flags | FD_CLOEXEC));
+  g_assert_no_errno (dup2 (STDERR_FILENO, STDOUT_FILENO));
+  g_assert_no_errno ((original_stdout = fdopen (original_stdout_fd, "w")) ? 0 : -1);
 
   /* GLib's GTest framework has historically used g_print() to write
    * its structured output to stdout. This isn't completely future-proof,

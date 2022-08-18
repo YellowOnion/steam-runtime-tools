@@ -191,7 +191,7 @@ foreach test_info : tests
     )
   endif
 
-  if glib_tap_support.found()
+  if glib_tap_support
     test(
       test_name,
       exe,

@@ -356,6 +356,7 @@ test_library_identification (Fixture *f,
       libc_dirname = g_path_get_dirname (libc_info[i].path);
       argv[2] = libc_dirname;
 
+      g_test_message ("Running: %s %s %s", argv[0], argv[1], argv[2]);
       ret = g_spawn_sync (NULL,    /* working directory */
                           (gchar **) argv,
                           NULL,    /* envp */
@@ -368,12 +369,15 @@ test_library_identification (Fixture *f,
                           &error);
       g_assert_no_error (error);
       g_assert_true (ret);
+      g_test_message ("stdout: '''\\\n%s'''", child_stdout);
+      g_test_message ("stderr: '''\\\n%s'''", child_stderr);
       g_assert_cmpint (exit_status, ==, 0);
       g_assert_nonnull (child_stdout);
       g_assert_cmpstr (child_stdout, !=, "");
       g_assert_true (g_utf8_validate (child_stdout, -1, NULL));
       g_assert_nonnull (child_stderr);
 
+      g_test_message ("Looking for %s in output", libc_info[i].path);
       out_line = strstr (child_stdout, libc_info[i].path);
       g_assert_nonnull (out_line);
       end_of_line = strstr (out_line, "\n");

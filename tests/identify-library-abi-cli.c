@@ -295,43 +295,43 @@ test_library_identification (Fixture *f,
   g_assert_true (g_utf8_validate (child_stdout, -1, NULL));
   g_assert_nonnull (child_stderr);
 
-  const LibInfo libc_info[] =
+  const LibInfo glib_info[] =
   {
     {
-      .path = "/usr/lib/x86_64-linux-gnu/libc.so.6",
+      .path = "/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0",
       .abi = "x86_64-linux-gnu",
     },
     {
-      .path = "/lib/x86_64-linux-gnu/libc.so.6",
+      .path = "/lib/x86_64-linux-gnu/libglib-2.0.so.0",
       .abi = "x86_64-linux-gnu",
     },
     {
-      .path = "/usr/lib/i386-linux-gnu/libc.so.6",
+      .path = "/usr/lib/i386-linux-gnu/libglib-2.0.so.0",
       .abi = "i386-linux-gnu",
     },
     {
-      .path = "/lib/i386-linux-gnu/libc.so.6",
+      .path = "/lib/i386-linux-gnu/libglib-2.0.so.0",
       .abi = "i386-linux-gnu",
     },
   };
 
-  for (i = 0; i < G_N_ELEMENTS (libc_info); i++)
+  for (i = 0; i < G_N_ELEMENTS (glib_info); i++)
     {
       g_autofree gchar *expected_out_line = NULL;
-      gchar *out_line = strstr (child_stdout, libc_info[i].path);
+      gchar *out_line = strstr (child_stdout, glib_info[i].path);
       if (out_line != NULL)
         {
           gchar *end_of_line = strstr (out_line, "\n");
           g_assert_nonnull (end_of_line);
           end_of_line[0] = '\0';
-          expected_out_line = g_strdup_printf ("%s=%s", libc_info[i].path, libc_info[i].abi);
+          expected_out_line = g_strdup_printf ("%s=%s", glib_info[i].path, glib_info[i].abi);
           g_assert_cmpstr (out_line, ==, expected_out_line);
           end_of_line[0] = '\n';
         }
       else
         {
           g_test_message ("\"%s\" seems to not be available in ldconfig output, "
-                          "skipping this part of the test", libc_info[i].path);
+                          "skipping this part of the test", glib_info[i].path);
         }
     }
 
@@ -339,22 +339,22 @@ test_library_identification (Fixture *f,
   g_free (child_stderr);
 
   argv[1] = "--directory";
-  for (i = 0; i < G_N_ELEMENTS (libc_info); i++)
+  for (i = 0; i < G_N_ELEMENTS (glib_info); i++)
     {
-      g_autofree gchar *libc_dirname = NULL;
+      g_autofree gchar *glib_dirname = NULL;
       g_autofree gchar *expected_out_line = NULL;
       const gchar *out_line;
       gchar *end_of_line;  /* not owned */
 
-      if (!g_file_test (libc_info[i].path, G_FILE_TEST_EXISTS))
+      if (!g_file_test (glib_info[i].path, G_FILE_TEST_EXISTS))
         {
           g_test_message ("\"%s\" is not available in the filesystem, skipping this "
-                          "part of the test", libc_info[i].path);
+                          "part of the test", glib_info[i].path);
           continue;
         }
 
-      libc_dirname = g_path_get_dirname (libc_info[i].path);
-      argv[2] = libc_dirname;
+      glib_dirname = g_path_get_dirname (glib_info[i].path);
+      argv[2] = glib_dirname;
 
       g_test_message ("Running: %s %s %s", argv[0], argv[1], argv[2]);
       ret = g_spawn_sync (NULL,    /* working directory */
@@ -377,13 +377,13 @@ test_library_identification (Fixture *f,
       g_assert_true (g_utf8_validate (child_stdout, -1, NULL));
       g_assert_nonnull (child_stderr);
 
-      g_test_message ("Looking for %s in output", libc_info[i].path);
-      out_line = strstr (child_stdout, libc_info[i].path);
+      g_test_message ("Looking for %s in output", glib_info[i].path);
+      out_line = strstr (child_stdout, glib_info[i].path);
       g_assert_nonnull (out_line);
       end_of_line = strstr (out_line, "\n");
       g_assert_nonnull (end_of_line);
       end_of_line[0] = '\0';
-      expected_out_line = g_strdup_printf ("%s=%s", libc_info[i].path, libc_info[i].abi);
+      expected_out_line = g_strdup_printf ("%s=%s", glib_info[i].path, glib_info[i].abi);
       g_assert_cmpstr (out_line, ==, expected_out_line);
       end_of_line[0] = '\n';
 

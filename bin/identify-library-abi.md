@@ -48,6 +48,13 @@ currently can have the following values: `i386-linux-gnu`, `x86_64-linux-gnu`,
 `x86_64-linux-gnux32`, `aarch64-linux-gnu`, or `?` that groups all the other
 possible ABIs.
 
+# BUGS
+
+**steam-runtime-identify-library-abi --directory** currently assumes that
+it only needs to act on symbolic links, not regular files. This is
+sufficient for the use-case it was designed for (examining the contents of
+the `LD_LIBRARY_PATH` Steam Runtime) but unsuitable for more general uses.
+
 # EXIT STATUS
 
 0

@@ -121,6 +121,12 @@ split_log_func (const char *log_domain,
 
 static gboolean tests_init_done = FALSE;
 
+gboolean
+_srt_tests_init_was_called (void)
+{
+  return tests_init_done;
+}
+
 void
 _srt_tests_init (int *argc,
                  char ***argv,

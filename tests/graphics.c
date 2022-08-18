@@ -3329,9 +3329,9 @@ main (int argc,
   int ret;
 
   argv0 = argv[0];
+  _srt_tests_init (&argc, &argv, NULL);
   global_sysroots = _srt_global_setup_sysroots (argv0);
 
-  _srt_tests_init (&argc, &argv, NULL);
   g_test_add ("/graphics/object", Fixture, NULL,
               setup, test_object, teardown);
   g_test_add ("/graphics/normalize_window_system", Fixture, NULL,

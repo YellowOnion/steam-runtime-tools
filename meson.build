@@ -272,11 +272,7 @@ glib = dependency(
   'glib-2.0',
   version : '>= 2.32',
 )
-glib_tap_support = dependency(
-  'glib-2.0',
-  version : '>= 2.38',
-  required : false,
-)
+glib_tap_support = glib.version().version_compare('>=2.38')
 gobject = dependency(
   'gobject-2.0',
   version : '>= 2.32',

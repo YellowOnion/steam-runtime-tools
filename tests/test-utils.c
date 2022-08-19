@@ -57,6 +57,7 @@ _srt_global_setup_private_xdg_dirs (void)
   gchar *fake_home_path = NULL;
   gchar *xdg_data_home = NULL;
 
+  g_return_val_if_fail (_srt_tests_init_was_called (), NULL);
   g_return_val_if_fail (fake_home_parent == NULL, NULL);
 
   /* Create a directory that we control, and then put the fake home
@@ -127,6 +128,7 @@ _srt_global_setup_sysroots (const char *argv0)
   };
   int wait_status;
 
+  g_return_val_if_fail (_srt_tests_init_was_called (), NULL);
   g_return_val_if_fail (sysroots_parent == NULL, NULL);
 
   /* Create a directory that we control, and then put the fake home
@@ -181,6 +183,8 @@ tests_check_fd_leaks_enter (void)
   g_autoptr(GHashTable) ret = NULL;
   g_auto(GLnxDirFdIterator) iter = { FALSE };
   g_autoptr(GError) error = NULL;
+
+  g_return_val_if_fail (_srt_tests_init_was_called (), NULL);
 
   ret = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 

@@ -73,7 +73,7 @@ foreach test_name : compiled_tests
     install : false,
   )
 
-  if glib_tap_support.found()
+  if glib_tap_support
     test(
       test_name, exe,
       args : ['--tap'],

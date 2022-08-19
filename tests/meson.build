@@ -66,6 +66,7 @@ test_utils = static_library(
   'test-utils',
   sources : [
     'fake-home.c',
+    'test-backports.c',
     'test-init.c',
     'test-utils.c',
   ],
@@ -190,7 +191,7 @@ foreach test_info : tests
     )
   endif
 
-  if glib_tap_support.found()
+  if glib_tap_support
     test(
       test_name,
       exe,

@@ -989,6 +989,14 @@ main (int argc,
   /* Set up the initial base logging */
   _srt_util_set_glib_log_handler (G_LOG_DOMAIN, FALSE);
 
+  original_stdout = _srt_divert_stdout_to_stderr (error);
+
+  if (original_stdout == NULL)
+    {
+      launch_exit_status = LAUNCH_EX_FAILED;
+      goto out;
+    }
+
   context = g_option_context_new ("COMMAND [ARG...]");
   g_option_context_set_summary (context,
                                 "Send IPC requests to create child "
@@ -1029,14 +1037,6 @@ main (int argc,
   if (opt_list)
     {
       launch_exit_status = list_servers (error);
-      goto out;
-    }
-
-  original_stdout = _srt_divert_stdout_to_stderr (error);
-
-  if (original_stdout == NULL)
-    {
-      launch_exit_status = LAUNCH_EX_FAILED;
       goto out;
     }
 

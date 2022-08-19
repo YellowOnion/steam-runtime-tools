@@ -36,6 +36,8 @@ _build/
     host/                       Build for host system, with pressure-vessel
     scout-i386/                 Build for scout, i386
     scout-x86_64/               Build for scout, x86_64, with pressure-vessel
+    soldier-x86_64/             Build for soldier, x86_64, with pressure-vessel
+    sniper-x86_64/              Build for sniper, x86_64, with pressure-vessel
 
     # Non-Meson-managed
     cache/                      Download cache for populate-depot.py
@@ -68,8 +70,8 @@ from typing import List, Union
 
 logger = logging.getLogger('many-builds')
 
-SCOUT_SYSROOT_TAR = (
-    'com.valvesoftware.SteamRuntime.Sdk-amd64,i386-scout-sysroot.tar.gz'
+SYSROOT_TAR = (
+    'com.valvesoftware.SteamRuntime.Sdk-amd64,i386-{}-sysroot.tar.gz'
 )
 
 
@@ -139,66 +141,71 @@ class Environment:
                 ),
             ])
 
-        self.scout_oci = 'registry.gitlab.steamos.cloud/steamrt/scout/sdk'
-        oci_run_args.append(self.scout_oci)
+        self.oci_images = {
+            'scout': 'registry.gitlab.steamos.cloud/steamrt/scout/sdk:beta',
+            'heavy': '',
+            'soldier': (
+                'registry.gitlab.steamos.cloud/steamrt/soldier/sdk:beta'
+            ),
+            'sniper': 'registry.gitlab.steamos.cloud/steamrt/sniper/sdk:beta',
+            'medic': '',
+        }
 
         if self.podman:
-            self.scout_oci_run_args = ['podman', 'run'] + oci_run_args
+            self.oci_run_argv = ['podman', 'run'] + oci_run_args
         elif self.docker:
-            self.scout_oci_run_args = self.docker + [
+            self.oci_run_argv = self.docker + [
                 'run',
                 '-e', 'HOME={}'.format(Path.home()),
                 '-u', '{}:{}'.format(os.geteuid(), os.getegid()),
             ] + oci_run_args
         else:
-            self.scout_oci_run_args = []
+            self.oci_run_argv = []
 
     def populate_depots(self):
         with tempfile.TemporaryDirectory() as empty_depot_template:
             Path(empty_depot_template, 'common').mkdir()
-            subprocess.run(
-                [
-                    self.populate_depot,
-                    '--cache', self.cache,
-                    '--depot', self.containers,
-                    '--include-archives',
-                    '--include-sdk-sysroot',
-                    '--no-versioned-directories',
-                    '--source-dir', empty_depot_template,
-                    '--unpack-runtimes',
-                    '--version=latest-steam-client-public-beta',
-                    'scout',
-                ],
-                check=True,
-            )
-            subprocess.run(
-                [
-                    self.populate_depot,
-                    '--cache', self.cache,
-                    '--depot', self.containers,
-                    '--include-archives',
-                    '--include-sdk-sysroot',
-                    '--no-versioned-directories',
-                    '--source-dir', empty_depot_template,
-                    '--unpack-runtimes',
-                    '--version=latest-container-runtime-public-beta',
-                    'soldier',
-                ],
-                check=True,
-            )
 
-    def run_in_scout(self, argv: List[str]) -> None:
-        if self.scout_oci_run_args:
-            subprocess.run(self.scout_oci_run_args + argv, check=True)
+            for suite in self.oci_images:
+                if not self.oci_images[suite]:
+                    continue
+
+                if suite in ('scout', 'heavy'):
+                    version = 'latest-steam-client-public-beta'
+                else:
+                    version = 'latest-container-runtime-public-beta'
+
+                subprocess.run(
+                    [
+                        self.populate_depot,
+                        '--cache', self.cache,
+                        '--depot', self.containers,
+                        '--include-archives',
+                        '--include-sdk-sysroot',
+                        '--no-versioned-directories',
+                        '--source-dir', empty_depot_template,
+                        '--unpack-runtimes',
+                        f'--version={version}',
+                        suite,
+                    ],
+                    check=True,
+                )
+
+    def run_in_suite(self, suite: str, argv: List[str]) -> None:
+        if self.oci_run_argv:
+            subprocess.run(
+                self.oci_run_argv + [self.oci_images[suite]] + argv,
+                check=True,
+            )
         else:
-            scout_sysroot = self.containers / 'scout_sysroot'
-            tarball = self.containers / SCOUT_SYSROOT_TAR
+            sysroot = self.containers / (suite + '_sysroot')
+            tarball = self.containers / SYSROOT_TAR.format(suite)
             subprocess.run(
                 [
                     str(self.abs_srcdir / 'build-aux' / 'run-in-sysroot.py'),
                     '--srcdir', str(self.srcdir),
                     '--builddir', str(self.builddir_parent),
-                    '--sysroot', str(scout_sysroot),
+                    '--sysroot', str(sysroot),
                     '--tarball', str(tarball),
                     '--',
                 ] + argv,
@@ -206,7 +213,8 @@ class Environment:
             )
 
     def run_scout_builds(self, verb: str, args: List[str]) -> None:
-        self.run_in_scout(
+        self.run_in_suite(
+            'scout',
             [
                 str(self.abs_srcdir / 'build-aux' / 'scout-builds.py'),
                 '--srcdir', str(self.srcdir),
@@ -218,23 +226,12 @@ class Environment:
     def setup(self, args: List[str]) -> None:
         self.populate_depots()
 
-        if self.podman:
-            subprocess.run(
-                [
-                    'podman',
-                    'pull',
-                    self.scout_oci,
-                ],
-                check=True,
-            )
-        elif self.docker:
-            subprocess.run(
-                self.docker + [
-                    'pull',
-                    self.scout_oci,
-                ],
-                check=True,
-            )
+        for suite, image in self.oci_images.items():
+            if image:
+                if self.podman:
+                    subprocess.run(['podman', 'pull', image], check=True)
+                elif self.docker:
+                    subprocess.run(self.docker + ['pull', image], check=True)
 
         subprocess.run(
             [
@@ -308,6 +305,24 @@ class Environment:
             check=True,
         )
 
+        for suite, image in self.oci_images.items():
+            if suite == 'scout' or not image:
+                continue
+
+            self.run_in_suite(
+                suite,
+                [
+                    'meson',
+                    str(self.abs_builddir_parent / f'{suite}-x86_64'),
+                    '-Dbin=true',
+                    '-Doptimization=g',
+                    '-Dprefix=/usr',
+                    '-Dpressure_vessel=true',
+                    '-Dwarning_level=2',
+                    '-Dwerror=true',
+                ] + args,
+            )
+
         self.run_scout_builds('setup', args)
 
     def clean(self, args: List[str]) -> None:
@@ -319,6 +334,19 @@ class Environment:
                     'clean',
                 ] + args,
                 check=True,
+            )
+
+        for suite, image in self.oci_images.items():
+            if suite == 'scout' or not image:
+                continue
+
+            self.run_in_suite(
+                suite,
+                [
+                    'ninja',
+                    '-C', str(self.abs_builddir_parent / f'{suite}-x86_64'),
+                    'clean',
+                ] + args,
             )
 
         self.run_scout_builds('clean', args)
@@ -333,6 +361,18 @@ class Environment:
                 check=True,
             )
 
+        for suite, image in self.oci_images.items():
+            if suite == 'scout' or not image:
+                continue
+
+            self.run_in_suite(
+                suite,
+                [
+                    'ninja',
+                    '-C', str(self.abs_builddir_parent / f'{suite}-x86_64'),
+                ] + args,
+            )
+
         self.run_scout_builds('build', args)
 
     def test(self, args: List[str]) -> None:
@@ -343,6 +383,18 @@ class Environment:
             ] + args,
             check=True,
         )
+
+        for suite, image in self.oci_images.items():
+            if suite == 'scout' or not image:
+                continue
+
+            self.run_in_suite(
+                suite,
+                [
+                    'meson', 'test',
+                    '-C', str(self.abs_builddir_parent / f'{suite}-x86_64'),
+                ] + args,
+            )
 
         self.run_scout_builds('test', args)
 

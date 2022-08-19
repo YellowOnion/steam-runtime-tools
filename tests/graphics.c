@@ -56,18 +56,42 @@ typedef struct
   gchar **fake_icds_envp;
 } Fixture;
 
+typedef enum
+{
+  ICD_MODE_NORMAL,
+  ICD_MODE_XDG_DIRS,
+  ICD_MODE_FLATPAK,
+  ICD_MODE_EXPLICIT_DIRS,
+  ICD_MODE_EXPLICIT_FILENAMES,
+  ICD_MODE_RELATIVE_FILENAMES,
+} IcdMode;
+
 typedef struct
 {
-  enum
-  {
-    ICD_MODE_NORMAL,
-    ICD_MODE_XDG_DIRS,
-    ICD_MODE_FLATPAK,
-    ICD_MODE_EXPLICIT_DIRS,
-    ICD_MODE_EXPLICIT_FILENAMES,
-    ICD_MODE_RELATIVE_FILENAMES,
-  } icd_mode;
+  IcdMode icd_mode;
 } Config;
+
+static const char *
+icd_mode_to_string (IcdMode mode)
+{
+  switch (mode)
+    {
+#define CASE(x) \
+      case ICD_MODE_ ## x: \
+        return #x;
+
+      CASE (NORMAL)
+      CASE (XDG_DIRS)
+      CASE (FLATPAK)
+      CASE (EXPLICIT_DIRS)
+      CASE (EXPLICIT_FILENAMES)
+      CASE (RELATIVE_FILENAMES)
+
+      default:
+        g_return_val_if_reached ("?");
+#undef CASE
+    }
+}
 
 static void
 setup (Fixture *f,
@@ -269,6 +293,8 @@ test_object (Fixture *f,
   int exit_status;
   int terminating_signal;
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
   graphics = _srt_graphics_new("mock-good",
                                SRT_WINDOW_SYSTEM_GLX,
                                SRT_RENDERING_INTERFACE_GL,
@@ -382,6 +408,8 @@ test_normalize_window_system (Fixture *f,
   gsize i;
   g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
   srt_system_info_set_helpers_path (info, f->builddir);
 
   for (i = 0; i < G_N_ELEMENTS (test_vectors); i++)
@@ -450,6 +478,8 @@ test_sigusr (Fixture *f,
   g_autofree gchar *tuple = NULL;
   int exit_status;
   int terminating_signal;
+
+  g_test_message ("Entering %s", G_STRFUNC);
 
   g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
   srt_system_info_set_helpers_path (info, f->builddir);
@@ -690,6 +720,14 @@ test_icd_egl (Fixture *f,
   g_autofree gchar *resolved = NULL;
   const GList *iter;
   const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
+
+  g_test_message ("Entering %s", G_STRFUNC);
+
+  if (config != NULL)
+    g_test_message ("Mode: %s", icd_mode_to_string (config->icd_mode));
+
+  if (f->sysroot != NULL)
+    g_test_message ("Sysroot: %s", glnx_basename (f->sysroot));
 
   srt_system_info_set_environ (info, f->fake_icds_envp);
   srt_system_info_set_sysroot (info, f->sysroot);
@@ -978,6 +1016,14 @@ test_egl_external_platform (Fixture *f,
   g_autofree gchar *resolved = NULL;
   const GList *iter;
   const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
+
+  g_test_message ("Entering %s", G_STRFUNC);
+
+  if (config != NULL)
+    g_test_message ("Mode: %s", icd_mode_to_string (config->icd_mode));
+
+  if (f->sysroot != NULL)
+    g_test_message ("Sysroot: %s", glnx_basename (f->sysroot));
 
   srt_system_info_set_environ (info, f->fake_icds_envp);
   srt_system_info_set_sysroot (info, f->sysroot);
@@ -1685,9 +1731,18 @@ static void
 test_icd_vulkan_explicit_multiarch (Fixture *f,
                                     gconstpointer context)
 {
+  const Config *config = context;
   g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) icds = NULL;
   const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
+
+  g_test_message ("Entering %s", G_STRFUNC);
+
+  if (config != NULL)
+    g_test_message ("Mode: %s", icd_mode_to_string (config->icd_mode));
+
+  if (f->sysroot != NULL)
+    g_test_message ("Sysroot: %s", glnx_basename (f->sysroot));
 
   srt_system_info_set_environ (info, f->fake_icds_envp);
   srt_system_info_set_sysroot (info, f->sysroot);
@@ -1702,9 +1757,18 @@ static void
 test_icd_vulkan_implicit_multiarch (Fixture *f,
                                    gconstpointer context)
 {
+  const Config *config = context;
   g_autoptr(SrtSystemInfo) info = srt_system_info_new (NULL);
   g_autoptr(SrtObjectList) icds = NULL;
   const char * const multiarchs[] = { "x86_64-mock-abi", NULL };
+
+  g_test_message ("Entering %s", G_STRFUNC);
+
+  if (config != NULL)
+    g_test_message ("Mode: %s", icd_mode_to_string (config->icd_mode));
+
+  if (f->sysroot != NULL)
+    g_test_message ("Sysroot: %s", glnx_basename (f->sysroot));
 
   srt_system_info_set_environ (info, f->fake_icds_envp);
   srt_system_info_set_sysroot (info, f->sysroot);
@@ -2066,6 +2130,8 @@ test_layer_vulkan (Fixture *f,
   gsize i;
   const char * const multiarchs[] = { "x86_64-mock-abi", "i386-mock-abi", NULL };
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
   tmp_dir = g_dir_make_tmp ("layers-test-XXXXXX", &error);
   g_assert_no_error (error);
 
@@ -2365,6 +2431,8 @@ test_dri_debian10 (Fixture *f,
                                            "/lib/x86_64-linux-gnu/dri/radeonsi_drv_video.so",
                                            NULL};
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
   sysroot = g_build_filename (f->sysroots, "debian10", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
@@ -2377,22 +2445,26 @@ test_dri_debian10 (Fixture *f,
   srt_system_info_set_helpers_path (info, f->builddir);
 
   /* The output is guaranteed to be in aphabetical order */
+  g_test_message ("i386 DRI drivers...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes_i386, SRT_GRAPHICS_DRI_MODULE);
   check_paths_are_absolute (dri, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
+  g_test_message ("x86_64 DRI drivers...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes_x86_64, SRT_GRAPHICS_DRI_MODULE);
   check_paths_are_absolute (dri, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
   /* The output is guaranteed to be in aphabetical order */
+  g_test_message ("i386 VA-API drivers...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes_i386, SRT_GRAPHICS_VAAPI_MODULE);
   check_paths_are_absolute (va_api, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
+  g_test_message ("x86_64 VA-API drivers...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes_x86_64, SRT_GRAPHICS_VAAPI_MODULE);
   check_paths_are_absolute (va_api, SRT_GRAPHICS_VAAPI_MODULE);
@@ -2406,18 +2478,22 @@ test_dri_debian10 (Fixture *f,
    * Anyway, even if the folder had the same name as the multiarch tuple,
    * we still would be unable to get extras because the drivers that we are
    * using (e.g. libGL.so.1) are just empty files, so `elf_begin` would fail. */
+  g_test_message ("i386 DRI drivers, from cache, with extras...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (dri, dri_suffixes_i386, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
+  g_test_message ("x86_64 DRI drivers, from cache, with extras...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (dri, dri_suffixes_x86_64, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
+  g_test_message ("i386 VA-API drivers, from cache, with extras...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (va_api, va_api_suffixes_i386, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
+  g_test_message ("x86_64 VA-API drivers, from cache, with extras...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (va_api, va_api_suffixes_x86_64, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
@@ -2447,6 +2523,8 @@ test_dri_fedora (Fixture *f,
                                        "/usr/lib64/dri/radeonsi_drv_video.so",
                                        NULL};
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
   sysroot = g_build_filename (f->sysroots, "fedora", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
@@ -2458,18 +2536,22 @@ test_dri_fedora (Fixture *f,
   srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
+  g_test_message ("i386 DRI drivers...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes_32, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
+  g_test_message ("x86_64 DRI drivers...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes_64, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
+  g_test_message ("i386 VA-API drivers...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes_32, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
+  g_test_message ("x86_64 VA-API drivers...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes_64, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
@@ -2493,6 +2575,8 @@ test_dri_ubuntu16 (Fixture *f,
   const gchar *va_api_suffixes[] = {"/lib/x86_64-mock-ubuntu/dri/radeonsi_drv_video.so",
                                     NULL};
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
   sysroot = g_build_filename (f->sysroots, "ubuntu16", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
@@ -2505,18 +2589,22 @@ test_dri_ubuntu16 (Fixture *f,
   srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
+  g_test_message ("DRI drivers...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
+  g_test_message ("DRI drivers (all)...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (dri, dri_suffixes_extra, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
+  g_test_message ("VA-API drivers...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
+  g_test_message ("VA-API drivers (all)...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
@@ -2560,6 +2648,8 @@ test_dri_with_env (Fixture *f,
                                                 "/usr/lib/dri/r600_drv_video.so",
                                                 NULL};
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
 #ifndef _SRT_MULTIARCH
   g_test_skip ("Unsupported architecture");
   return;
@@ -2591,18 +2681,21 @@ test_dri_with_env (Fixture *f,
   srt_system_info_set_helpers_path (info, f->builddir);
 
   /* The output is guaranteed to be in aphabetical order */
+  g_test_message ("DRI drivers...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
   check_paths_are_absolute (dri, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
   /* The output is guaranteed to be in aphabetical order */
+  g_test_message ("VA-API drivers...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
   check_paths_are_absolute (va_api, SRT_GRAPHICS_VAAPI_MODULE);
   g_list_free_full (va_api, g_object_unref);
 
   /* Do it again, this time including the extras */
+  g_test_message ("DRI drivers (all)...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (dri, dri_suffixes_with_extras, SRT_GRAPHICS_DRI_MODULE);
   /* Minus one to not count the NULL terminator */
@@ -2610,6 +2703,7 @@ test_dri_with_env (Fixture *f,
   check_paths_are_absolute (dri, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
+  g_test_message ("VA-API drivers (all)...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_INCLUDE_ALL);
   check_list_suffixes (va_api, va_api_suffixes_with_extras, SRT_GRAPHICS_VAAPI_MODULE);
   /* Minus one to not count the NULL terminator */
@@ -2631,11 +2725,13 @@ test_dri_with_env (Fixture *f,
   envp = g_environ_setenv (envp, "LIBVA_DRIVERS_PATH", libva_combined, TRUE);
   srt_system_info_set_environ (info, envp);
 
+  g_test_message ("DRI drivers (with relative path)...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
   check_paths_are_relative (dri, SRT_GRAPHICS_DRI_MODULE);
   g_list_free_full (dri, g_object_unref);
 
+  g_test_message ("VA-API drivers (with relative path)...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
   check_paths_are_relative (va_api, SRT_GRAPHICS_VAAPI_MODULE);
@@ -2659,6 +2755,8 @@ test_dri_flatpak (Fixture *f,
                                     "/usr/lib/x86_64-mock-abi/GL/lib/dri/r600_drv_video.so",
                                     NULL};
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
   sysroot = g_build_filename (f->sysroots, "flatpak-example", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
@@ -2670,9 +2768,11 @@ test_dri_flatpak (Fixture *f,
   srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
+  g_test_message ("DRI drivers...");
   dri = srt_system_info_list_dri_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (dri, dri_suffixes, SRT_GRAPHICS_DRI_MODULE);
 
+  g_test_message ("VA-API drivers...");
   va_api = srt_system_info_list_va_api_drivers (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   check_list_suffixes (va_api, va_api_suffixes, SRT_GRAPHICS_VAAPI_MODULE);
 }
@@ -2816,6 +2916,8 @@ static void
 test_vdpau (Fixture *f,
             gconstpointer context)
 {
+  g_test_message ("Entering %s", G_STRFUNC);
+
   for (gsize i = 0; i < G_N_ELEMENTS (vdpau_test); i++)
     {
       const VdpauTest *test = &vdpau_test[i];
@@ -3116,6 +3218,8 @@ static void
 test_check_graphics (Fixture *f,
                      gconstpointer context)
 {
+  g_test_message ("Entering %s", G_STRFUNC);
+
   for (gsize i = 0; i < G_N_ELEMENTS (graphics_test); i++)
     {
       const GraphicsTest *test = &graphics_test[i];
@@ -3244,6 +3348,8 @@ test_glx_debian (Fixture *f,
   const gchar *glx_paths_x86_64[] = {"/lib/x86_64-linux-gnu/libGLX_mesa.so.0",
                                      NULL};
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
   sysroot = g_build_filename (f->sysroots, "debian10", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
@@ -3253,6 +3359,7 @@ test_glx_debian (Fixture *f,
   srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
+  g_test_message ("i386...");
   glx = srt_system_info_list_glx_icds (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   /* The icds are not provided in a guaranteed order. Sort them before checking
    * with the expectations */
@@ -3261,6 +3368,7 @@ test_glx_debian (Fixture *f,
   check_list_links (glx, glx_paths_i386, SRT_GRAPHICS_GLX_MODULE);
   g_list_free_full (glx, g_object_unref);
 
+  g_test_message ("x86_64...");
   glx = srt_system_info_list_glx_icds (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   /* The icds are not provided in a guaranteed order. Sort them before checking
    * with the expectations */
@@ -3290,6 +3398,8 @@ test_glx_container (Fixture *f,
                                      "/lib/x86_64-linux-gnu/libGLX_mesa.so.0",
                                      NULL};
 
+  g_test_message ("Entering %s", G_STRFUNC);
+
   sysroot = g_build_filename (f->sysroots, "steamrt", NULL);
   envp = g_get_environ ();
   envp = g_environ_setenv (envp, "SRT_TEST_SYSROOT", sysroot, TRUE);
@@ -3299,6 +3409,7 @@ test_glx_container (Fixture *f,
   srt_system_info_set_sysroot (info, sysroot);
   srt_system_info_set_helpers_path (info, f->builddir);
 
+  g_test_message ("i386...");
   glx = srt_system_info_list_glx_icds (info, multiarch_tuples[0], SRT_DRIVER_FLAGS_NONE);
   /* The icds are not provided in a guaranteed order. Sort them before checking
    * with the expectations */
@@ -3307,6 +3418,7 @@ test_glx_container (Fixture *f,
   check_list_links (glx, glx_paths_i386, SRT_GRAPHICS_GLX_MODULE);
   g_list_free_full (glx, g_object_unref);
 
+  g_test_message ("x86_64...");
   glx = srt_system_info_list_glx_icds (info, multiarch_tuples[1], SRT_DRIVER_FLAGS_NONE);
   /* The icds are not provided in a guaranteed order. Sort them before checking
    * with the expectations */

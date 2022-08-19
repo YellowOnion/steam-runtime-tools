@@ -29,7 +29,6 @@ variables:
         meson
         pandoc
         python3
-        python3.5
         zlib1g
 
     IMAGES_DOWNLOAD_URL: ''
@@ -37,10 +36,17 @@ variables:
 
     DEBIAN_FRONTEND: noninteractive
 
-    SCOUT_DOCKER_REGISTRY: registry.gitlab.steamos.cloud
+    SCOUT_DOCKER_REGISTRY: '${CI_REGISTRY}'
     SCOUT_DOCKER_IMAGE: steamrt/scout/sdk:beta
     SCOUT_I386_DOCKER_IMAGE: steamrt/scout/sdk/i386:beta
     SCOUT_APT_SOURCES_FILE: ''
+    # There's no public Docker image for heavy right now
+    HEAVY_DOCKER_REGISTRY: ''
+    HEAVY_DOCKER_IMAGE: ''
+    SOLDIER_DOCKER_REGISTRY: '${CI_REGISTRY}'
+    SOLDIER_DOCKER_IMAGE: steamrt/soldier/sdk:beta
+    SNIPER_DOCKER_REGISTRY: '${CI_REGISTRY}'
+    SNIPER_DOCKER_IMAGE: steamrt/sniper/sdk:beta
     DEVEL_DOCKER_REGISTRY: ''
     DEVEL_DOCKER_IMAGE: ''
     # Set non-empty to allow
@@ -117,6 +123,29 @@ package:i386:
         STEAM_CI_DEB_BUILD: any     # debuild --build=any, aka -B
         STEAM_CI_INSTALL_SCRIPT: |
             apt-get -y install pkg-create-dbgsym
+
+package:heavy:
+    extends: .srt_build_package
+    rules:
+        - if: '$HEAVY_DOCKER_REGISTRY != "" && $HEAVY_DOCKER_IMAGE != ""'
+    variables:
+        BUILD_IMAGE: '${HEAVY_DOCKER_REGISTRY}/${HEAVY_DOCKER_IMAGE}'
+        DEB_BUILD_SNAPSHOT_RELEASE_TAGS: 'yes'
+        STEAM_CI_DEB_BUILD: full    # debuild --build=full, aka -F
+
+package:soldier:
+    extends: .srt_build_package
+    variables:
+        BUILD_IMAGE: '${SOLDIER_DOCKER_REGISTRY}/${SOLDIER_DOCKER_IMAGE}'
+        DEB_BUILD_SNAPSHOT_RELEASE_TAGS: 'yes'
+        STEAM_CI_DEB_BUILD: full    # debuild --build=full, aka -F
+
+package:sniper:
+    extends: .srt_build_package
+    variables:
+        BUILD_IMAGE: '${SNIPER_DOCKER_REGISTRY}/${SNIPER_DOCKER_IMAGE}'
+        DEB_BUILD_SNAPSHOT_RELEASE_TAGS: 'yes'
+        STEAM_CI_DEB_BUILD: full    # debuild --build=full, aka -F
 
 build:devel:
     stage: build

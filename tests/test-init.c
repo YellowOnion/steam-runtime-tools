@@ -42,10 +42,13 @@ static FILE *original_stdout = NULL;
 static void
 print_to_original_stdout (const char *message)
 {
-  if (original_stdout != NULL)
-    fputs (message, original_stdout);
-  else
-    fputs (message, stdout);
+  FILE *fh = original_stdout;
+
+  if (fh == NULL)
+    fh = stdout;
+
+  fputs (message, fh);
+  fflush (fh);
 }
 #endif
 

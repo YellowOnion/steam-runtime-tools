@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220803.1) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220823.0) steamrt; urgency=medium
 
   * pressure-vessel: Preserve X11 display number instead of redirecting
     it to :99. This avoids X11 being broken by an unrelated X display :99
@@ -7,8 +7,13 @@ steam-runtime-tools (0.20220803.1) UNRELEASED; urgency=medium
     (steamrt/tasks#149)
   * pressure-vessel: Avoid startup failure with --filesystem=/overrides
   * build: Require Meson 0.56.2 backport, update build system accordingly
+  * bin: Document that s-r-identify-library-api --directory only looks at
+    symlinks, not regular files
+  * tests: Fix test failure with glibc 2.34+
+  * tests: Fix test failures with older GLib on Steam Runtime 1½ 'heavy'
+  * tests: Fix test failure with older GLib on Steam Runtime 2 'soldier'
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 11 Aug 2022 20:10:59 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 23 Aug 2022 17:18:43 +0100
 
 steam-runtime-tools (0.20220803.0) steamrt; urgency=medium
 

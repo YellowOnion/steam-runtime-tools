@@ -402,16 +402,10 @@ of the compatibility tool used to run a game:
 
 * `container-runtime` for "Steam Linux Runtime - soldier" or
     "Steam Linux Runtime - sniper"
-    (as of July 2022, this feature is available in the `client_beta`
-    branch of these compatibility tools)
 
-* `proton` for any version of Proton
-    (as of July 2022, this feature is available in the `bleeding-edge`
-    branch of "Proton - Experimental")
+* `proton` for any version of Proton that supports it (7.0 or later)
 
 * `scout-in-container` for "Steam Linux Runtime"
-    (as of July 2022, this feature is available in the `client_beta`
-    branch of this compatibility tool)
 
 When running games through Steam, you can either export something like
 `STEAM_COMPAT_LAUNCHER_SERVICE=container-runtime` for the whole Steam

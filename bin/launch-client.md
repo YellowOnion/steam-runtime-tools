@@ -372,5 +372,23 @@ then you can attach a debugger with commands like:
     (gdb) thread apply all bt
     (gdb) detach
 
+If a game is crashing on startup, this can be debugged by setting its
+Steam Launch Options to
+
+    SRT_LAUNCHER_SERVICE_STOP_ON_EXIT=0 STEAM_COMPAT_LAUNCHER_SERVICE=proton %command%
+
+and then running debugging commands in its Proton environment with
+commands like:
+
+    steam-runtime-launch-client \
+        --bus-name=com.steampowered.App312990 \
+        -- \
+        wine64 winedbg Expendabros.exe
+
+To exit the command server when finished, use a command like:
+
+    steam-runtime-launch-client \
+        --bus-name=com.steampowered.App312990 \
+        --terminate
 
 <!-- vim:set sw=4 sts=4 et: -->

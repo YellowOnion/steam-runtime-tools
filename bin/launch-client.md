@@ -326,6 +326,12 @@ Any value less than 128
 
 # EXAMPLES
 
+A copy of **steam-runtime-launch-client** can be found in
+`~/.steam/root/ubuntu12_32/steam-runtime/amd64/usr/bin/`,
+`.../steamapps/common/SteamLinuxRuntime_soldier/pressure-vessel/bin/`
+or
+`.../steamapps/common/SteamLinuxRuntime_sniper/pressure-vessel/bin/`.
+
 For a Steam game that runs under Proton 7.0 or later, if you set its
 Steam Launch Options to
 

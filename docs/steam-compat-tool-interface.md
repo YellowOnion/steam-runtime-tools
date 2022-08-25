@@ -177,7 +177,8 @@ as shown here.)
 
 ## Launch options
 
-If a Steam game has user-specified launch options configured in its
+If a Steam game or a shortcut to a non-Steam game
+has user-specified launch options configured in its
 Properties, and they contain the special token `%command%`, then
 `%command%` is replaced by the entire command-line built up from the
 compatibility tools. For example, if a compat tool named `Inner` requires
@@ -197,19 +198,10 @@ then the final command line will look something like this:
 (In reality it would all be one line, rather than having escaped newlines
 as shown here.)
 
-If the user-specified launch options for a Steam game do not contain
+If the user-specified launch options do not contain
 `%command%`, then they are simply appended to the command-line. For
 example, setting the launch options to `--debug` is equivalent to
 `%command% --debug`.
-
-Shortcuts for non-Steam games do not currently implement the special
-handling for `%command%`: the configured launch options are simply
-appended to the command-line, regardless of whether they contain
-`%command%` or not.
-Feature request [steam-for-linux#6046][] is a request for this
-limitation to be removed.
-
-[steam-for-linux#6046]: https://github.com/ValveSoftware/steam-for-linux/issues/6046
 
 Please note that not all invocations of compatibility tools take the
 user-specified launch options into account: they are used when running
@@ -522,7 +514,4 @@ main executable, but can be reconfigured through the shortcut's properties.
 Steam Linux Runtime (pressure-vessel) containers will not work as expected
 unless this is set to the game's top-level directory.
 
-Launch options are appended to the command-line. The special token
-`%command%` in Steam games' launch options is not currently used here,
-but feature request [steam-for-linux#6046][] is a request for this
-limitation to be removed.
+[Launch options](#launch-options) behave the same as for Steam games.

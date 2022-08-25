@@ -125,7 +125,6 @@ like:
 
     ~/.steam/root/ubuntu12_32/steam-runtime/amd64/bin/steam-runtime-launch-client \
         --bus-name=com.steampowered.App312990 \
-        --directory="" \
         -- \
         .../Proton\ -\ Experimental/files/bin/wine64 winedbg Expendabros.exe
 

@@ -346,7 +346,6 @@ like:
 
     $ steam-runtime-launch-client \
         --bus-name=com.steampowered.App312990 \
-        --directory="" \
         -- \
         wine winedbg notepad.exe
 

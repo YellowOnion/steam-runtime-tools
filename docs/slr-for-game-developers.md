@@ -462,7 +462,6 @@ and then connect to one of them with a command like:
 ```
 $ .../SteamLinuxRuntime_soldier/pressure-vessel/bin/steam-runtime-launch-client \
     --bus-name=com.steampowered.App123 \
-    --directory='' \
     -- \
     bash
 ```
@@ -494,7 +493,6 @@ with a command like:
 ```
 $ .../SteamLinuxRuntime_soldier/pressure-vessel/bin/steam-runtime-launch-client \
     --bus-name=com.steampowered.App123 \
-    --directory='' \
     -- \
     gdbserver 127.0.0.1:12345 ./my-game-executable
 ```

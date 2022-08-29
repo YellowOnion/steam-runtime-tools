@@ -114,25 +114,6 @@ Any nonzero status
 
 # EXAMPLE
 
-When this tool has been integrated into Steam and Proton, if a Proton
-game is crashing on startup, it will be possible to set its Steam
-launch options to
-
-    SRT_LAUNCHER_SERVICE_STOP_ON_EXIT=0 STEAM_COMPAT_LAUNCHER_SERVICE=proton %command%
-
-and then run debugging commands in its Proton environment with a command
-like:
-
-    ~/.steam/root/ubuntu12_32/steam-runtime/amd64/bin/steam-runtime-launch-client \
-        --bus-name=com.steampowered.App312990 \
-        --directory="" \
-        -- \
-        .../Proton\ -\ Experimental/files/bin/wine64 winedbg Expendabros.exe
-
-To exit the command server when finished, use a command like:
-
-    ~/.steam/root/ubuntu12_32/steam-runtime/amd64/bin/steam-runtime-launch-client \
-        --bus-name=com.steampowered.App312990 \
-        --terminate
+Please see **steam-runtime-launch-client**(1).
 
 <!-- vim:set sw=4 sts=4 et: -->

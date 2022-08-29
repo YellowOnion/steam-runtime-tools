@@ -323,8 +323,14 @@ Any value less than 128
 
 # EXAMPLES
 
-For a Steam game that runs under Proton, if you set its Steam
-Launch Options to
+A copy of **steam-runtime-launch-client** can be found in
+`~/.steam/root/ubuntu12_32/steam-runtime/amd64/usr/bin/`,
+`.../steamapps/common/SteamLinuxRuntime_soldier/pressure-vessel/bin/`
+or
+`.../steamapps/common/SteamLinuxRuntime_sniper/pressure-vessel/bin/`.
+
+For a Steam game that runs under Proton 7.0 or later, if you set its
+Steam Launch Options to
 
     STEAM_COMPAT_LAUNCHER_SERVICE=proton %command%
 
@@ -337,14 +343,8 @@ like:
 
     $ steam-runtime-launch-client \
         --bus-name=com.steampowered.App312990 \
-        --directory="" \
         -- \
         wine winedbg notepad.exe
-
-(As of July 2022, this requires configuring it to run under
-**Proton - Experimental** and selecting the **bleeding-edge** beta branch,
-and also changing the options of **Steam Linux Runtime - soldier** to
-select the **client_beta** branch.)
 
 Similarly, for a Steam game that runs under the "Steam Linux Runtime"
 compatibility tool, if you set its Steam Launch Options to
@@ -369,9 +369,23 @@ then you can attach a debugger with commands like:
     (gdb) thread apply all bt
     (gdb) detach
 
-(As of July 2022, this requires configuring it to run under
-**Steam Linux Runtime** and selecting the **client_beta** beta branch,
-and also changing the options of **Steam Linux Runtime - soldier** to
-select the **client_beta** branch.)
+If a game is crashing on startup, this can be debugged by setting its
+Steam Launch Options to
+
+    SRT_LAUNCHER_SERVICE_STOP_ON_EXIT=0 STEAM_COMPAT_LAUNCHER_SERVICE=proton %command%
+
+and then running debugging commands in its Proton environment with
+commands like:
+
+    steam-runtime-launch-client \
+        --bus-name=com.steampowered.App312990 \
+        -- \
+        wine64 winedbg Expendabros.exe
+
+To exit the command server when finished, use a command like:
+
+    steam-runtime-launch-client \
+        --bus-name=com.steampowered.App312990 \
+        --terminate
 
 <!-- vim:set sw=4 sts=4 et: -->

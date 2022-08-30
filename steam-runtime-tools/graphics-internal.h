@@ -290,12 +290,14 @@ G_GNUC_INTERNAL
 GList *_srt_load_egl_things (GType which,
                              const char *helpers_path,
                              const char *sysroot,
+                             int sysroot_fd,
                              gchar **envp,
                              const char * const *multiarch_tuples,
                              SrtCheckFlags check_flags);
 G_GNUC_INTERNAL
 GList *_srt_load_vulkan_icds (const char *helpers_path,
                               const char *sysroot,
+                              int sysroot_fd,
                               gchar **envp,
                               const char * const *multiarch_tuples,
                               SrtCheckFlags check_flags);
@@ -312,6 +314,7 @@ GList *_srt_list_graphics_modules (const gchar *sysroot,
 G_GNUC_INTERNAL
 GList *_srt_load_vulkan_layers_extended (const char *helpers_path,
                                          const char *sysroot,
+                                         int sysroot_fd,
                                          gchar **envp,
                                          const char * const *multiarch_tuples,
                                          gboolean explicit,

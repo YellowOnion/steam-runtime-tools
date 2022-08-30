@@ -911,6 +911,8 @@ get_glvnd_datadir (void)
  * @helpers_path: (nullable): An optional path to find "inspect-library"
  *  helper, PATH is used if %NULL
  * @sysroot: (not nullable): The root directory, usually `/`
+ * @sysroot_fd: A file descriptor opened on @sysroot, or negative to
+ *  reopen it
  * @envp: (array zero-terminated=1) (not nullable): Behave as though `environ`
  *  was this array
  * @multiarch_tuples: (nullable): If not %NULL, and a Flatpak environment
@@ -931,6 +933,7 @@ GList *
 _srt_load_egl_things (GType which,
                       const char *helpers_path,
                       const char *sysroot,
+                      int sysroot_fd,
                       gchar **envp,
                       const char * const *multiarch_tuples,
                       SrtCheckFlags check_flags)
@@ -1007,7 +1010,7 @@ _srt_load_egl_things (GType which,
         {
           g_auto(GStrv) dirs = g_strsplit (value, G_SEARCHPATH_SEPARATOR_S, -1);
 
-          load_json_dirs (sysroot, dirs, NULL, _srt_indirect_strcmp0,
+          load_json_dirs (sysroot, sysroot_fd, dirs, NULL, _srt_indirect_strcmp0,
                           loader_cb, &ret);
         }
       else if (which == SRT_TYPE_EGL_ICD

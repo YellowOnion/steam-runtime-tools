@@ -3154,6 +3154,7 @@ srt_system_info_list_egl_icds (SrtSystemInfo *self,
       self->icds.egl = _srt_load_egl_things (SRT_TYPE_EGL_ICD,
                                              self->helpers_path,
                                              self->sysroot,
+                                             self->sysroot_fd,
                                              self->env,
                                              multiarch_tuples,
                                              self->check_flags);
@@ -3221,6 +3222,7 @@ srt_system_info_list_egl_external_platforms (SrtSystemInfo *self,
       self->egl_ext_platform.list = _srt_load_egl_things (SRT_TYPE_EGL_EXTERNAL_PLATFORM,
                                                           self->helpers_path,
                                                           self->sysroot,
+                                                          self->sysroot_fd,
                                                           self->env,
                                                           multiarch_tuples,
                                                           self->check_flags);
@@ -3287,7 +3289,7 @@ srt_system_info_list_vulkan_icds (SrtSystemInfo *self,
         stored_multiarch_tuples = srt_system_info_dup_multiarch_tuples (self);
 
       self->icds.vulkan = _srt_load_vulkan_icds (self->helpers_path, self->sysroot,
-                                                 self->env,
+                                                 self->sysroot_fd, self->env,
                                                  multiarch_tuples == NULL ?
                                                    (const char * const *) stored_multiarch_tuples :
                                                    multiarch_tuples,
@@ -3342,6 +3344,7 @@ srt_system_info_list_explicit_vulkan_layers (SrtSystemInfo *self)
       g_assert (self->layers.vulkan_explicit == NULL);
       self->layers.vulkan_explicit = _srt_load_vulkan_layers_extended (self->helpers_path,
                                                                        self->sysroot,
+                                                                       self->sysroot_fd,
                                                                        self->env,
                                                                        (const char * const *) multiarch_tuples,
                                                                        TRUE,
@@ -3396,6 +3399,7 @@ srt_system_info_list_implicit_vulkan_layers (SrtSystemInfo *self)
       g_assert (self->layers.vulkan_implicit == NULL);
       self->layers.vulkan_implicit = _srt_load_vulkan_layers_extended (self->helpers_path,
                                                                        self->sysroot,
+                                                                       self->sysroot_fd,
                                                                        self->env,
                                                                        (const char * const *) multiarch_tuples,
                                                                        FALSE,

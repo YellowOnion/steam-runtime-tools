@@ -123,3 +123,13 @@ install_data(
   'libcurl4.symbols',
   install_dir : 'lib/steamrt/libcurl-compat/expectations/x86_64-linux-gnu',
 )
+
+if get_option('installed_tests')
+  install_data(
+    'libc6.symbols',
+    install_dir : tests_dir / 'libcurl-compat',
+  )
+endif
+
+# Mock libraries and helper executables used for regression testing
+subdir('test-fixtures')

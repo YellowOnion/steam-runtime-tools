@@ -114,17 +114,6 @@ test_utils_static_libsteamrt_dep = declare_dependency(
   link_with : test_utils,
 )
 
-tests_dir = join_paths(
-  get_option('libexecdir'),
-  'installed-tests',
-  meson.project_name() + '-' + api_major,
-)
-tests_metadir = join_paths(
-  get_option('datadir'),
-  'installed-tests',
-  meson.project_name() + '-' + api_major,
-)
-
 install_subdir('expectations', install_dir : tests_dir)
 install_subdir('expectations_with_missings', install_dir : tests_dir)
 # To avoid being dependent on readdir() order, don't include more

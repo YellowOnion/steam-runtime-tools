@@ -125,6 +125,7 @@ override_dh_shlibdeps:
 		$(NULL)
 	dh_shlibdeps \
 		-Xlibsteam-runtime-shim-libcurl \
+		-Xusr/libexec/installed-tests/steam-runtime-tools-0/libcurl-compat \
 		$(NULL)
 
 override_dh_link:

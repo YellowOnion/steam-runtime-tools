@@ -1,0 +1,12 @@
+/*
+ * Copyright © 2022 Collabora Ltd.
+ * SPDX-License-Identifier: MIT
+ *
+ * GNU version script providing an ABI that is incompatible with all known
+ * versions of libcurl.
+ */
+
+CURL_FROM_THE_FUTURE {
+    global:
+        curl_*;
+};

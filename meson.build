@@ -366,6 +366,17 @@ pkglibexecdir = join_paths(
 # and that libdir is relative
 pkglibexec_rpath = '${ORIGIN}/../../' + pkglibdir
 
+tests_dir = join_paths(
+  get_option('libexecdir'),
+  'installed-tests',
+  meson.project_name() + '-' + api_major,
+)
+tests_metadir = join_paths(
+  get_option('datadir'),
+  'installed-tests',
+  meson.project_name() + '-' + api_major,
+)
+
 subdir('steam-runtime-tools')
 
 if multiarch != ''

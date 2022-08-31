@@ -164,6 +164,7 @@ build:devel:
 
             mkdir -p _build
             meson \
+                -Dlibcurl_compat=true \
                 -Dman=enabled \
                 --werror \
                 _build/devel
@@ -206,6 +207,7 @@ build:clang:
                 -Db_lundef=false \
                 -Db_sanitize=address,undefined \
                 -Dgtk_doc=disabled \
+                -Dlibcurl_compat=true \
                 --werror \
                 _build/clang-asan
             ninja -C _build/clang-asan

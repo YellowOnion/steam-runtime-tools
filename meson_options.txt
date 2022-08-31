@@ -30,6 +30,13 @@ option(
 )
 
 option(
+  'libcurl_compat',
+  type : 'boolean',
+  value : false,
+  description : 'enable libcurl.so.4 / libcurl.so.3 compatibility shim',
+)
+
+option(
   'man',
   type : 'feature',
   value : 'auto',

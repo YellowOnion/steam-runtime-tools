@@ -376,6 +376,10 @@ if get_option('bin')
   subdir('bin')
 endif
 
+if get_option('libcurl_compat')
+  subdir('libcurl-compat')
+endif
+
 if get_option('pressure_vessel') and get_option('bin')
   subdir('pressure-vessel')
 endif

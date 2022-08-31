@@ -1,0 +1,12 @@
+/*
+ * Copyright © 2021 Collabora Ltd.
+ * SPDX-License-Identifier: MIT
+ *
+ * GNU version script providing an ABI that mimics libcurl-gnutls.so.3
+ * as provided by Debian.
+ */
+
+CURL_GNUTLS_3 {
+    global:
+        curl_*;
+};

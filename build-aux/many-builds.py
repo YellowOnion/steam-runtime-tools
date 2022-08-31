@@ -240,6 +240,9 @@ class Environment:
                 '-Db_lundef=false',
                 '-Db_sanitize=address,undefined',
                 '-Dbin=true',
+                # libcurl_compat defaults to false, but for developer builds
+                # we want it true so we can get more test coverage
+                '-Dlibcurl_compat=true',
                 '-Doptimization=g',
                 '-Dprefix=/usr',
                 ('-Dtest_containers_dir='
@@ -255,6 +258,7 @@ class Environment:
                 'meson',
                 str(self.abs_builddir_parent / 'host-no-asan'),
                 '-Dbin=true',
+                '-Dlibcurl_compat=true',
                 '-Doptimization=g',
                 '-Dprefix=/usr',
                 ('-Dtest_containers_dir='
@@ -271,6 +275,7 @@ class Environment:
                 str(self.abs_builddir_parent / 'coverage'),
                 '-Db_coverage=true',
                 '-Dbin=true',
+                '-Dlibcurl_compat=true',
                 '-Doptimization=g',
                 '-Dpressure_vessel=true',
                 '-Dprefix=/usr',
@@ -298,6 +303,7 @@ class Environment:
                 '-Db_lundef=false',
                 '-Db_sanitize=address,undefined',
                 '-Dbin=true',
+                '-Dlibcurl_compat=true',
                 '-Doptimization=g',
                 '-Dprefix=/usr',
                 '-Dwarning_level=3',
@@ -316,6 +322,7 @@ class Environment:
                     'meson',
                     str(self.abs_builddir_parent / f'{suite}-x86_64'),
                     '-Dbin=true',
+                    '-Dlibcurl_compat=true',
                     '-Doptimization=g',
                     '-Dprefix=/usr',
                     '-Dpressure_vessel=true',

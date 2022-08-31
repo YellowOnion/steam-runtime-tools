@@ -10,12 +10,13 @@ Files:
  build-aux/many-builds.md
  docs/reference/version.xml.in
  helpers/shader.*
+ libcurl-compat/README.md
  tests/template.test.in
  tests/*.json
  tests/*/*.json
  tests/*/*.symbols
  .gitlab/issue_templates/*
-Copyright: 2019-2021 Collabora Ltd.
+Copyright: 2019-2022 Collabora Ltd.
 License: MIT
 
 Files:

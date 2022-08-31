@@ -1,0 +1,17 @@
+/*
+ * Copyright © 2021 Collabora Ltd.
+ * SPDX-License-Identifier: MIT
+ *
+ * GNU version script providing an ABI that exports both the
+ * ABI of libcurl-gnutls.so.* in Debian, and the upstream equivalent.
+ */
+
+CURL_GNUTLS_3 {
+    global:
+        curl_*;
+};
+
+CURL_GNUTLS_4 {
+    global:
+        curl_*;
+};

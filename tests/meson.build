@@ -184,7 +184,9 @@ foreach test_info : tests
   if get_option('installed_tests')
     test_conf = configuration_data()
     test_conf.set('tests_dir', join_paths(get_option('prefix'), tests_dir))
+    test_conf.set('wrapper', '')
     test_conf.set('program', 'test-' + test_name)
+    test_conf.set('args', '--tap')
     configure_file(
       input: files('template.test.in'),
       output: test_name + '.test',

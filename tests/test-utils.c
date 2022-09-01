@@ -119,6 +119,7 @@ _srt_global_setup_sysroots (const char *argv0)
   g_autofree gchar *generate_sysroots = NULL;
   g_autofree gchar *out = NULL;
   g_autofree gchar *err = NULL;
+  g_autofree gchar *python3 = NULL;
   const char *argv[] =
   {
     _SRT_PYTHON,
@@ -142,6 +143,17 @@ _srt_global_setup_sysroots (const char *argv0)
 
   if (srcdir == NULL)
     srcdir = g_path_get_dirname (argv0);
+
+  if (!g_file_test (_SRT_PYTHON, G_FILE_TEST_IS_EXECUTABLE))
+    {
+      python3 = g_find_program_in_path ("python3.5");
+
+      if (python3 == NULL)
+        python3 = g_find_program_in_path ("python3");
+
+      if (python3 != NULL)
+        argv[0] = python3;
+    }
 
   generate_sysroots = g_build_filename (srcdir, "generate-sysroots.py", NULL);
   argv[1] = generate_sysroots;

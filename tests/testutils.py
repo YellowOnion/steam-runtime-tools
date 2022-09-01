@@ -95,15 +95,19 @@ class BaseTest(unittest.TestCase):
             'G_TEST_SRCDIR',
             os.path.abspath(os.path.dirname(__file__)),
         )
-        cls.top_srcdir = os.path.dirname(os.path.dirname(cls.G_TEST_SRCDIR))
+        cls.top_srcdir = os.getenv(
+            'SRT_TEST_TOP_SRCDIR',
+            os.path.abspath(os.path.dirname(os.path.dirname(__file__))),
+        )
         cls.G_TEST_BUILDDIR = os.getenv(
             'G_TEST_BUILDDIR',
             os.path.abspath(
-                os.path.join(os.path.dirname(__file__), '..', '..', '_build'),
+                os.path.join(os.path.dirname(__file__)),
             ),
         )
-        cls.top_builddir = os.path.dirname(
-            os.path.dirname(cls.G_TEST_BUILDDIR)
+        cls.top_builddir = os.getenv(
+            'SRT_TEST_TOP_BUILDDIR',
+            os.path.abspath(os.path.dirname(os.path.dirname(__file__))),
         )
 
         cls.tmpdir = tempfile.TemporaryDirectory()

@@ -429,6 +429,14 @@ class Environment:
         print('To upload to a test machine:')
         print(
             'rsync -avzP --delete {}/ '
+            'machine:tmp/steam-runtime-tools-tests/'.format(
+                self.builddir_parent
+                / 'scout-DESTDIR/usr/libexec/installed-tests'
+                / 'steam-runtime-tools-0'
+            )
+        )
+        print(
+            'rsync -avzP --delete {}/ '
             'machine:.../steamapps/common/'
             'SteamLinuxRuntime_soldier/pressure-vessel/'.format(pv)
         )

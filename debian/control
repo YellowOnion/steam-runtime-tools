@@ -5,6 +5,7 @@ Maintainer: Simon McVittie <smcv@collabora.com>
 Standards-Version: 4.3.0
 Build-Depends:
  base-files (>= 6.5ubuntu6.8+steamrt1.2),
+ chrpath,
  debhelper (>= 9),
  g++ (>= 4:4.8) | g++-4.8,
  gcc (>= 4:4.8) | gcc-4.8,

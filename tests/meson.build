@@ -454,6 +454,12 @@ test_scripts = [
   {'name': 'check-sh.sh'},
 ]
 
+if get_option('libcurl_compat')
+  test_scripts += [
+    {'name': 'libcurl-compat.py'},
+  ]
+endif
+
 foreach test_info : test_scripts
   test_name = test_info['name']
   program = files(test_name)

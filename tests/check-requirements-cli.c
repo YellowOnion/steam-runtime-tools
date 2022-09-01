@@ -208,7 +208,8 @@ test_help_and_version (Fixture *f,
   g_assert_true (g_utf8_validate (output, -1, NULL));
   g_assert_nonnull (diagnostics);
 
-  g_assert_nonnull (strstr (output, VERSION));
+  if (g_getenv ("SRT_TEST_UNINSTALLED") != NULL)
+    g_assert_nonnull (strstr (output, VERSION));
 
   g_free (output);
   g_free (diagnostics);

@@ -27,7 +27,12 @@ test_env.set('SRT_TEST_TOP_BUILDDIR', meson.project_build_root())
 test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
 test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
 test_env.set('SRT_HELPERS_PATH', join_paths(meson.current_build_dir(), '..', 'helpers'))
+test_env.set('SRT_TEST_UNINSTALLED', 'yes')
 test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
+
+if multiarch != ''
+  test_env.set('SRT_TEST_MULTIARCH', multiarch)
+endif
 
 no_activation_session_conf = files('session.conf')
 
@@ -447,6 +452,57 @@ foreach test_name : lint_scripts
     protocol : 'tap',
     timeout : timeout,
   )
+endforeach
+
+install_data(
+  'find-python.sh',
+  'testutils.py',
+  install_dir : tests_dir,
+)
+
+test_scripts = [
+  {'name': 'check-python.py'},
+  {'name': 'check-sh.sh'},
+]
+
+foreach test_info : test_scripts
+  test_name = test_info['name']
+  program = files(test_name)
+  wrapper = ''
+  test_argv = []
+  timeout = 30
+
+  if test_name.endswith('.py')
+    test_argv += [program]
+    program = python
+    wrapper = get_option('prefix') / tests_dir / 'find-python.sh'
+  endif
+
+  test(
+    test_name, program,
+    args : test_argv,
+    env : test_env,
+    protocol : 'tap',
+    timeout : timeout,
+  )
+
+  if get_option('installed_tests')
+    install_data(
+      test_name,
+      install_dir : tests_dir,
+    )
+    test_conf = configuration_data()
+    test_conf.set('tests_dir', join_paths(get_option('prefix'), tests_dir))
+    test_conf.set('wrapper', wrapper)
+    test_conf.set('program', test_name)
+    test_conf.set('args', '')
+    configure_file(
+      input: files('template.test.in'),
+      output: test_name + '.test',
+      install_dir: tests_metadir,
+      configuration: test_conf
+    )
+  endif
 endforeach
 
 if get_option('pressure_vessel') and get_option('bin')

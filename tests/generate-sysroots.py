@@ -454,7 +454,7 @@ with open('debian10/expectations/MangoHud.json', 'w') as writer:
   "layer" : {
     "name" : "VK_LAYER_MANGOHUD_overlay",
     "type" : "GLOBAL",
-    "library_path" : "/usr/$LIB/libMangoHud.so",
+    "library_path" : "/usr/\\$LIB/libMangoHud.so",
     "api_version" : "1.2.135",
     "implementation_version" : "1",
     "description" : "Vulkan Hud Overlay",
@@ -783,7 +783,7 @@ with open('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/implicit_lay
         "name": "VK_LAYER_MANGOHUD_overlay",
         "type": "GLOBAL",
         "api_version": "1.2.135",
-        "library_path": "/usr/lib/extensions/vulkan/\$LIB/mangohud/libMangoHud.so",
+        "library_path": "/usr/lib/extensions/vulkan/\\$LIB/mangohud/libMangoHud.so",
         "description": "Vulkan Hud Overlay",
         "implementation_version": "1",
         "functions": {
@@ -821,7 +821,7 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/implicit_layer.d/run
         "name": "VK_LAYER_RUNTIME_implicit",
         "type": "GLOBAL",
         "api_version": "1.2.135",
-        "library_path": "/usr/\$LIB/implicit/libLayer.so",
+        "library_path": "/usr/\\$LIB/implicit/libLayer.so",
         "description": "Runtime's implicit layer",
         "implementation_version": "1",
         "functions": {
@@ -871,7 +871,7 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/implicit_layer.d/
         "name": "VK_LAYER_GLEXT_implicit",
         "type": "GLOBAL",
         "api_version": "1.2.135",
-        "library_path": "/usr/\$LIB/GL/implicit/libLayer.so",
+        "library_path": "/usr/\\$LIB/GL/implicit/libLayer.so",
         "description": "GL extension's implicit layer",
         "implementation_version": "1",
         "functions": {

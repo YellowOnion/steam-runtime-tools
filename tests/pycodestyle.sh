@@ -51,6 +51,7 @@ if "${PYCODESTYLE}" \
     ./build-aux/*.py \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \
+    ./tests/*.py \
     ./tests/*/*.py \
     >&2; then
     echo "ok 1 - $PYCODESTYLE reported no issues"

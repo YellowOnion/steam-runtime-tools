@@ -30,12 +30,20 @@ import textwrap
 
 parser = argparse.ArgumentParser()
 parser.add_argument("path")
-parser.add_argument('-i', '--install', action='store_true',
-                    help='Install the sysroot in the provided [path], using $MESON_INSTALL_DESTDIR_PREFIX as a prefix')
+parser.add_argument(
+    '-i', '--install', action='store_true',
+    help=(
+        'Install the sysroot in the provided [path], using '
+        '$MESON_INSTALL_DESTDIR_PREFIX as a prefix'
+    )
+)
 args = parser.parse_args()
 
 if args.install:
-    full_path = os.path.join(os.environ['MESON_INSTALL_DESTDIR_PREFIX'], args.path.lstrip("/"))
+    full_path = os.path.join(
+        os.environ['MESON_INSTALL_DESTDIR_PREFIX'],
+        args.path.lstrip("/"),
+    )
 else:
     full_path = args.path
 
@@ -275,7 +283,7 @@ ubuntu16/usr/lib/x86_64-mock-ubuntu/libva.so.1
 ubuntu16/usr/lib/x86_64-mock-ubuntu/mesa/libGL.so.1
 ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau/libvdpau_r600.so.1.0.0
 ubuntu16/usr/lib/x86_64-mock-ubuntu/vdpau/libvdpau_radeonsi.so.1.0.0
-'''
+'''     # noqa
 
 for name in files.split():
     os.makedirs(os.path.dirname(name), mode=0o755, exist_ok=True)
@@ -388,7 +396,7 @@ with open('debian10/custom_path/Single-good-layer.json', 'w') as writer:
       "DISABLE_LAYER_OVERLAY_1" : ""
     }
   }
-}''')
+}''')       # noqa
 
 with open('debian10/expectations/MultiLayers_part1.json', 'w') as writer:
     writer.write('''\
@@ -454,7 +462,7 @@ with open('debian10/expectations/MangoHud.json', 'w') as writer:
   "layer" : {
     "name" : "VK_LAYER_MANGOHUD_overlay",
     "type" : "GLOBAL",
-    "library_path" : "/usr/$LIB/libMangoHud.so",
+    "library_path" : "/usr/\\$LIB/libMangoHud.so",
     "api_version" : "1.2.135",
     "implementation_version" : "1",
     "description" : "Vulkan Hud Overlay",
@@ -471,7 +479,10 @@ with open('debian10/expectations/MangoHud.json', 'w') as writer:
   }
 }''')
 
-with open('debian10/usr/local/etc/vulkan/explicit_layer.d/VkLayer_MESA_overlay.json', 'w') as writer:
+with open(
+    'debian10/usr/local/etc/vulkan/explicit_layer.d/VkLayer_MESA_overlay.json',
+    'w'
+) as writer:
     writer.write('''\
 {
   "file_format_version" : "1.0.0",
@@ -485,7 +496,9 @@ with open('debian10/usr/local/etc/vulkan/explicit_layer.d/VkLayer_MESA_overlay.j
   }
 }''')
 
-with open('debian10/usr/share/vulkan/implicit_layer.d/MultiLayers.json', 'w') as writer:
+with open(
+    'debian10/usr/share/vulkan/implicit_layer.d/MultiLayers.json', 'w'
+) as writer:
     writer.write('''\
 {
   "file_format_version" : "1.0.1",
@@ -509,7 +522,11 @@ with open('debian10/usr/share/vulkan/implicit_layer.d/MultiLayers.json', 'w') as
   ]
 }''')
 
-with open('debian10/home/debian/.local/share/vulkan/implicit_layer.d/steamoverlay_x86_64.json', 'w') as writer:
+with open(
+    ('debian10/home/debian/.local/share/vulkan/implicit_layer.d/'
+     'steamoverlay_x86_64.json'),
+    'w'
+) as writer:
     writer.write('''\
 {
   "file_format_version" : "1.0.0",
@@ -527,7 +544,7 @@ with open('debian10/home/debian/.local/share/vulkan/implicit_layer.d/steamoverla
       "DISABLE_VK_LAYER_VALVE_steam_overlay_1" : "1"
     }
   }
-}''')
+}''')   # noqa
 
 with open('fake-icds/false.json', 'w') as writer:
     writer.write('''false''')
@@ -619,7 +636,9 @@ with open('fake-icds/datahome/vulkan/icd.d/invalid.json', 'w') as writer:
 with open('fake-icds/home/.config/vulkan/icd.d/invalid.json', 'w') as writer:
     writer.write('''{ }''')
 
-with open('fake-icds/home/.local/share/vulkan/icd.d/invalid.json', 'w') as writer:
+with open(
+    'fake-icds/home/.local/share/vulkan/icd.d/invalid.json', 'w'
+) as writer:
     writer.write('''{ }''')
 
 with open('fake-icds/egl2/absolute.json', 'w') as writer:
@@ -668,7 +687,9 @@ with open('fake-icds/etc/vulkan/icd.d/basename.json', 'w') as writer:
     "file_format_version": "1.0.0"
 }''')
 
-with open('fake-icds/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json', 'w') as writer:
+with open(
+    'fake-icds/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json', 'w'
+) as writer:
     writer.write('''\
 {
     "ICD": {
@@ -678,7 +699,10 @@ with open('fake-icds/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json', 'w') a
     "file_format_version": "1.0.0"
 }''')
 
-with open('fake-icds/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relative.json', 'w') as writer:
+with open(
+    'fake-icds/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relative.json',
+    'w',
+) as writer:
     writer.write('''\
 {
     "ICD": {
@@ -687,10 +711,14 @@ with open('fake-icds/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relative.json
     "file_format_version": "1.0.0"
 }''')
 
-with open('fake-icds/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d/invalid.json', 'w') as writer:
+with open(
+    'fake-icds/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d/invalid.json', 'w'
+) as writer:
     writer.write('''[]''')
 
-with open('fake-icds/usr/local/share/vulkan/icd.d/intel_icd.i686.json', 'w') as writer:
+with open(
+    'fake-icds/usr/local/share/vulkan/icd.d/intel_icd.i686.json', 'w'
+) as writer:
     writer.write('''\
 {
     "ICD": {
@@ -700,7 +728,10 @@ with open('fake-icds/usr/local/share/vulkan/icd.d/intel_icd.i686.json', 'w') as 
     "file_format_version": "1.0.0"
 }''')
 
-with open('fake-icds/usr/share/egl/egl_external_platform.d/10_nvidia_wayland.json', 'w') as writer:
+with open(
+    'fake-icds/usr/share/egl/egl_external_platform.d/10_nvidia_wayland.json',
+    'w',
+) as writer:
     writer.write('''\
 {
     "file_format_version" : "1.0.0",
@@ -709,7 +740,9 @@ with open('fake-icds/usr/share/egl/egl_external_platform.d/10_nvidia_wayland.jso
     }
 }''')
 
-with open('fake-icds/usr/share/glvnd/egl_vendor.d/50_mesa.json', 'w') as writer:
+with open(
+    'fake-icds/usr/share/glvnd/egl_vendor.d/50_mesa.json', 'w'
+) as writer:
     writer.write('''\
 {
     "file_format_version" : "1.0.0",
@@ -718,7 +751,9 @@ with open('fake-icds/usr/share/glvnd/egl_vendor.d/50_mesa.json', 'w') as writer:
     }
 }''')
 
-with open('fake-icds/usr/share/vulkan/icd.d/intel_icd.x86_64.json', 'w') as writer:
+with open(
+    'fake-icds/usr/share/vulkan/icd.d/intel_icd.x86_64.json', 'w'
+) as writer:
     writer.write('''\
 {
     "ICD": {
@@ -728,7 +763,9 @@ with open('fake-icds/usr/share/vulkan/icd.d/intel_icd.x86_64.json', 'w') as writ
     "file_format_version": "1.0.0"
 }''')
 
-with open('fake-icds-flatpak/home/.local/share/vulkan/icd.d/relative_new.json', 'w') as writer:
+with open(
+    'fake-icds-flatpak/home/.local/share/vulkan/icd.d/relative_new.json', 'w'
+) as writer:
     writer.write('''\
 {
     "ICD": {
@@ -736,7 +773,7 @@ with open('fake-icds-flatpak/home/.local/share/vulkan/icd.d/relative_new.json', 
         "library_path": "/usr/lib/x86_64-mock-abi/vulkan/icd.d/../libvulkan_relative.so"
     },
     "file_format_version": "1.0.0"
-}''')
+}''')   # noqa
 
 with open('fake-icds-flatpak/etc/vulkan/icd.d/basename.json', 'w') as writer:
     writer.write('''\
@@ -751,7 +788,10 @@ with open('fake-icds-flatpak/etc/vulkan/icd.d/basename.json', 'w') as writer:
 with open('fake-icds-flatpak/false.json', 'w') as writer:
     writer.write('''false''')
 
-with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json', 'w') as writer:
+with open(
+    'fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json',
+    'w',
+) as writer:
     writer.write('''\
 {
     "ICD": {
@@ -761,7 +801,11 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/icd.d/relative.json'
     "file_format_version": "1.0.0"
 }''')
 
-with open('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/explicit_layer.d/mr3398.json', 'w') as writer:
+with open(
+    ('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/'
+     'explicit_layer.d/mr3398.json'),
+    'w',
+) as writer:
     writer.write('''\
 {
     "file_format_version": "1.0.0",
@@ -775,7 +819,11 @@ with open('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/explicit_lay
     }
 }''')
 
-with open('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/implicit_layer.d/mr3398.json', 'w') as writer:
+with open(
+    ('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/'
+     'implicit_layer.d/mr3398.json'),
+    'w'
+) as writer:
     writer.write('''\
 {
     "file_format_version": "1.0.0",
@@ -783,7 +831,7 @@ with open('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/implicit_lay
         "name": "VK_LAYER_MANGOHUD_overlay",
         "type": "GLOBAL",
         "api_version": "1.2.135",
-        "library_path": "/usr/lib/extensions/vulkan/\$LIB/mangohud/libMangoHud.so",
+        "library_path": "/usr/lib/extensions/vulkan/\\$LIB/mangohud/libMangoHud.so",
         "description": "Vulkan Hud Overlay",
         "implementation_version": "1",
         "functions": {
@@ -797,9 +845,13 @@ with open('fake-icds-flatpak/usr/lib/extensions/vulkan/share/vulkan/implicit_lay
             "DISABLE_MANGOHUD": "1"
         }
     }
-}''')
+}''')   # noqa
 
-with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/explicit_layer.d/runtime.json', 'w') as writer:
+with open(
+    ('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/'
+     'explicit_layer.d/runtime.json'),
+    'w',
+) as writer:
     writer.write('''\
 {
     "file_format_version": "1.0.0",
@@ -813,7 +865,11 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/explicit_layer.d/run
     }
 }''')
 
-with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/implicit_layer.d/runtime.json', 'w') as writer:
+with open(
+    ('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/'
+     'implicit_layer.d/runtime.json'),
+    'w',
+) as writer:
     writer.write('''\
 {
     "file_format_version": "1.0.0",
@@ -821,7 +877,7 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/implicit_layer.d/run
         "name": "VK_LAYER_RUNTIME_implicit",
         "type": "GLOBAL",
         "api_version": "1.2.135",
-        "library_path": "/usr/\$LIB/implicit/libLayer.so",
+        "library_path": "/usr/\\$LIB/implicit/libLayer.so",
         "description": "Runtime's implicit layer",
         "implementation_version": "1",
         "functions": {
@@ -837,7 +893,11 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/vulkan/implicit_layer.d/run
     }
 }''')
 
-with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relative.json', 'w') as writer:
+with open(
+    ('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/glvnd/'
+     'egl_vendor.d/relative.json'),
+    'w',
+) as writer:
     writer.write('''\
 {
     "ICD": {
@@ -846,7 +906,11 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/glvnd/egl_vendor.d/relat
     "file_format_version": "1.0.0"
 }''')
 
-with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/explicit_layer.d/glext.json', 'w') as writer:
+with open(
+    ('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/'
+     'explicit_layer.d/glext.json'),
+    'w',
+) as writer:
     writer.write('''\
 {
     "file_format_version": "1.0.0",
@@ -860,10 +924,17 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/explicit_layer.d/
     }
 }''')
 
-with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d/invalid.json', 'w') as writer:
+with open(
+    'fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/icd.d/invalid.json',
+    'w',
+) as writer:
     writer.write('''[]''')
 
-with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/implicit_layer.d/glext.json', 'w') as writer:
+with open(
+    ('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/'
+     'implicit_layer.d/glext.json'),
+    'w',
+) as writer:
     writer.write('''\
 {
     "file_format_version": "1.0.0",
@@ -871,7 +942,7 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/implicit_layer.d/
         "name": "VK_LAYER_GLEXT_implicit",
         "type": "GLOBAL",
         "api_version": "1.2.135",
-        "library_path": "/usr/\$LIB/GL/implicit/libLayer.so",
+        "library_path": "/usr/\\$LIB/GL/implicit/libLayer.so",
         "description": "GL extension's implicit layer",
         "implementation_version": "1",
         "functions": {
@@ -887,7 +958,10 @@ with open('fake-icds-flatpak/usr/lib/x86_64-mock-abi/GL/vulkan/implicit_layer.d/
     }
 }''')
 
-with open('fake-icds-flatpak/usr/local/share/vulkan/icd.d/intel_icd.i686.json', 'w') as writer:
+with open(
+    'fake-icds-flatpak/usr/local/share/vulkan/icd.d/intel_icd.i686.json',
+    'w',
+) as writer:
     writer.write('''\
 {
     "ICD": {
@@ -897,7 +971,9 @@ with open('fake-icds-flatpak/usr/local/share/vulkan/icd.d/intel_icd.i686.json', 
     "file_format_version": "1.0.0"
 }''')
 
-with open('fake-icds-flatpak/usr/share/glvnd/egl_vendor.d/50_mesa.json', 'w') as writer:
+with open(
+    'fake-icds-flatpak/usr/share/glvnd/egl_vendor.d/50_mesa.json', 'w'
+) as writer:
     writer.write('''\
 {
     "file_format_version" : "1.0.0",
@@ -906,7 +982,9 @@ with open('fake-icds-flatpak/usr/share/glvnd/egl_vendor.d/50_mesa.json', 'w') as
     }
 }''')
 
-with open('fake-icds-flatpak/usr/share/vulkan/icd.d/intel_icd.x86_64.json', 'w') as writer:
+with open(
+    'fake-icds-flatpak/usr/share/vulkan/icd.d/intel_icd.x86_64.json', 'w'
+) as writer:
     writer.write('''\
 {
     "ICD": {
@@ -917,11 +995,12 @@ with open('fake-icds-flatpak/usr/share/vulkan/icd.d/intel_icd.x86_64.json', 'w')
 }''')
 
 for abi in supported_abis:
-    symbols = 'fake-steam-runtime/usr/lib/steamrt/expectations/{}/libglib2.0-0.symbols'.format(abi)
+    symbols = ('fake-steam-runtime/usr/lib/steamrt/expectations/{}/'
+               'libglib2.0-0.symbols').format(abi)
     with open(symbols, 'w') as writer:
         writer.write(textwrap.dedent('''\
-            # Cut-down version of libglib2.0-0:amd64.symbols, to illustrate what we expect
-            # to find here
+            # Cut-down version of libglib2.0-0:amd64.symbols, to illustrate
+            # what we expect to find here
             libgio-2.0.so.0 libglib2.0-0 #MINVER#
             * Build-Depends-Package: libglib2.0-dev
              g_action_activate@Base 2.28.0
@@ -933,25 +1012,29 @@ for abi in supported_abis:
              g_allocator_new@Base 2.12.0
             '''))
 
-    symbols = 'fake-steam-runtime/usr/lib/steamrt/expectations/{}/libtheora0.symbols'.format(abi)
+    symbols = ('fake-steam-runtime/usr/lib/steamrt/expectations/{}/'
+               'libtheora0.symbols').format(abi)
     with open(symbols, 'w') as writer:
         writer.write(textwrap.dedent('''\
-            # Cut-down version of libtheora0:amd64.symbols, to illustrate what we expect
-            # to find here
+            # Cut-down version of libtheora0:amd64.symbols, to illustrate
+            # what we expect to find here
             libtheoraenc.so.1 libtheora0 #MINVER#
             # No symbols listed here yet
             '''))
 
-    symbols = 'fake-steam-runtime/usr/lib/steamrt/expectations/{}/zlib1g.symbols'.format(abi)
+    symbols = ('fake-steam-runtime/usr/lib/steamrt/expectations/{}/'
+               'zlib1g.symbols').format(abi)
     with open(symbols, 'w') as writer:
         writer.write(textwrap.dedent('''\
-            # Cut-down version of zlib1g:amd64.symbols, to illustrate what we expect
-            # to find here
+            # Cut-down version of zlib1g:amd64.symbols, to illustrate
+            # what we expect to find here
             libz.so.1 zlib1g #MINVER#
              adler32@Base 1:1.1.4
             '''))
 
-with open('fake-steam-runtime/usr/lib/steamrt/steam-runtime-abi.json', 'w') as writer:
+with open(
+    'fake-steam-runtime/usr/lib/steamrt/steam-runtime-abi.json', 'w'
+) as writer:
     writer.write('''\
 {
  "architectures": {
@@ -1002,7 +1085,9 @@ with open('fake-steam-runtime/usr/lib/steamrt/steam-runtime-abi.json', 'w') as w
  ]
 }''')
 
-with open('fedora/usr/share/vulkan/implicit_layer.d/incomplete_layer.json', 'w') as writer:
+with open(
+    'fedora/usr/share/vulkan/implicit_layer.d/incomplete_layer.json', 'w'
+) as writer:
     writer.write('''\
 {
   "file_format_version" : "1.1.2",
@@ -1013,9 +1098,11 @@ with open('fedora/usr/share/vulkan/implicit_layer.d/incomplete_layer.json', 'w')
     "implementation_version" : "1",
     "description" : "Steam Overlay Layer"
   }
-}''')
+}''')   # noqa
 
-with open('fedora/usr/share/vulkan/implicit_layer.d/newer_layer.json', 'w') as writer:
+with open(
+    'fedora/usr/share/vulkan/implicit_layer.d/newer_layer.json', 'w'
+) as writer:
     writer.write('''\
 {
   "file_format_version" : "99.1.2",
@@ -1158,7 +1245,7 @@ with open('steamrt-unofficial/proc/1/cgroup', 'w') as writer:
 2:pids:/docker/9999999999999999999999999999999999999999999999999999999999999999
 1:name=systemd:/docker/9999999999999999999999999999999999999999999999999999999999999999
 0::/system.slice/docker.service
-''')
+''')    # noqa
 
 with open('ubuntu16/sys/class/dmi/id/sys_vendor', 'w') as writer:
     writer.write('QEMU\n')

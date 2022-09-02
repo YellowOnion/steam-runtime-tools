@@ -1,4 +1,4 @@
 [Test]
 Type=session
-Exec=@tests_dir@/@program@ --tap
+Exec=@wrapper@ @tests_dir@/@program@ @args@
 Output=TAP

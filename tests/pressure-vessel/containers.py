@@ -412,10 +412,18 @@ class TestContainers(BaseTest):
         os.makedirs(os.path.join(cls.artifacts, 'tmp'), exist_ok=True)
 
         for f in ('testutils.py', 'inside-runtime.py'):
-            self.copy2(
-                os.path.join(cls.G_TEST_SRCDIR, f),
-                os.path.join(cls.artifacts, 'tmp', f),
-            )
+            for d in (
+                os.path.dirname(os.path.abspath(__file__)),
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            ):
+                if os.path.exists(os.path.join(d, f)):
+                    self.copy2(
+                        os.path.join(d, f),
+                        os.path.join(cls.artifacts, 'tmp', f),
+                    )
+                    break
+            else:
+                raise AssertionError('Cannot find %r' % f)
 
         # This parsing is sufficiently "cheap" that we repeat it for
         # each test-case rather than introducing more class variables.

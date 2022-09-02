@@ -283,6 +283,7 @@ relocatable-install:i386:
               --architecture-multiarch i386-linux-gnu \
               ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
               ${NULL+}
+            PYTHONPATH=$(pwd)/tests \
             python3.5 ./tests/pressure-vessel/relocatable-install.py \
               --multiarch-tuple=i386-linux-gnu \
               "$(pwd)/_build/i386/relocatable-install"
@@ -330,6 +331,7 @@ relocatable-install:production:
               --no-archive-versions \
               ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
               ${NULL+}
+            PYTHONPATH=$(pwd)/tests \
             python3.5 ./tests/pressure-vessel/relocatable-install.py \
               "$(pwd)/_build/production/relocatable-install"
     artifacts:
@@ -379,6 +381,7 @@ test:debian-10:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
+            PYTHONPATH=$(pwd)/tests \
             python3 tests/pressure-vessel/containers.py
 
 test:ubuntu-18.04:
@@ -392,6 +395,7 @@ test:ubuntu-18.04:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
+            PYTHONPATH=$(pwd)/tests \
             python3 tests/pressure-vessel/containers.py
 
 test:ubuntu-20.04:
@@ -405,6 +409,7 @@ test:ubuntu-20.04:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
+            PYTHONPATH=$(pwd)/tests \
             python3 tests/pressure-vessel/containers.py
 
 test:archlinux:
@@ -442,6 +447,7 @@ test:archlinux:
 
             export AUTOPKGTEST_ARTIFACTS="$(pwd)/_build/artifacts"
             export PRESSURE_VESSEL_TEST_CONTAINERS="$(pwd)/_build/depot"
+            PYTHONPATH=$(pwd)/tests \
             python3 tests/pressure-vessel/containers.py
 
 autopkgtest:

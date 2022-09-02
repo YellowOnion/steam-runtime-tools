@@ -41,6 +41,7 @@ for script in \
     ./build-aux/*.py \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \
+    ./tests/*.py \
     ./tests/*/*.py \
 ; do
     i=$((i + 1))

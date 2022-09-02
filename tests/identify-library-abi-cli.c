@@ -65,6 +65,7 @@ typedef struct
   int exit_status;
   const gchar *stdout_contains;
   const gchar *stderr_contains;
+  gboolean version_dependent;
 } IdentifyLibraryAbi;
 
 static void
@@ -121,8 +122,16 @@ _spawn_and_check_output (const IdentifyLibraryAbi *t)
   g_assert_true (g_utf8_validate (child_stdout, -1, NULL));
   g_assert_nonnull (child_stderr);
   g_assert_true (g_utf8_validate (child_stderr, -1, NULL));
-  if (t->stdout_contains != NULL)
-    g_assert_cmpstr (strstr (child_stdout, t->stdout_contains), !=, NULL);
+
+  if (t->version_dependent && g_getenv ("SRT_TEST_UNINSTALLED") == NULL)
+    {
+      g_debug ("Not testing --version match in installed-tests");
+    }
+  else if (t->stdout_contains != NULL)
+    {
+      g_assert_cmpstr (strstr (child_stdout, t->stdout_contains), !=, NULL);
+    }
+
   if (t->stderr_contains != NULL)
     g_assert_cmpstr (strstr (child_stderr, t->stderr_contains), !=, NULL);
 }
@@ -240,6 +249,7 @@ test_help_and_version (Fixture *f,
       },
       .exit_status = 0,
       .stdout_contains = VERSION,
+      .version_dependent = TRUE,
     },
     {
       .argv =

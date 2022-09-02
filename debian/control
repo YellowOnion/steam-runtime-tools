@@ -4,6 +4,7 @@ Priority: optional
 Maintainer: Simon McVittie <smcv@collabora.com>
 Standards-Version: 4.3.0
 Build-Depends:
+ base-files (>= 6.5ubuntu6.8+steamrt1.2),
  debhelper (>= 9),
  g++ (>= 4:4.8) | g++-4.8,
  gcc (>= 4:4.8) | gcc-4.8,
@@ -36,6 +37,34 @@ Build-Conflicts:
  libsteam-runtime-tools-0-relocatable-libs,
 Vcs-Git: https://gitlab.steamos.cloud/steamrt/steam-runtime-tools.git
 Vcs-Browser: https://gitlab.steamos.cloud/steamrt/steam-runtime-tools
+
+Package: libsteam-runtime-shim-libcurl-bin
+Build-Profiles: <pkg.steamrt.scout>
+Architecture: amd64 i386
+Section: misc
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ libsteam-runtime-shim-libcurl4,
+Description: Library loader shim for libcurl - setup helper
+ This package provides the steam-runtime-libcurl-compat-setup
+ helper, which sets up the LD_LIBRARY_PATH Steam Runtime to use
+ libsteam-runtime-shim-libcurl4.
+
+Package: libsteam-runtime-shim-libcurl4
+Build-Profiles: <pkg.steamrt.scout>
+Architecture: amd64 i386
+Multi-Arch: same
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ libcurl3,
+ libcurl3-gnutls,
+Description: Library loader shim for libcurl
+ This package provides a "shim" library that can load both a system
+ copy of libcurl and the Steam Runtime's copy, in order to satisfy
+ dependencies on both CURL_OPENSSL_3 and CURL_OPENSSL_4 versioned
+ symbols simultaneously.
 
 Package: libsteam-runtime-tools-0-0
 Architecture: any

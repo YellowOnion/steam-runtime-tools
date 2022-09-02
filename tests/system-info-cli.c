@@ -693,6 +693,25 @@ stdout_to_stderr_child_setup (gpointer nil)
     _srt_async_signal_safe_error ("Unable to redirect stdout to stderr", 1);
 }
 
+static gchar *
+pretty_print_json (const char *unformatted)
+{
+  g_autoptr(JsonParser) parser = NULL;
+  JsonNode *node = NULL;  /* not owned */
+  g_autoptr(JsonGenerator) generator = NULL;
+  g_autoptr(GError) error = NULL;
+
+  parser = json_parser_new ();
+  json_parser_load_from_data (parser, unformatted, -1, &error);
+  g_assert_no_error (error);
+  node = json_parser_get_root (parser);
+  g_assert_nonnull (node);
+  generator = json_generator_new ();
+  json_generator_set_root (generator, node);
+  json_generator_set_pretty (generator, TRUE);
+  return json_generator_to_data (generator, NULL);
+}
+
 static void
 json_parsing (Fixture *f,
               gconstpointer context)
@@ -704,15 +723,13 @@ json_parsing (Fixture *f,
       int exit_status = -1;
       g_autofree gchar *input_json = NULL;
       g_autofree gchar *output_json = NULL;
+      g_autofree gchar *unformatted = NULL;
       g_autofree gchar *output = NULL;
       g_autofree gchar *expectation = NULL;
-      g_autofree gchar *generated = NULL;
       g_auto(GStrv) envp = NULL;
       g_autoptr(GError) error = NULL;
       const gchar *argv[] = { "steam-runtime-system-info", NULL };
-      g_autoptr(JsonParser) parser = NULL;
-      JsonNode *node = NULL;  /* not owned */
-      g_autoptr(JsonGenerator) generator = NULL;
+      gsize len;
 
       g_test_message ("%s: input=%s output=%s", test->description, test->input_name, test->output_name);
 
@@ -721,16 +738,11 @@ json_parsing (Fixture *f,
       output_json = g_build_filename (f->srcdir, "json-report", multiarch_tuples[0],
                                       test->output_name, NULL);
 
-      parser = json_parser_new ();
-      json_parser_load_from_file (parser, output_json, &error);
+      g_file_get_contents (output_json, &unformatted, &len, &error);
       g_assert_no_error (error);
-      node = json_parser_get_root (parser);
-      g_assert_nonnull (node);
-      generator = json_generator_new ();
-      json_generator_set_root (generator, node);
-      json_generator_set_pretty (generator, TRUE);
-      generated = json_generator_to_data (generator, NULL);
-      expectation = g_strconcat (generated, "\n", NULL);
+      g_assert_cmpuint (len, ==, strlen (unformatted));
+      expectation = pretty_print_json (unformatted);
+      g_clear_pointer (&unformatted, g_free);
 
       envp = g_get_environ ();
       envp = g_environ_setenv (envp, "SRT_TEST_PARSE_JSON", input_json, TRUE);
@@ -741,14 +753,15 @@ json_parsing (Fixture *f,
                              G_SPAWN_SEARCH_PATH,
                              NULL,    /* child setup */
                              NULL,    /* user data */
-                             &output, /* stdout */
+                             &unformatted,  /* stdout */
                              NULL,    /* stderr */
                              &exit_status,
                              &error);
       g_assert_no_error (error);
       g_assert_true (result);
       g_assert_cmpint (exit_status, ==, 0);
-      g_assert_nonnull (output);
+      g_assert_nonnull (unformatted);
+      output = pretty_print_json (unformatted);
 
       if (g_strcmp0 (output, expectation) != 0)
         {

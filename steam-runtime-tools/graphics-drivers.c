@@ -1008,6 +1008,7 @@ _srt_get_modules_full (const char *sysroot,
   g_autoptr(GPtrArray) vdpau_argv = NULL;
   g_autoptr(GError) error = NULL;
   gsize i;
+  gsize j;
 
   g_return_if_fail (sysroot != NULL);
   g_return_if_fail (sysroot_fd >= 0);
@@ -1159,6 +1160,56 @@ _srt_get_modules_full (const char *sysroot,
           else
             is_extra = TRUE;
         }
+    }
+
+  if (check_flags & SRT_CHECK_FLAGS_NO_HELPERS)
+    {
+      /* Hard-code the most common paths where we expect to find the drivers */
+      g_autofree gchar *usr_lib_tup = g_build_filename ("/usr", "lib", multiarch_tuple,
+                                                        NULL);
+      g_autofree gchar *usr_lib = g_build_filename ("/usr", "lib", NULL);
+      g_autofree gchar *usr_libqual = NULL;
+
+      if (g_strcmp0 (multiarch_tuple, SRT_ABI_X86_64) == 0
+          || g_strcmp0 (multiarch_tuple, SRT_ABI_AARCH64) == 0)
+        usr_libqual = g_build_filename ("/usr", "lib64", NULL);
+      else if (g_strcmp0 (multiarch_tuple, SRT_ABI_I386) == 0)
+        usr_libqual = g_build_filename ("/usr", "lib32", NULL);
+
+      const gchar *libdirs[] = {
+        usr_lib_tup,
+        usr_libqual,
+        usr_lib,
+      };
+
+      for (i = 0; loader_libraries[i] != NULL; i++)
+        {
+          for (j = 0; j < G_N_ELEMENTS (libdirs); j++)
+            {
+              if (libdirs[j] == NULL)
+                continue;
+
+              g_autofree gchar *library_path = g_build_filename (libdirs[j],
+                                                                 loader_libraries[i],
+                                                                 NULL);
+              g_autofree gchar *library_path_in_sysroot = g_build_filename (sysroot,
+                                                                            library_path,
+                                                                            NULL);
+              if (g_file_test (library_path_in_sysroot, G_FILE_TEST_EXISTS))
+                {
+                  g_debug ("Searching modules in the library path \"%s\"", library_path);
+                  _srt_get_modules_from_loader_library (sysroot_fd, library_path,
+                                                        envp, helpers_path, multiarch_tuple,
+                                                        check_flags, is_extra, module,
+                                                        drivers_set, drivers_out);
+                  break;
+                }
+            }
+        }
+
+      /* It's not possible to discover the extras without relying on the
+       * architecture-specific helpers. For this reason we just return. */
+      goto out;
     }
 
   if (g_strcmp0 (sysroot, "/") != 0)

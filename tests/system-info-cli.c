@@ -29,6 +29,7 @@
 
 #include <steam-runtime-tools/glib-backports-internal.h>
 #include <steam-runtime-tools/json-glib-backports-internal.h>
+#include <steam-runtime-tools/utils-internal.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -686,6 +687,13 @@ static const JsonTest json_test[] =
 };
 
 static void
+stdout_to_stderr_child_setup (gpointer nil)
+{
+  if (dup2 (STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
+    _srt_async_signal_safe_error ("Unable to redirect stdout to stderr", 1);
+}
+
+static void
 json_parsing (Fixture *f,
               gconstpointer context)
 {
@@ -741,6 +749,49 @@ json_parsing (Fixture *f,
       g_assert_true (result);
       g_assert_cmpint (exit_status, ==, 0);
       g_assert_nonnull (output);
+
+      if (g_strcmp0 (output, expectation) != 0)
+        {
+          const char *artifacts = g_getenv ("AUTOPKGTEST_ARTIFACTS");
+          g_autofree gchar *tmpdir = NULL;
+          g_autofree gchar *expected_path = NULL;
+          g_autofree gchar *output_path = NULL;
+          const gchar *diff_argv[] = { "diff", "-u", "<expected>", "<output>", NULL };
+
+          if (artifacts == NULL)
+            {
+              tmpdir = g_dir_make_tmp ("srt-tests-XXXXXX", &error);
+              g_assert_no_error (error);
+              artifacts = tmpdir;
+            }
+
+          expected_path = g_build_filename (artifacts, "expected.json", NULL);
+          g_file_set_contents (expected_path, expectation, -1, &error);
+          g_assert_no_error (error);
+
+          output_path = g_build_filename (artifacts, "output.json", NULL);
+          g_file_set_contents (output_path, output, -1, &error);
+          g_assert_no_error (error);
+
+          g_assert_cmpstr (diff_argv[2], ==, "<expected>");
+          diff_argv[2] = expected_path;
+          g_assert_cmpstr (diff_argv[3], ==, "<output>");
+          diff_argv[3] = output_path;
+          g_assert_null (diff_argv[4]);
+
+          /* Ignore error from calling diff, if any: we're running it
+           * for its side-effect of producing output on our stderr. */
+          g_spawn_sync (NULL, (gchar **) diff_argv, NULL, G_SPAWN_SEARCH_PATH,
+                        stdout_to_stderr_child_setup, NULL,
+                        NULL, NULL, NULL, NULL);
+
+          g_test_message ("Output for comparison: %s %s",
+                          expected_path, output_path);
+
+          if (tmpdir != NULL)
+            _srt_rm_rf (tmpdir);
+        }
+
       g_assert_cmpstr (output, ==, expectation);
     }
 }

@@ -141,6 +141,8 @@ _srt_tests_init (int *argc,
                  char ***argv,
                  const char *reserved)
 {
+  const char *env;
+
   g_return_if_fail (!tests_init_done);
   g_return_if_fail (reserved == NULL);
   tests_init_done = TRUE;
@@ -152,4 +154,15 @@ _srt_tests_init (int *argc,
   /* Do this *after* g_test_init so we can hijack its log handler */
   gtest_log_func = g_log_set_default_handler (split_log_func, NULL);
 #endif
+
+  env = g_getenv ("STEAM_RUNTIME");
+
+  if (env != NULL && env[0] == '/')
+    {
+      gchar *helpers = g_build_filename (env, "usr", "libexec",
+                                         "steam-runtime-tools-0", NULL);
+
+      g_setenv ("SRT_HELPERS_PATH", helpers, TRUE);
+      g_free (helpers);
+    }
 }

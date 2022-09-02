@@ -86,3 +86,5 @@ gboolean _srt_global_teardown_sysroots (void);
 #define g_test_message(...) _srt_test_message_safe (__VA_ARGS__)
 void _srt_test_message_safe (const char *format, ...) G_GNUC_PRINTF (1, 2);
 #endif
+
+gboolean _srt_tests_skip_if_really_in_steam_runtime (void);

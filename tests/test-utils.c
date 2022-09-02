@@ -296,3 +296,23 @@ tests_check_fd_leaks_leave (TestsOpenFdSet fds)
 
   g_hash_table_unref (fds);
 }
+
+/**
+ * If we are running in the LD_LIBRARY_PATH Steam Runtime or in a scout
+ * Steam Runtime container, skip the test.
+ *
+ * Returns: %TRUE if the test should be skipped
+ */
+gboolean
+_srt_tests_skip_if_really_in_steam_runtime (void)
+{
+  const char *env = g_getenv ("STEAM_RUNTIME");
+
+  if (env != NULL && env[0] == '/')
+    {
+      g_test_skip ("already in Steam Runtime environment");
+      return TRUE;
+    }
+
+  return FALSE;
+}

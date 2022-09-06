@@ -29,6 +29,7 @@ enum {
   PROP_0,
   PROP_PATH_IN_CURRENT_NS,
   PROP_PATH_IN_CONTAINER_NS,
+  PROP_USE_SRT_HELPERS,
   N_PROPERTIES
 };
 
@@ -65,6 +66,10 @@ pv_graphics_provider_get_property (GObject *object,
         g_value_set_string (value, self->path_in_container_ns);
         break;
 
+      case PROP_USE_SRT_HELPERS:
+        g_value_set_boolean (value, self->use_srt_helpers);
+        break;
+
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
     }
@@ -90,6 +95,11 @@ pv_graphics_provider_set_property (GObject *object,
         /* Construct-only */
         g_return_if_fail (self->path_in_container_ns == NULL);
         self->path_in_container_ns = g_value_dup_string (value);
+        break;
+
+      case PROP_USE_SRT_HELPERS:
+        /* Construct-only */
+        self->use_srt_helpers = g_value_get_boolean (value);
         break;
 
       default:
@@ -167,6 +177,14 @@ pv_graphics_provider_class_init (PvGraphicsProviderClass *cls)
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
 
+  properties[PROP_USE_SRT_HELPERS] =
+    g_param_spec_boolean ("use-srt-helpers", "Use SRT helpers?",
+                          "TRUE to use the SRT architecture-specific helpers, or"
+                          "FALSE to assume hard-coded paths instead",
+                          TRUE,
+                          G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS);
+
   g_object_class_install_properties (object_class, N_PROPERTIES, properties);
 }
 
@@ -209,6 +227,7 @@ pv_graphics_provider_search_in_path_and_bin (PvGraphicsProvider *self,
 PvGraphicsProvider *
 pv_graphics_provider_new (const char *path_in_current_ns,
                           const char *path_in_container_ns,
+                          gboolean use_srt_helpers,
                           GError **error)
 {
   g_return_val_if_fail (path_in_current_ns != NULL, NULL);
@@ -220,6 +239,7 @@ pv_graphics_provider_new (const char *path_in_current_ns,
                          error,
                          "path-in-container-ns", path_in_container_ns,
                          "path-in-current-ns", path_in_current_ns,
+                         "use-srt-helpers", use_srt_helpers,
                          NULL);
 }
 
@@ -230,14 +250,17 @@ SrtSystemInfo *
 pv_graphics_provider_create_system_info (PvGraphicsProvider *self)
 {
   g_autoptr(SrtSystemInfo) system_info = NULL;
+  SrtCheckFlags flags = SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS
+                        | SRT_CHECK_FLAGS_SKIP_EXTRAS;
 
   g_return_val_if_fail (PV_IS_GRAPHICS_PROVIDER (self), NULL);
 
+  if (!self->use_srt_helpers)
+    flags |= SRT_CHECK_FLAGS_NO_HELPERS;
+
   system_info = srt_system_info_new (NULL);
   srt_system_info_set_sysroot (system_info, self->path_in_current_ns);
-  _srt_system_info_set_check_flags (system_info,
-                                    (SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS
-                                     | SRT_CHECK_FLAGS_SKIP_EXTRAS));
+  _srt_system_info_set_check_flags (system_info, flags);
   return g_steal_pointer (&system_info);
 }
 

@@ -1579,7 +1579,7 @@ main (int argc,
           g_assert (graphics_provider_mount_point != NULL);
           graphics_provider = pv_graphics_provider_new (opt_graphics_provider,
                                                         graphics_provider_mount_point,
-                                                        error);
+                                                        TRUE, error);
 
           if (graphics_provider == NULL)
             goto out;

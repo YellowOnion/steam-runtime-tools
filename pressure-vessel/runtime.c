@@ -99,6 +99,7 @@ struct _PvRuntime
   const gchar *host_in_current_namespace;
   EnumerationThread indep_thread;
   EnumerationThread host_thread;
+  EnumerationThread *arch_host_threads;
   EnumerationThread *arch_threads;
 
   PvRuntimeFlags flags;
@@ -1364,7 +1365,10 @@ enumerate_arch (gpointer data)
   if (g_cancellable_is_cancelled (inputs->cancellable))
     goto out;
 
-  if (TRUE)
+  /* At the moment the real host is included only when FEX emulator is in use.
+   * Skipping VDPAU until there is a real use case for it, because
+   * it only supports one search path entry, which is problematic for us. */
+  if (pv_supported_architectures_include_machine_type (inputs->details->machine_type))
     {
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating %s VDPAU drivers in thread",
@@ -1616,6 +1620,15 @@ pv_runtime_initable_init (GInitable *initable,
                                           self->flags,
                                           self->interpreter_host_provider,
                                           "real-host");
+
+          self->arch_host_threads = g_new0 (EnumerationThread,
+                                            PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST);
+
+          for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST; i++)
+            enumeration_thread_start_arch (&self->arch_host_threads[i],
+                                           &pv_multiarch_as_emulator_details[i],
+                                           self->flags,
+                                           self->interpreter_host_provider);
         }
 
       self->arch_threads = g_new0 (EnumerationThread,
@@ -1938,6 +1951,8 @@ pv_runtime_dispose (GObject *object)
   g_clear_object (&self->interpreter_host_provider);
   enumeration_thread_clear (&self->indep_thread);
   enumeration_thread_clear (&self->host_thread);
+  enumeration_threads_clear (&self->arch_host_threads,
+                             PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST);
   enumeration_threads_clear (&self->arch_threads,
                              PV_N_SUPPORTED_ARCHITECTURES);
 
@@ -6274,6 +6289,77 @@ collect_dri_drivers (PvRuntime *self,
 }
 
 /*
+ * @search_path: (inout):
+ */
+static void
+pv_append_host_dri_library_paths (SrtSystemInfo *system_info,
+                                  const char *multiarch_tuple,
+                                  GString *search_path)
+{
+  g_autoptr(SrtObjectList) dri_drivers = NULL;
+  g_autoptr(SrtObjectList) va_api_drivers = NULL;
+  g_autoptr(GHashTable) drivers_set = NULL;
+  const GList *icd_iter;
+  GHashTableIter iter;
+  const gchar *drivers_path = NULL;
+  gsize i;
+
+  g_return_if_fail (search_path != NULL);
+
+  drivers_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  g_debug ("Enumerating %s DRI drivers on host...", multiarch_tuple);
+  {
+    G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+      _srt_profiling_start ("Enumerating host DRI drivers");
+
+    dri_drivers = srt_system_info_list_dri_drivers (system_info,
+                                                    multiarch_tuple,
+                                                    SRT_DRIVER_FLAGS_NONE);
+  }
+
+  for (icd_iter = dri_drivers, i = 0; icd_iter != NULL; icd_iter = icd_iter->next, i++)
+    {
+      g_assert (SRT_IS_DRI_DRIVER (icd_iter->data));
+      SrtDriDriver *driver = icd_iter->data;
+      g_autofree gchar *driver_path = NULL;
+      const gchar *lib_path = srt_dri_driver_get_library_path (driver);
+
+      g_debug ("Found DRI driver: %s", lib_path);
+      driver_path = g_path_get_dirname (lib_path);
+      if (!g_hash_table_contains (drivers_set, driver_path))
+        g_hash_table_add (drivers_set, g_steal_pointer (&driver_path));
+    }
+
+  g_debug ("Enumerating %s VA-API drivers on host...", multiarch_tuple);
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+        _srt_profiling_start ("Enumerating host VA-API drivers");
+
+      va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
+                                                            multiarch_tuple,
+                                                            SRT_DRIVER_FLAGS_NONE);
+    }
+
+  for (icd_iter = va_api_drivers, i = 0; icd_iter != NULL; icd_iter = icd_iter->next, i++)
+    {
+      g_assert (SRT_IS_VA_API_DRIVER (icd_iter->data));
+      SrtVaApiDriver *driver = icd_iter->data;
+      g_autofree gchar *driver_path = NULL;
+      const gchar *lib_path = srt_va_api_driver_get_library_path (driver);
+
+      g_debug ("Found VA-API driver: %s", lib_path);
+      driver_path = g_path_get_dirname (lib_path);
+      if (!g_hash_table_contains (drivers_set, driver_path))
+        g_hash_table_add (drivers_set, g_steal_pointer (&driver_path));
+    }
+
+  g_hash_table_iter_init (&iter, drivers_set);
+  while (g_hash_table_iter_next (&iter, (gpointer *)&drivers_path, NULL))
+    pv_search_path_append (search_path, drivers_path);
+}
+
+/*
  * Returns: (element-type IcdDetails):
  */
 static GPtrArray *
@@ -6852,6 +6938,25 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
         }
 
       g_clear_pointer (&part_timer, _srt_profiling_end);
+    }
+
+  if (self->interpreter_host_provider != NULL)
+    {
+      g_assert (pv_multiarch_as_emulator_tuples[PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST] == NULL);
+
+      for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST; i++)
+        {
+          SrtSystemInfo *arch_system_info;
+
+          if (self->flags & PV_RUNTIME_FLAGS_SINGLE_THREAD)
+            arch_system_info = host_system_info;
+          else
+            arch_system_info = enumeration_thread_join (&self->arch_host_threads[i]);
+
+          pv_append_host_dri_library_paths (arch_system_info,
+                                            pv_multiarch_as_emulator_tuples[i],
+                                            dri_path);
+        }
     }
 
   part_timer = _srt_profiling_start ("Finishing graphics stack capture");

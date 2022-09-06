@@ -172,6 +172,7 @@ fixture_create_runtime (Fixture *f,
                             f->var,
                             NULL,
                             graphics_provider,
+                            NULL,
                             environ,
                             (flags
                              | PV_RUNTIME_FLAGS_VERBOSE

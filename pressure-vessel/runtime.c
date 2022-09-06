@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Collabora Ltd.
+ * Copyright © 2020-2022 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -95,8 +95,10 @@ struct _PvRuntime
   gchar *runtime_files_on_host;
   const gchar *adverb_in_container;
   PvGraphicsProvider *provider;
+  PvGraphicsProvider *interpreter_host_provider;
   const gchar *host_in_current_namespace;
   EnumerationThread indep_thread;
+  EnumerationThread host_thread;
   EnumerationThread *arch_threads;
 
   PvRuntimeFlags flags;
@@ -122,6 +124,7 @@ enum {
   PROP_0,
   PROP_BUBBLEWRAP,
   PROP_GRAPHICS_PROVIDER,
+  PROP_INTERPRETER_HOST_PROVIDER,
   PROP_SOURCE,
   PROP_ORIGINAL_ENVIRON,
   PROP_FLAGS,
@@ -479,6 +482,10 @@ pv_runtime_get_property (GObject *object,
         g_value_set_object (value, self->provider);
         break;
 
+      case PROP_INTERPRETER_HOST_PROVIDER:
+        g_value_set_object (value, self->interpreter_host_provider);
+        break;
+
       case PROP_ORIGINAL_ENVIRON:
         g_value_set_boxed (value, self->original_environ);
         break;
@@ -525,6 +532,12 @@ pv_runtime_set_property (GObject *object,
         /* Construct-only */
         g_return_if_fail (self->provider == NULL);
         self->provider = g_value_dup_object (value);
+        break;
+
+      case PROP_INTERPRETER_HOST_PROVIDER:
+        /* Construct-only */
+        g_return_if_fail (self->interpreter_host_provider == NULL);
+        self->interpreter_host_provider = g_value_dup_object (value);
         break;
 
       case PROP_ORIGINAL_ENVIRON:
@@ -1548,14 +1561,16 @@ enumeration_thread_start_arch (EnumerationThread *self,
 static void
 enumeration_thread_start_indep (EnumerationThread *self,
                                 PvRuntimeFlags flags,
-                                PvGraphicsProvider *provider)
+                                PvGraphicsProvider *provider,
+                                const gchar *thread_name)
 {
   g_return_if_fail (self->cancellable == NULL);
   g_return_if_fail (self->system_info == NULL);
   g_return_if_fail (self->thread == NULL);
 
   self->cancellable = g_cancellable_new ();
-  self->thread = g_thread_new ("cross-architecture", enumerate_indep,
+  self->thread = g_thread_new (thread_name == NULL ? "cross-architecture" : thread_name,
+                               enumerate_indep,
                                enumeration_thread_inputs_new (NULL, flags,
                                                               provider,
                                                               self->cancellable));
@@ -1593,7 +1608,15 @@ pv_runtime_initable_init (GInitable *initable,
 
       enumeration_thread_start_indep (&self->indep_thread,
                                       self->flags,
-                                      self->provider);
+                                      self->provider, NULL);
+
+      if (self->interpreter_host_provider != NULL)
+        {
+          enumeration_thread_start_indep (&self->host_thread,
+                                          self->flags,
+                                          self->interpreter_host_provider,
+                                          "real-host");
+        }
 
       self->arch_threads = g_new0 (EnumerationThread,
                                    PV_N_SUPPORTED_ARCHITECTURES);
@@ -1912,7 +1935,9 @@ pv_runtime_dispose (GObject *object)
   PvRuntime *self = PV_RUNTIME (object);
 
   g_clear_object (&self->provider);
+  g_clear_object (&self->interpreter_host_provider);
   enumeration_thread_clear (&self->indep_thread);
+  enumeration_thread_clear (&self->host_thread);
   enumeration_threads_clear (&self->arch_threads,
                              PV_N_SUPPORTED_ARCHITECTURES);
 
@@ -1976,6 +2001,14 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
 
+  properties[PROP_INTERPRETER_HOST_PROVIDER] =
+    g_param_spec_object ("interpreter-host-provider",
+                         "Interpreter host graphics provider",
+                         "Sysroot used for the interpreter host graphics stack, or NULL",
+                         PV_TYPE_GRAPHICS_PROVIDER,
+                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS));
+
   properties[PROP_ORIGINAL_ENVIRON] =
     g_param_spec_boxed ("original-environ", "Original environ",
                         "The original environ to use",
@@ -2021,6 +2054,7 @@ pv_runtime_new (const char *source,
                 const char *variable_dir,
                 const char *bubblewrap,
                 PvGraphicsProvider *provider,
+                PvGraphicsProvider *interpreter_host_provider,
                 const GStrv original_environ,
                 PvRuntimeFlags flags,
                 GError **error)
@@ -2033,6 +2067,7 @@ pv_runtime_new (const char *source,
                          error,
                          "bubblewrap", bubblewrap,
                          "graphics-provider", provider,
+                         "interpreter-host-provider", interpreter_host_provider,
                          "original-environ", original_environ,
                          "variable-dir", variable_dir,
                          "source", source,
@@ -6493,7 +6528,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GString) va_api_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
   g_autoptr(SrtSystemInfo) system_info = NULL;
+  g_autoptr(SrtSystemInfo) host_system_info = NULL;
   g_autoptr(IcdStack) provider_stack = icd_stack_new ();
+  g_autoptr(IcdStack) host_stack = icd_stack_new ();
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autoptr(SrtProfilingTimer) part_timer = NULL;
   gboolean all_libglx_from_provider = TRUE;
@@ -6525,9 +6562,17 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     return FALSE;
 
   if (self->flags & PV_RUNTIME_FLAGS_SINGLE_THREAD)
-    system_info = pv_graphics_provider_create_system_info (self->provider);
+    {
+      system_info = pv_graphics_provider_create_system_info (self->provider);
+      if (self->interpreter_host_provider != NULL)
+        host_system_info = pv_graphics_provider_create_system_info (self->interpreter_host_provider);
+    }
   else
-    system_info = g_object_ref (enumeration_thread_join (&self->indep_thread));
+    {
+      system_info = g_object_ref (enumeration_thread_join (&self->indep_thread));
+      if (self->interpreter_host_provider != NULL)
+        host_system_info = g_object_ref (enumeration_thread_join (&self->host_thread));
+    }
 
   provider_stack->egl_icd_details = pv_enumerate_egl_icds (system_info,
                                                            pv_multiarch_tuples, provider);
@@ -6543,6 +6588,22 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                          provider,
                                          &provider_stack->vulkan_exp_layer_details,
                                          &provider_stack->vulkan_imp_layer_details);
+    }
+
+  if (host_system_info != NULL)
+    {
+      const gchar *which = "host";
+      host_stack->egl_icd_details = pv_enumerate_egl_icds (host_system_info, NULL, which);
+      host_stack->egl_ext_platform_details = pv_enumerate_egl_ext_platforms (host_system_info,
+                                                                             NULL, which);
+      host_stack->vulkan_icd_details = pv_enumerate_vulkan_icds (host_system_info, NULL, which);
+      if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
+        {
+          pv_enumerate_vulkan_layer_details (host_system_info,
+                                             which,
+                                             &host_stack->vulkan_exp_layer_details,
+                                             &host_stack->vulkan_imp_layer_details);
+        }
     }
 
   /* We set this FALSE later if we decide not to use the provider libc
@@ -6843,15 +6904,46 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                  provider_stack->egl_icd_details, egl_path, error))
     return FALSE;
 
+  if (host_stack->egl_icd_details != NULL)
+    {
+      for (i = 0; i < host_stack->egl_icd_details->len; i++)
+        {
+          IcdDetails *details = g_ptr_array_index (host_stack->egl_icd_details, i);
+          SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
+          pv_search_path_append (egl_path, srt_egl_icd_get_json_path (icd));
+        }
+    }
+
   if (!setup_each_json_manifest (self, bwrap, "egl/egl_external_platform.d",
                                  provider_stack->egl_ext_platform_details,
                                  egl_ext_platform_path, error))
     return FALSE;
 
+  if (host_stack->egl_ext_platform_details != NULL)
+    {
+      for (i = 0; i < host_stack->egl_ext_platform_details->len; i++)
+        {
+          IcdDetails *details = g_ptr_array_index (host_stack->egl_ext_platform_details, i);
+          SrtEglExternalPlatform *ext_platform = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
+          pv_search_path_append (egl_ext_platform_path,
+                                 srt_egl_external_platform_get_json_path (ext_platform));
+        }
+    }
+
   g_debug ("Setting up Vulkan ICD JSON...");
   if (!setup_each_json_manifest (self, bwrap, "vulkan/icd.d",
                                  provider_stack->vulkan_icd_details, vulkan_path, error))
     return FALSE;
+
+  if (host_stack->vulkan_icd_details != NULL)
+    {
+      for (i = 0; i < host_stack->vulkan_icd_details->len; i++)
+        {
+          IcdDetails *details = g_ptr_array_index (host_stack->vulkan_icd_details, i);
+          SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
+          pv_search_path_append (vulkan_path, srt_vulkan_icd_get_json_path (icd));
+        }
+    }
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
@@ -6861,11 +6953,31 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                      vulkan_exp_layer_path, error))
         return FALSE;
 
+      if (host_stack->vulkan_exp_layer_details != NULL)
+        {
+          for (i = 0; i < host_stack->vulkan_exp_layer_details->len; i++)
+            {
+              IcdDetails *details = g_ptr_array_index (host_stack->vulkan_exp_layer_details, i);
+              SrtVulkanLayer *layer = SRT_VULKAN_LAYER (details->icd);
+              pv_search_path_append (vulkan_path, srt_vulkan_layer_get_json_path (layer));
+            }
+        }
+
       g_debug ("Setting up Vulkan implicit layer JSON...");
       if (!setup_each_json_manifest (self, bwrap, "vulkan/implicit_layer.d",
                                      provider_stack->vulkan_imp_layer_details,
                                      vulkan_imp_layer_path, error))
         return FALSE;
+
+      if (host_stack->vulkan_imp_layer_details != NULL)
+        {
+          for (i = 0; i < host_stack->vulkan_imp_layer_details->len; i++)
+            {
+              IcdDetails *details = g_ptr_array_index (host_stack->vulkan_imp_layer_details, i);
+              SrtVulkanLayer *layer = SRT_VULKAN_LAYER (details->icd);
+              pv_search_path_append (vulkan_path, srt_vulkan_layer_get_json_path (layer));
+            }
+        }
     }
 
   if (dri_path->len != 0)

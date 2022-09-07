@@ -294,6 +294,7 @@ class Environment:
             [
                 'meson',
                 str(self.abs_builddir_parent / 'clang'),
+                '--native-file=build-aux/meson/clang.txt',
                 '-Db_lundef=false',
                 '-Db_sanitize=address,undefined',
                 '-Dbin=true',

@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220908.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220908.0) steamrt; urgency=medium
 
   * libcurl-compat: When building for scout (only), build a shim libcurl
     that can dispatch to runtime or system copies.
@@ -21,7 +21,7 @@ steam-runtime-tools (0.20220908.0) UNRELEASED; urgency=medium
   * build-aux: Actually use clang for the build labelled "clang"
   * launch-options: Update for steam-launch-wrapper addition to recent betas
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 08 Sep 2022 13:32:21 +0100
+ -- Simon McVittie <smcv@collabora.com>  Thu, 08 Sep 2022 13:38:04 +0100
 
 steam-runtime-tools (0.20220823.0) steamrt; urgency=medium
 

@@ -1,3 +1,28 @@
+steam-runtime-tools (0.20220908.0) UNRELEASED; urgency=medium
+
+  * libcurl-compat: When building for scout (only), build a shim libcurl
+    that can dispatch to runtime or system copies.
+    This works around ABI divergence from upstream in the libcurl in
+    Debian/Ubuntu between about 2005 and 2018, which unfortunately includes
+    the time at which Steam Runtime 1 'scout' started. Additional setup in
+    the steam-runtime scripts is necessary to take advantage of this.
+    (steamrt/tasks#119)
+  * Documentation updates:
+    - compat-tool-interface: Non-Steam launch options can have %command% now
+    - launch-client, shared-paths: Remove notes about obsolete versions
+    - launch-client: Update release status
+    - launch-client: Say where to find it
+    - launcher-interface-0: Move example to launch-client
+  * Tests:
+    - Improve support for using the tests "as-installed" to test a proposed
+      Steam Runtime
+    - generate-sysroots: Avoid using undefined string escape sequences
+    - Generalize TAP test template
+  * build-aux: Actually use clang for the build labelled "clang"
+  * launch-options: Update for steam-launch-wrapper addition to recent betas
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 08 Sep 2022 13:32:21 +0100
+
 steam-runtime-tools (0.20220823.0) steamrt; urgency=medium
 
   * pressure-vessel: Preserve X11 display number instead of redirecting

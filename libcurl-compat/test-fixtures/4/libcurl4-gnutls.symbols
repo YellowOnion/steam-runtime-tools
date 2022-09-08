@@ -1,0 +1,9 @@
+# Copyright 2022 Collabora Ltd.
+# SPDX-License-Identifier: MIT
+#
+# Cut-down version of libcurl-compat/libcurl4-gnutls.symbols with only
+# the symbol that is exported by our mock implementation.
+
+libcurl-gnutls.so.4 libcurl4-gnutls #MINVER#
+ CURL_GNUTLS_4@CURL_GNUTLS_4 0
+ curl_version@CURL_GNUTLS_4 0

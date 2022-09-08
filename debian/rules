@@ -30,6 +30,18 @@ ifeq ($(gtk_doc_with_cflags),disabled)
 dh_options += -Nlibsteam-runtime-tools-0-doc
 endif
 
+# Ideally we'd use /usr/lib/os-release here, but scout doesn't have that
+is_scout := $(shell \
+	if grep '^VERSION_CODENAME=' /etc/os-release | grep -w scout >/dev/null; then \
+		echo true; \
+	else \
+		echo false; \
+	fi \
+)
+ifeq ($(is_scout),true)
+export DEB_BUILD_PROFILES += pkg.steamrt.scout
+endif
+
 %:
 	dh $@ $(dh_options)
 
@@ -55,6 +67,7 @@ override_dh_auto_configure:
 		--libdir=$(libdir) \
 		-Dgtk_doc=$(gtk_doc_with_cflags) \
 		-Dintrospection=disabled \
+		-Dlibcurl_compat=$(is_scout) \
 		-Dman=enabled \
 		-Dmultiarch_tuple=$(DEB_HOST_MULTIARCH) \
 		-Dsrcdir=src \
@@ -94,6 +107,13 @@ override_dh_auto_install:
 		fi; \
 	done
 
+override_dh_install:
+ifeq ($(is_scout),true)
+	ln -fnsv libcurl.so.4 $(DESTDIR)/usr/$(libdir)/libsteam-runtime-our-libcurl.so.4
+	ln -fnsv libcurl-gnutls.so.4 $(DESTDIR)/usr/$(libdir)/libsteam-runtime-our-libcurl-gnutls.so.4
+endif
+	dh_install
+
 override_dh_shlibdeps:
 	dh_shlibdeps \
 		-plibsteam-runtime-tools-0-relocatable-libs \
@@ -103,7 +123,10 @@ override_dh_shlibdeps:
 		-e$(DESTDIR)/usr/bin/steam-runtime-system-info \
 		-e$(DESTDIR)/usr/$(pkglibexecdir)/$(DEB_HOST_MULTIARCH)-check-locale \
 		$(NULL)
-	dh_shlibdeps
+	dh_shlibdeps \
+		-Xlibsteam-runtime-shim-libcurl \
+		-Xusr/libexec/installed-tests/steam-runtime-tools-0/libcurl-compat \
+		$(NULL)
 
 override_dh_link:
 	dh_link

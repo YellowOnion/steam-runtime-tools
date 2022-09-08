@@ -1,0 +1,12 @@
+/*
+ * Copyright © 2021 Collabora Ltd.
+ * SPDX-License-Identifier: MIT
+ *
+ * GNU version script providing an ABI that mimics historical versions
+ * of libcurl.so.3 in Debian prior to 2018.
+ */
+
+CURL_OPENSSL_3 {
+    global:
+        curl_*;
+};

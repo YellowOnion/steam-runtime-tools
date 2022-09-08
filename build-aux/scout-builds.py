@@ -50,6 +50,7 @@ def setup(args):
 
     common_options = [
         '-Dgtk_doc=disabled',
+        '-Dlibcurl_compat=true',
         '-Dman=disabled',
         '-Dsrcdir=src',
         '--optimization=g',

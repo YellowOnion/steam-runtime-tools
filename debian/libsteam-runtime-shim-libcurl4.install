@@ -1,0 +1,4 @@
+usr/lib/*/libsteam-runtime-our-libcurl.so.4
+usr/lib/*/libsteam-runtime-our-libcurl-gnutls.so.4
+usr/lib/*/libsteam-runtime-shim-libcurl.so.4
+usr/lib/*/libsteam-runtime-shim-libcurl-gnutls.so.4

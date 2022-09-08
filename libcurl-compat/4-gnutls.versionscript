@@ -1,0 +1,12 @@
+/*
+ * Copyright © 2021 Collabora Ltd.
+ * SPDX-License-Identifier: MIT
+ *
+ * GNU version script providing an ABI that mimics upstream
+ * libcurl-gnutls.so.4 when built with --enable-versioned-symbols.
+ */
+
+CURL_GNUTLS_4 {
+    global:
+        curl_*;
+};

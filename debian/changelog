@@ -1,3 +1,23 @@
+steam-runtime-tools (0.20220919.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * pressure-vessel: If using libudev from the host, provide read-only
+    access to /run/udev.
+    This is sufficient to identify non-hotplugged game controllers in
+    games that use libudev directly (older bundled SDL versions, or not
+    using SDL at all).
+    - Controller hotplug support continues to require using an up-to-date
+      version of SDL or Proton.
+    - This is not done for older host OSs (Debian 10, Ubuntu 18.04, etc.)
+      because on these older OSs we have to use the container's libudev,
+      but the host /run/udev is not necessarily compatible with that.
+  * tests: Fix test failure with Arch Linux glibc ≥ 2.36-4
+
+  [ Simon McVittie ]
+  * tests: Fix test failure with latest Steam Runtime 1 'scout' images
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 19 Sep 2022 15:43:12 +0100
+
 steam-runtime-tools (0.20220908.0) steamrt; urgency=medium
 
   * libcurl-compat: When building for scout (only), build a shim libcurl

@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20220919.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20220919.0) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]
   * pressure-vessel: If using libudev from the host, provide read-only
@@ -11,12 +11,17 @@ steam-runtime-tools (0.20220919.0) UNRELEASED; urgency=medium
     - This is not done for older host OSs (Debian 10, Ubuntu 18.04, etc.)
       because on these older OSs we have to use the container's libudev,
       but the host /run/udev is not necessarily compatible with that.
+    (steamrt/tasks#171)
   * tests: Fix test failure with Arch Linux glibc ≥ 2.36-4
 
   [ Simon McVittie ]
+  * pv-runtime: Use host's libudev if equal to or newer than container
+    libudev, even if no graphics driver depends on it.
+    This makes it more likely that we can parse /run/udev.
+    (steamrt/tasks#171)
   * tests: Fix test failure with latest Steam Runtime 1 'scout' images
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 19 Sep 2022 15:43:12 +0100
+ -- Simon McVittie <smcv@collabora.com>  Mon, 19 Sep 2022 17:46:02 +0100
 
 steam-runtime-tools (0.20220908.0) steamrt; urgency=medium
 

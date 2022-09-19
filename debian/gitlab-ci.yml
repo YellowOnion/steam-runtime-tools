@@ -317,6 +317,7 @@ relocatable-install:production:
 
             dpkg -i \
             debian/tmp/artifacts/build/*_amd64.*deb \
+            debian/tmp/artifacts/build/libsteam-runtime-shim-libcurl4_*_i386.*deb \
             debian/tmp/artifacts/build/libsteam-runtime-tools-0-0-dbgsym_*_i386.*deb \
             debian/tmp/artifacts/build/libsteam-runtime-tools-0-0_*_i386.deb \
             debian/tmp/artifacts/build/libsteam-runtime-tools-0-dev_*_i386.deb \

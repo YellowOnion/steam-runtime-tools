@@ -4955,6 +4955,29 @@ collect_graphics_libraries_patterns (GPtrArray *patterns)
                                       soname_globs_even_if_older[i]));
 }
 
+static void
+collect_core_libraries_patterns (GPtrArray *patterns)
+{
+  static const char * const sonames[] =
+  {
+    /* If we have libudev from the graphics-stack provider (in practice
+     * the host system), it's a lot more likely to be able to understand
+     * the data in /run/udev, which is private to the version of udevd
+     * and its corresponding libudev. However, it's only safe to do this
+     * if it's equal to or newer than the version in the runtime. */
+    "libudev.so.0",
+    "libudev.so.1",
+  };
+  gsize i;
+
+  g_return_if_fail (patterns != NULL);
+
+  for (i = 0; i < G_N_ELEMENTS (sonames); i++)
+    g_ptr_array_add (patterns,
+                     g_strdup_printf ("if-exists:if-same-abi:soname:%s",
+                                      sonames[i]));
+}
+
 /*
  * pv_runtime_collect_libc_family:
  * @self: The runtime
@@ -6493,6 +6516,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           g_debug ("Collecting graphics drivers from provider system...");
 
+          collect_core_libraries_patterns (patterns);
           collect_graphics_libraries_patterns (patterns);
 
           if (!collect_egl_drivers (self, arch, egl_icd_details, patterns,

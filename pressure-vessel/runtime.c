@@ -4885,7 +4885,20 @@ collect_graphics_libraries_patterns (GPtrArray *patterns)
     "libva-glx.so.2",
     "libva-x11.so.2",
   };
-  static const char * const soname_globs[] =
+  /*
+   * In principle we could have another array sonames_even_if_older[] here,
+   * but in practice we don't want to do that, because we should prefer to
+   * use dependency libaries from the runtime if they're strictly newer.
+   * Otherwise, games linked against the runtime could fail to start up.
+   *
+   * Similarly, in principle we could have another array soname_globs[]
+   * here, but in practice the libraries that we want to match with
+   * wildcards are the same ones we want to take from the host even if
+   * they're older than the ones in the runtime: games are expected to
+   * look up symbols in all of these libraries with dlsym(), except for
+   * a few core symbols that have existed since time immemorial.
+   */
+  static const char * const soname_globs_even_if_older[] =
   {
     /* NVIDIA proprietary stack */
     "libEGL.so.*",
@@ -4936,10 +4949,10 @@ collect_graphics_libraries_patterns (GPtrArray *patterns)
                      g_strdup_printf ("if-exists:if-same-abi:soname:%s",
                                       sonames[i]));
 
-  for (i = 0; i < G_N_ELEMENTS (soname_globs); i++)
+  for (i = 0; i < G_N_ELEMENTS (soname_globs_even_if_older); i++)
     g_ptr_array_add (patterns,
                      g_strdup_printf ("if-exists:even-if-older:soname-match:%s",
-                                      soname_globs[i]));
+                                      soname_globs_even_if_older[i]));
 }
 
 /*

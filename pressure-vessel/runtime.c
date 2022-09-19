@@ -7121,6 +7121,14 @@ pv_runtime_get_modified_app (PvRuntime *self)
     return NULL;
 }
 
+const char *
+pv_runtime_get_overrides (PvRuntime *self)
+{
+  g_return_val_if_fail (PV_IS_RUNTIME (self), NULL);
+
+  return self->overrides;
+}
+
 /*
  * Return %TRUE if the runtime provides @library, either directly or
  * via the graphics-stack provider.

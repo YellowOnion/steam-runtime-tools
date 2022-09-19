@@ -45,6 +45,7 @@
 #include "flatpak-utils-private.h"
 #include "graphics-provider.h"
 #include "runtime.h"
+#include "supported-architectures.h"
 #include "utils.h"
 #include "wrap-flatpak.h"
 #include "wrap-home.h"
@@ -1816,6 +1817,32 @@ main (int argc,
         bind_and_propagate_from_environ (exports, container_env,
                                          known_required_env[i].name,
                                          known_required_env[i].flags);
+
+      /* Bind-mount /run/udev to support games that detect joysticks by using
+       * udev directly. We only do that when the host's version of libudev.so.1
+       * is in use, because there is no guarantees that the container's libudev
+       * is compatible with the host's udevd. */
+      if (runtime != NULL)
+        {
+          for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES; i++)
+            {
+              GStatBuf ignored;
+              g_autofree gchar *override = NULL;
+
+              override = g_build_filename (pv_runtime_get_overrides (runtime),
+                                           "lib", pv_multiarch_tuples[i],
+                                           "libudev.so.1", NULL);
+
+              if (g_lstat (override, &ignored) == 0)
+                {
+                  g_debug ("We are using the host's version of \"libudev.so.1\", trying to bind-mount /run/udev too...");
+                  flatpak_exports_add_path_expose (exports,
+                                                   FLATPAK_FILESYSTEM_MODE_READ_ONLY,
+                                                   "/run/udev");
+                  break;
+                }
+            }
+        }
 
       /* On NixOS, all paths hard-coded into libraries are in here */
       flatpak_exports_add_path_expose (exports,

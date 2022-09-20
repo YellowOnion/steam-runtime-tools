@@ -117,15 +117,7 @@ class TestLibcurlCompat(BaseTest):
 
         for arch in self.architectures.values():
             multiarch_tuple = arch.multiarch_tuple
-            word_size = arch.word_size
 
-            os.makedirs(
-                os.path.join(
-                    self.tmpdir.name, 'steam-runtime',
-                    'pinned_libs_{}'.format(word_size),
-                ),
-                exist_ok=True,
-            )
             os.makedirs(
                 os.path.join(
                     self.tmpdir.name, 'os-lib', multiarch_tuple,

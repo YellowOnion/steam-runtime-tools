@@ -375,13 +375,22 @@ class TestLibcurlCompat(BaseTest):
                     ),
                 )
 
-    def run_compat_setup(self) -> None:
+    def run_compat_setup(
+        self,
+        runtime_optional: bool = False,
+    ) -> None:
         '''
         Run steam-runtime-libcurl-compat-setup to set up pinned libraries.
         In real life this would be run by setup.sh, normally from outside
         the LD_LIBRARY_PATH runtime, but here we use SYSTEM_LD_LIBRARY_PATH
         to ensure that the Steam Runtime's LD_LIBRARY_PATH gets overridden.
         '''
+        argv = [self.compat_setup]
+
+        if runtime_optional:
+            argv.append('--runtime-optional')
+
+        argv.append(os.path.join(self.tmpdir.name, 'steam-runtime'))
         run_subprocess(
             [
                 'env',
@@ -392,9 +401,7 @@ class TestLibcurlCompat(BaseTest):
                     ),
                 ),
                 'G_MESSAGES_DEBUG=all',
-                self.compat_setup,
-                os.path.join(self.tmpdir.name, 'steam-runtime'),
-            ],
+            ] + argv,
             check=True,
             stdout=2,
         )
@@ -417,12 +424,13 @@ class TestLibcurlCompat(BaseTest):
         paths = []      # type: typing.List[str]
 
         for a in self.architectures.values():
-            paths.append(
-                os.path.join(
-                    self.tmpdir.name, 'steam-runtime',
-                    'pinned_libs_{}'.format(a.word_size),
-                ),
-            )
+            for subdir_prefix in ('libcurl_compat', 'pinned_libs'):
+                paths.append(
+                    os.path.join(
+                        self.tmpdir.name, 'steam-runtime',
+                        '{}_{}'.format(subdir_prefix, a.word_size),
+                    ),
+                )
 
         for a in self.architectures.values():
             paths.append(
@@ -486,42 +494,66 @@ class TestLibcurlCompat(BaseTest):
             stdout=subprocess.PIPE,
         )
 
-    def assert_using_system_libcurl(self):
+    def assert_using_system_libcurl(self, runtime_optional=False):
+        if runtime_optional:
+            # If we want the shim to be runtime-optional, we create the
+            # symlink in libcurl_compat_{word_size} and do not create any
+            # symlink in pinned_libs_{word_size}.
+            subdir_prefix = 'libcurl_compat'
+            other_subdir_prefix = 'pinned_libs'
+        else:
+            # If we want the shim to be used all the time, we do the reverse.
+            subdir_prefix = 'pinned_libs'
+            other_subdir_prefix = 'libcurl_compat'
+
         for arch in self.architectures.values():
             for suffix in self.suffixes:
                 for v in ('3', '4'):
                     # libcurl.so.4, libcurl-gnutls.so.3, etc. all point to the
                     # mock "system" library, which is compatible with both the
                     # OS and the scout ABI, even if those are not compatible
+                    path = os.path.join(
+                        self.tmpdir.name, 'steam-runtime',
+                        '{}_{}'.format(subdir_prefix, arch.word_size),
+                        'libcurl{}.so.{}'.format(suffix, v),
+                    )
                     self.assertEqual(
-                        os.readlink(
-                            os.path.join(
-                                self.tmpdir.name, 'steam-runtime',
-                                'pinned_libs_{}'.format(arch.word_size),
-                                'libcurl{}.so.{}'.format(suffix, v),
-                            ),
-                        ),
+                        os.readlink(path),
                         os.path.join(
                             self.tmpdir.name, 'os-lib', arch.multiarch_tuple,
                             'libcurl{}.so.4'.format(suffix),
                         ),
                     )
+                    path = os.path.join(
+                        self.tmpdir.name, 'steam-runtime',
+                        '{}_{}'.format(other_subdir_prefix, arch.word_size),
+                        'libcurl{}.so.{}'.format(suffix, v),
+                    )
+                    self.assertFalse(os.path.islink(path))
+                    self.assertFalse(os.path.exists(path))
 
-    def assert_using_shim_libcurl(self):
+    def assert_using_shim_libcurl(self, runtime_optional=False):
+        if runtime_optional:
+            # Same as in assert_using_system_libcurl()
+            subdir_prefix = 'libcurl_compat'
+            other_subdir_prefix = 'pinned_libs'
+        else:
+            subdir_prefix = 'pinned_libs'
+            other_subdir_prefix = 'libcurl_compat'
+
         for arch in self.architectures.values():
             for suffix in self.suffixes:
                 for v in ('3', '4'):
                     # libcurl.so.4, libcurl-gnutls.so.3, etc. all point to the
                     # shim library, which is compatible with both the OS and
                     # the scout ABI, even if those are not compatible
+                    path = os.path.join(
+                        self.tmpdir.name, 'steam-runtime',
+                        '{}_{}'.format(subdir_prefix, arch.word_size),
+                        'libcurl{}.so.{}'.format(suffix, v),
+                    )
                     self.assertEqual(
-                        os.readlink(
-                            os.path.join(
-                                self.tmpdir.name, 'steam-runtime',
-                                'pinned_libs_{}'.format(arch.word_size),
-                                'libcurl{}.so.{}'.format(suffix, v),
-                            ),
-                        ),
+                        os.readlink(path),
                         (
                             '../usr/lib/{}/'
                             'libsteam-runtime-shim-libcurl{}.so.4'
@@ -530,6 +562,13 @@ class TestLibcurlCompat(BaseTest):
                             suffix,
                         ),
                     )
+                    path = os.path.join(
+                        self.tmpdir.name, 'steam-runtime',
+                        '{}_{}'.format(other_subdir_prefix, arch.word_size),
+                        'libcurl{}.so.{}'.format(suffix, v),
+                    )
+                    self.assertFalse(os.path.islink(path))
+                    self.assertFalse(os.path.exists(path))
 
                 # There's a symlink to the system library for the shim
                 # to open
@@ -537,7 +576,7 @@ class TestLibcurlCompat(BaseTest):
                     os.readlink(
                         os.path.join(
                             self.tmpdir.name, 'steam-runtime',
-                            'pinned_libs_{}'.format(arch.word_size),
+                            '{}_{}'.format(subdir_prefix, arch.word_size),
                             'libsteam-runtime-system-libcurl{}.so.4'.format(
                                 suffix,
                             ),
@@ -548,6 +587,13 @@ class TestLibcurlCompat(BaseTest):
                         'libcurl{}.so.4'.format(suffix),
                     )
                 )
+                path = os.path.join(
+                    self.tmpdir.name, 'steam-runtime',
+                    '{}_{}'.format(other_subdir_prefix, arch.word_size),
+                    'libcurl{}.so.{}'.format(suffix, v),
+                )
+                self.assertFalse(os.path.islink(path))
+                self.assertFalse(os.path.exists(path))
 
     def assert_nothing_pinned(self):
         for arch in self.architectures.values():
@@ -557,15 +603,19 @@ class TestLibcurlCompat(BaseTest):
                     # been pinned. setup.sh will fall back to its usual
                     # pinning logic
                     for prefix in ('', 'system_'):
-                        path = os.path.join(
-                            self.tmpdir.name, 'steam-runtime',
-                            'pinned_libs_{}'.format(arch.word_size),
-                            '{}libcurl{}.so.{}'.format(prefix, suffix, v),
-                        )
-                        self.assertFalse(os.path.islink(path))
-                        self.assertFalse(os.path.exists(path))
+                        for subdir_prefix in ('pinned_libs', 'libcurl_compat'):
+                            path = os.path.join(
+                                self.tmpdir.name, 'steam-runtime',
+                                '{}_{}'.format(subdir_prefix, arch.word_size),
+                                '{}libcurl{}.so.{}'.format(prefix, suffix, v),
+                            )
+                            self.assertFalse(os.path.islink(path))
+                            self.assertFalse(os.path.exists(path))
 
-    def test_mock_system_libcurl4(self) -> None:
+    def test_mock_system_libcurl4(
+        self,
+        runtime_optional: bool = False,
+    ) -> None:
         '''
         System libcurl4 is CURL_OPENSSL_4, etc.
 
@@ -575,8 +625,8 @@ class TestLibcurlCompat(BaseTest):
         # version that implements only the new ABI
         self.install_mock_system_library('4')
 
-        self.run_compat_setup()
-        self.assert_using_shim_libcurl()
+        self.run_compat_setup(runtime_optional=runtime_optional)
+        self.assert_using_shim_libcurl(runtime_optional=runtime_optional)
 
         for multiarch_tuple, arch in self.architectures.items():
             for suffix in self.suffixes:
@@ -614,7 +664,13 @@ class TestLibcurlCompat(BaseTest):
                 else:
                     print('# {} not found'.format(helper), file=sys.stderr)
 
-    def test_mock_system_libcurl3(self) -> None:
+    def test_mock_system_libcurl4_runtime_optional(self) -> None:
+        self.test_mock_system_libcurl4(runtime_optional=True)
+
+    def test_mock_system_libcurl3(
+        self,
+        runtime_optional: bool = False,
+    ) -> None:
         '''
         System libcurl3 is CURL_OPENSSL_3, etc.
 
@@ -624,8 +680,8 @@ class TestLibcurlCompat(BaseTest):
         # version that implements only the old ABI
         self.install_mock_system_library('3')
 
-        self.run_compat_setup()
-        self.assert_using_system_libcurl()
+        self.run_compat_setup(runtime_optional=runtime_optional)
+        self.assert_using_system_libcurl(runtime_optional=runtime_optional)
 
         # Both system and scout programs use the system libcurl, which
         # in this case is scout-compatible
@@ -655,7 +711,13 @@ class TestLibcurlCompat(BaseTest):
         # we expect that to fail in this case, because we do not have
         # anything with the CURL_OPENSSL_4 ABI in our runtime
 
-    def test_mock_system_both(self) -> None:
+    def test_mock_system_libcurl3_runtime_optional(self) -> None:
+        self.test_mock_system_libcurl3(runtime_optional=True)
+
+    def test_mock_system_both(
+        self,
+        runtime_optional: bool = False,
+    ) -> None:
         '''
         System libcurl4 is both CURL_OPENSSL_4 and CURL_OPENSSL_3, etc.
 
@@ -666,8 +728,8 @@ class TestLibcurlCompat(BaseTest):
         # version that implements both ABIs
         self.install_mock_system_library('both')
 
-        self.run_compat_setup()
-        self.assert_using_system_libcurl()
+        self.run_compat_setup(runtime_optional=runtime_optional)
+        self.assert_using_system_libcurl(runtime_optional=runtime_optional)
 
         for multiarch_tuple, arch in self.architectures.items():
             for suffix in self.suffixes:
@@ -712,7 +774,13 @@ class TestLibcurlCompat(BaseTest):
                 else:
                     print('# {} not found'.format(helper), file=sys.stderr)
 
-    def test_mock_system_incompatible(self) -> None:
+    def test_mock_system_both_runtime_optional(self) -> None:
+        self.test_mock_system_both(runtime_optional=True)
+
+    def test_mock_system_incompatible(
+        self,
+        runtime_optional: bool = False,
+    ) -> None:
         '''
         System libcurl4 is incompatible with everything
         '''
@@ -720,13 +788,19 @@ class TestLibcurlCompat(BaseTest):
         # some hypothetical future version with different symbol-versions
         self.install_mock_system_library('incompatible')
 
-        self.run_compat_setup()
+        self.run_compat_setup(runtime_optional=runtime_optional)
         # Nothing has been pinned. This will result in fallback to
         # what setup.sh normally does, which involves a special case for
         # libcurl that is out-of-scope here.
         self.assert_nothing_pinned()
 
-    def test_mock_system_unversioned(self) -> None:
+    def test_mock_system_incompatible_runtime_optional(self) -> None:
+        self.test_mock_system_incompatible(runtime_optional=True)
+
+    def test_mock_system_unversioned(
+        self,
+        runtime_optional: bool = False,
+    ) -> None:
         '''
         System libcurl4 does not have versioned symbols
         '''
@@ -734,11 +808,14 @@ class TestLibcurlCompat(BaseTest):
         # version that implements no symbol-versions at all
         self.install_mock_system_library('none')
 
-        self.run_compat_setup()
+        self.run_compat_setup(runtime_optional=runtime_optional)
         # Nothing has been pinned. This will result in fallback to
         # what setup.sh normally does, which involves a special case for
         # libcurl that is out-of-scope here.
         self.assert_nothing_pinned()
+
+    def test_mock_system_unversioned_runtime_optional(self) -> None:
+        self.test_mock_system_unversioned(runtime_optional=True)
 
     def test_real_system_libcurl(self) -> None:
         if 'SRT_TEST_UNINSTALLED' in os.environ:

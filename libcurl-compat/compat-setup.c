@@ -71,6 +71,7 @@ record_dependency (const char *soname_symlink,
                    const char *soname,
                    GError **error)
 {
+  g_autofree gchar *dir_path = NULL;
   g_autofree gchar *pin_path = NULL;
   g_autofree gchar *contents = NULL;
 
@@ -81,12 +82,16 @@ record_dependency (const char *soname_symlink,
   g_return_val_if_fail (soname != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  pin_path = g_strdup_printf ("%s/pinned_libs_%d/system_%s",
-                              runtime, word_size, soname);
+  dir_path = g_strdup_printf ("%s/pinned_libs_%d", runtime, word_size);
+  pin_path = g_strdup_printf ("%s/system_%s", dir_path, soname);
   contents = g_strdup_printf ("%s\n%s\n", soname_symlink, target);
 
   g_debug ("Recording dependency on system library \"%s\" -> \"%s\" in \"%s\"",
            soname_symlink, target, pin_path);
+
+  if (g_mkdir_with_parents (dir_path, 0755) != 0)
+    return glnx_throw_errno_prefix (error, "creating directory \"%s\"",
+                                    dir_path);
 
   if (!g_file_set_contents (pin_path, contents, -1, error))
     return FALSE;
@@ -112,6 +117,7 @@ create_symlink (const char *target,
                 const char *link_name,
                 GError **error)
 {
+  g_autofree gchar *dir_path = NULL;
   g_autofree gchar *full_path = NULL;
 
   g_return_val_if_fail (target != NULL, FALSE);
@@ -120,10 +126,14 @@ create_symlink (const char *target,
   g_return_val_if_fail (link_name != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  full_path = g_strdup_printf ("%s/pinned_libs_%d/%s",
-                               runtime, word_size, link_name);
+  dir_path = g_strdup_printf ("%s/pinned_libs_%d", runtime, word_size);
+  full_path = g_build_filename (dir_path, link_name, NULL);
 
   g_debug ("Creating symlink \"%s\" -> \"%s\"", link_name, target);
+
+  if (g_mkdir_with_parents (dir_path, 0755) != 0)
+    return glnx_throw_errno_prefix (error, "creating directory \"%s\"",
+                                    dir_path);
 
   if (unlink (full_path) != 0 && errno != ENOENT)
     return glnx_throw_errno_prefix (error, "removing \"%s\"", full_path);

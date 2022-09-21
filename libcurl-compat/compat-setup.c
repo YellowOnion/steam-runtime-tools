@@ -71,6 +71,7 @@ record_dependency (const char *soname_symlink,
                    const char *soname,
                    GError **error)
 {
+  g_autofree gchar *dir_path = NULL;
   g_autofree gchar *pin_path = NULL;
   g_autofree gchar *contents = NULL;
 
@@ -81,12 +82,16 @@ record_dependency (const char *soname_symlink,
   g_return_val_if_fail (soname != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  pin_path = g_strdup_printf ("%s/pinned_libs_%d/system_%s",
-                              runtime, word_size, soname);
+  dir_path = g_strdup_printf ("%s/pinned_libs_%d", runtime, word_size);
+  pin_path = g_strdup_printf ("%s/system_%s", dir_path, soname);
   contents = g_strdup_printf ("%s\n%s\n", soname_symlink, target);
 
   g_debug ("Recording dependency on system library \"%s\" -> \"%s\" in \"%s\"",
            soname_symlink, target, pin_path);
+
+  if (g_mkdir_with_parents (dir_path, 0755) != 0)
+    return glnx_throw_errno_prefix (error, "creating directory \"%s\"",
+                                    dir_path);
 
   if (!g_file_set_contents (pin_path, contents, -1, error))
     return FALSE;
@@ -96,34 +101,45 @@ record_dependency (const char *soname_symlink,
 
 /**
  * create_symlink:
- * @target: Path to a library. It may be absolute or relative to
- *  `${STEAM_RUNTIME}/pinned_libs_${word_size}`.
+ * @target: Path to a library. It may be absolute, or relative to
+ *  `${STEAM_RUNTIME}/pinned_libs_${word_size}` or
+ *  `${STEAM_RUNTIME}/libcurl_compat_${word_size}` as appropriate.
  * @runtime: `${STEAM_RUNTIME}`
+ * @subdir_prefix: either `pinned_libs` or `libcurl_compat`
  * @word_size: 32 or 64
  * @link_name: Name of symlink to create in
- *  `${STEAM_RUNTIME}/pinned_libs_${word_size}`
+ *  `${STEAM_RUNTIME}/pinned_libs_${word_size}` or
+ *  `${STEAM_RUNTIME}/libcurl_compat_${word_size}` as appropriate
  *
  * Create a symlink in @runtime as if via `ln -fns`.
  */
 static gboolean
 create_symlink (const char *target,
                 const char *runtime,
+                const char *subdir_prefix,
                 int word_size,
                 const char *link_name,
                 GError **error)
 {
+  g_autofree gchar *dir_path = NULL;
   g_autofree gchar *full_path = NULL;
 
   g_return_val_if_fail (target != NULL, FALSE);
   g_return_val_if_fail (runtime != NULL, FALSE);
+  g_return_val_if_fail (subdir_prefix != NULL, FALSE);
   g_return_val_if_fail (word_size == 32 || word_size == 64, FALSE);
   g_return_val_if_fail (link_name != NULL, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  full_path = g_strdup_printf ("%s/pinned_libs_%d/%s",
-                               runtime, word_size, link_name);
+  dir_path = g_strdup_printf ("%s/%s_%d",
+                              runtime, subdir_prefix, word_size);
+  full_path = g_build_filename (dir_path, link_name, NULL);
 
   g_debug ("Creating symlink \"%s\" -> \"%s\"", link_name, target);
+
+  if (g_mkdir_with_parents (dir_path, 0755) != 0)
+    return glnx_throw_errno_prefix (error, "creating directory \"%s\"",
+                                    dir_path);
 
   if (unlink (full_path) != 0 && errno != ENOENT)
     return glnx_throw_errno_prefix (error, "removing \"%s\"", full_path);
@@ -163,7 +179,8 @@ static const char *suffixes[] =
 G_STATIC_ASSERT (G_N_ELEMENTS (multiarch_tuples) == N_ABIS);
 
 static gboolean
-run (int argc,
+run (gboolean runtime_optional,
+     int argc,
      char **argv,
      GError **error)
 {
@@ -174,6 +191,7 @@ run (int argc,
   g_autoptr(SrtSystemInfo) upstream_abi = NULL;
   const char *env;
   const char *runtime;
+  const char *subdir_prefix;
   gsize i, j;
 
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
@@ -202,6 +220,11 @@ run (int argc,
                    "Exactly one positional parameter is required");
       return FALSE;
     }
+
+  if (runtime_optional)
+    subdir_prefix = "libcurl_compat";
+  else
+    subdir_prefix = "pinned_libs";
 
   /* If we're already running under the Steam Runtime, escape from it
    * so that we can look at the system copy of libcurl. */
@@ -332,10 +355,10 @@ run (int argc,
                * first. */
               if (!record_dependency (path, real_path, runtime, word_size,
                                       soname, &local_error)
-                  || !create_symlink (real_path, runtime, word_size, soname,
-                                      &local_error)
-                  || !create_symlink (real_path, runtime, word_size, old_soname,
-                                      &local_error))
+                  || !create_symlink (real_path, runtime, subdir_prefix,
+                                      word_size, soname, &local_error)
+                  || !create_symlink (real_path, runtime, subdir_prefix,
+                                      word_size, old_soname, &local_error))
                 {
                   g_warning ("%s", local_error->message);
                   g_clear_error (&local_error);
@@ -361,12 +384,12 @@ run (int argc,
                * otherwise it will fail at runtime. */
               if (!record_dependency (path, real_path, runtime, word_size,
                                       soname, &local_error)
-                  || !create_symlink (real_path, runtime, word_size, system,
-                                      &local_error)
-                  || !create_symlink (shim_path, runtime, word_size, soname,
-                                      &local_error)
-                  || !create_symlink (shim_path, runtime, word_size, old_soname,
-                                      &local_error))
+                  || !create_symlink (real_path, runtime, subdir_prefix,
+                                      word_size, system, &local_error)
+                  || !create_symlink (shim_path, runtime, subdir_prefix,
+                                      word_size, soname, &local_error)
+                  || !create_symlink (shim_path, runtime, subdir_prefix,
+                                      word_size, old_soname, &local_error))
                 {
                   g_warning ("%s", local_error->message);
                   g_clear_error (&local_error);
@@ -411,10 +434,15 @@ run (int argc,
 }
 
 static gboolean opt_print_version = FALSE;
+static gboolean opt_runtime_optional = FALSE;
 static gboolean opt_verbose = FALSE;
 
 static const GOptionEntry option_entries[] =
 {
+  { "runtime-optional", '\0', G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE,
+    &opt_runtime_optional,
+    "Set up compatibility shim in a separate directory so it can be "
+    "enabled or disabled by run.sh", NULL },
   { "verbose", '\0', G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_verbose,
     "Be more verbose", NULL },
   { "version", '\0', G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_print_version,
@@ -455,7 +483,7 @@ main (int argc,
   if (opt_verbose)
     _srt_util_set_glib_log_handler (G_LOG_DOMAIN, opt_verbose);
 
-  if (!run (argc, argv, &error))
+  if (!run (opt_runtime_optional, argc, argv, &error))
     {
       if (error->domain == G_OPTION_ERROR)
         status = EX_USAGE;

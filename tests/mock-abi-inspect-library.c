@@ -38,12 +38,10 @@ main (int argc,
 #if defined(MOCK_ARCHITECTURE_x86_64)
   const gchar *multiarch = "x86_64-mock-abi";
   const gchar *lib_dir = "lib64";
-  const gchar *wrong_lib_dir = "32/";
   const gchar *wrong_abi = "i386";
 #else
   const gchar *multiarch = "i386-mock-abi";
   const gchar *lib_dir = "lib32";
-  const gchar *wrong_lib_dir = "64/";
   const gchar *wrong_abi = "x86_64";
 #endif
 
@@ -54,11 +52,9 @@ main (int argc,
 
   if (argv[2][0] == '/')
     {
-      /* This is a very naive check to simulate the exit error that occurrs
+      /* This is a very naive check to simulate the exit error that occurs
        * when we request a library that is of the wrong ELF class. */
       if (g_strstr_len (argv[2], -1, wrong_abi) != NULL)
-        goto out;
-      if (g_strstr_len (argv[2], -1, wrong_lib_dir) != NULL)
         goto out;
 
       /* If the path is already absolute, just prepend the sysroot */

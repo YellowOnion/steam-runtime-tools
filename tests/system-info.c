@@ -1569,6 +1569,9 @@ os_steamrt (Fixture *f,
   gchar *s;
   SrtRuntimeIssues runtime_issues;
 
+  if (_srt_tests_skip_if_really_in_steam_runtime ())
+    return;
+
   sysroot = g_build_filename (f->sysroots, "steamrt", NULL);
 
   info = srt_system_info_new (NULL);
@@ -1646,6 +1649,9 @@ os_steamrt_unofficial (Fixture *f,
   gchar *sysroot;
   gchar *s;
   SrtRuntimeIssues runtime_issues;
+
+  if (_srt_tests_skip_if_really_in_steam_runtime ())
+    return;
 
   sysroot = g_build_filename (f->sysroots, "steamrt-unofficial", NULL);
 
@@ -1727,6 +1733,9 @@ os_invalid_os_release (Fixture *f,
   gchar *sysroot;
   gchar *s;
   SrtRuntimeIssues runtime_issues;
+
+  if (_srt_tests_skip_if_really_in_steam_runtime ())
+    return;
 
   sysroot = g_build_filename (f->sysroots, "invalid-os-release", NULL);
 

@@ -1,3 +1,18 @@
+steam-runtime-tools (0.20220919.1) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * libcurl-compat: Make it possible for run.sh to activate or deactivate
+    the compatibility shim without re-running setup.sh (steamrt/tasks#119)
+  * Tests:
+    - Improve ability to run tests against the Steam Runtime environment
+    - Improve diagnostic output if JSON results differ
+
+  [ Ludovico de Nittis ]
+  * Tests:
+    - Fix an intermittent unit test failure (steamrt/tasks#162)
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 26 Sep 2022 17:31:26 +0100
+
 steam-runtime-tools (0.20220919.0) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]

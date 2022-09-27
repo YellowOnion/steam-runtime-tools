@@ -1,6 +1,10 @@
 steam-runtime-tools (0.20220919.1) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
+  * pv-runtime: Don't capture libudev.so.0 for now.
+    This means we won't use a system copy of libudev0-shim, but avoids
+    crashes on systems where libudev.so.0 is incorrectly a symlink to
+    libudev.so.1. (steam-runtime-tools#96, ValveSoftware/steam-runtime#533)
   * libcurl-compat: Make it possible for run.sh to activate or deactivate
     the compatibility shim without re-running setup.sh (steamrt/tasks#119)
   * Tests:
@@ -11,7 +15,7 @@ steam-runtime-tools (0.20220919.1) UNRELEASED; urgency=medium
   * Tests:
     - Fix an intermittent unit test failure (steamrt/tasks#162)
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 26 Sep 2022 17:31:26 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 27 Sep 2022 14:04:58 +0100
 
 steam-runtime-tools (0.20220919.0) steamrt; urgency=medium
 

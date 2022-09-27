@@ -4965,7 +4965,6 @@ collect_core_libraries_patterns (GPtrArray *patterns)
      * the data in /run/udev, which is private to the version of udevd
      * and its corresponding libudev. However, it's only safe to do this
      * if it's equal to or newer than the version in the runtime. */
-    "libudev.so.0",
     "libudev.so.1",
   };
   gsize i;

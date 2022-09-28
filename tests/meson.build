@@ -149,6 +149,12 @@ executable(
   install_dir : tests_dir,
 )
 
+# A list of strings each of this form:
+# test-name:any one-line shell command, which will include ${G_TEST_BUILDDIR}
+# A typical example:
+# architecture:${G_TEST_BUILDDIR}/test-architecture --tap
+relocatable_installed_tests = []
+
 foreach test_info : tests
   test_name = test_info['name']
 
@@ -187,6 +193,13 @@ foreach test_info : tests
       install_dir: tests_metadir,
       configuration: test_conf
     )
+    relocatable_installed_tests += [
+      '@0@:@1@/test-@2@ --tap'.format(
+        test_name,
+        '${G_TEST_BUILDDIR}',
+        test_name,
+      )
+    ]
   endif
 
   if glib_tap_support
@@ -464,6 +477,7 @@ foreach test_info : test_scripts
   test_name = test_info['name']
   program = files(test_name)
   wrapper = ''
+  relocatable_wrapper = ''
   test_argv = []
   timeout = 30
 
@@ -471,6 +485,7 @@ foreach test_info : test_scripts
     test_argv += [program]
     program = python
     wrapper = get_option('prefix') / tests_dir / 'find-python.sh'
+    relocatable_wrapper = '${G_TEST_BUILDDIR}/find-python.sh'
   endif
 
   test(
@@ -497,11 +512,31 @@ foreach test_info : test_scripts
       install_dir: tests_metadir,
       configuration: test_conf
     )
+    relocatable_installed_tests += [
+      '@0@:@1@ @2@/@3@'.format(
+        test_name,
+        relocatable_wrapper,
+        '${G_TEST_BUILDDIR}',
+        test_name,
+      )
+    ]
   endif
 endforeach
 
 if get_option('pressure_vessel') and get_option('bin')
   subdir('pressure-vessel')
+endif
+
+if get_option('installed_tests')
+  install_data('run-in-ldlp-runtime.sh', install_dir: tests_dir)
+  test_conf = configuration_data()
+  test_conf.set('TESTS', '\n'.join(relocatable_installed_tests))
+  configure_file(
+    input: files('run-in-ldlp-runtime.txt.in'),
+    output: 'run-in-ldlp-runtime.txt',
+    install_dir: tests_dir,
+    configuration: test_conf
+  )
 endif
 
 # vim:set sw=2 sts=2 et:

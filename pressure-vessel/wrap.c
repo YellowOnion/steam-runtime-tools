@@ -1003,6 +1003,7 @@ main (int argc,
   int result;
   PvAppendPreloadFlags append_preload_flags = PV_APPEND_PRELOAD_FLAGS_NONE;
   glnx_autofd int root_fd = -1;
+  SrtMachineType host_machine = SRT_MACHINE_TYPE_UNKNOWN;
 
   setlocale (LC_ALL, "");
 
@@ -1097,7 +1098,7 @@ main (int argc,
   if (opt_verbose)
     _srt_util_set_glib_log_handler (G_LOG_DOMAIN, opt_verbose);
 
-  interpreter_root = pv_wrap_detect_interpreter_root ();
+  pv_wrap_detect_virtualization (&interpreter_root, &host_machine);
 
   /* Specifying either one of these mutually-exclusive options as a
    * command-line option disables use of the environment variable for
@@ -1564,6 +1565,7 @@ main (int argc,
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer =
         _srt_profiling_start ("Setting up runtime");
       g_autoptr(PvGraphicsProvider) graphics_provider = NULL;
+      g_autoptr(PvGraphicsProvider) interpreter_host_provider = NULL;
       PvRuntimeFlags flags = PV_RUNTIME_FLAGS_NONE;
       g_autofree gchar *runtime_resolved = NULL;
       const char *runtime_path = NULL;
@@ -1579,7 +1581,7 @@ main (int argc,
           g_assert (graphics_provider_mount_point != NULL);
           graphics_provider = pv_graphics_provider_new (opt_graphics_provider,
                                                         graphics_provider_mount_point,
-                                                        error);
+                                                        TRUE, error);
 
           if (graphics_provider == NULL)
             goto out;
@@ -1601,7 +1603,23 @@ main (int argc,
         flags |= PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX;
 
       if (interpreter_root != NULL)
-        flags |= PV_RUNTIME_FLAGS_INTERPRETER_ROOT;
+        {
+          flags |= PV_RUNTIME_FLAGS_INTERPRETER_ROOT;
+
+          /* Also include the real host graphics stack to allow thunking.
+           * To avoid enumerating the same DRIs/layers twice, we only do
+           * this if the host is not a supported architecture. */
+          if (!pv_supported_architectures_include_machine_type (host_machine))
+            {
+              /* The trailing slash is needed to allow open(2) to work even if
+               * it's using the O_NOFOLLOW flag. */
+              interpreter_host_provider = pv_graphics_provider_new ("/proc/self/root/",
+                                                                    "/proc/self/root/",
+                                                                    FALSE, error);
+              if (interpreter_host_provider == NULL)
+                goto out;
+            }
+        }
 
       if (opt_runtime != NULL)
         {
@@ -1639,6 +1657,7 @@ main (int argc,
                                 opt_variable_dir,
                                 bwrap_executable,
                                 graphics_provider,
+                                interpreter_host_provider,
                                 original_environ,
                                 flags,
                                 error);

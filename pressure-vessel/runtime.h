@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Collabora Ltd.
+ * Copyright © 2020-2022 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -92,6 +92,7 @@ PvRuntime *pv_runtime_new (const char *source,
                            const char *variable_dir,
                            const char *bubblewrap,
                            PvGraphicsProvider *provider,
+                           PvGraphicsProvider *interpreter_host_provider,
                            const GStrv original_environ,
                            PvRuntimeFlags flags,
                            GError **error);

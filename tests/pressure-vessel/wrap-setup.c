@@ -163,7 +163,7 @@ fixture_create_runtime (Fixture *f,
     gfx_in_container = "/run/host";
 
   graphics_provider = pv_graphics_provider_new ("/", gfx_in_container,
-                                                &local_error);
+                                                TRUE, &local_error);
   g_assert_no_error (local_error);
   g_assert_nonnull (graphics_provider);
 
@@ -172,6 +172,7 @@ fixture_create_runtime (Fixture *f,
                             f->var,
                             NULL,
                             graphics_provider,
+                            NULL,
                             environ,
                             (flags
                              | PV_RUNTIME_FLAGS_VERBOSE

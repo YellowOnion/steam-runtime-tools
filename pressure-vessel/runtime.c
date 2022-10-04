@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Collabora Ltd.
+ * Copyright © 2020-2022 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -95,8 +95,11 @@ struct _PvRuntime
   gchar *runtime_files_on_host;
   const gchar *adverb_in_container;
   PvGraphicsProvider *provider;
+  PvGraphicsProvider *interpreter_host_provider;
   const gchar *host_in_current_namespace;
   EnumerationThread indep_thread;
+  EnumerationThread host_thread;
+  EnumerationThread *arch_host_threads;
   EnumerationThread *arch_threads;
 
   PvRuntimeFlags flags;
@@ -122,6 +125,7 @@ enum {
   PROP_0,
   PROP_BUBBLEWRAP,
   PROP_GRAPHICS_PROVIDER,
+  PROP_INTERPRETER_HOST_PROVIDER,
   PROP_SOURCE,
   PROP_ORIGINAL_ENVIRON,
   PROP_FLAGS,
@@ -479,6 +483,10 @@ pv_runtime_get_property (GObject *object,
         g_value_set_object (value, self->provider);
         break;
 
+      case PROP_INTERPRETER_HOST_PROVIDER:
+        g_value_set_object (value, self->interpreter_host_provider);
+        break;
+
       case PROP_ORIGINAL_ENVIRON:
         g_value_set_boxed (value, self->original_environ);
         break;
@@ -525,6 +533,12 @@ pv_runtime_set_property (GObject *object,
         /* Construct-only */
         g_return_if_fail (self->provider == NULL);
         self->provider = g_value_dup_object (value);
+        break;
+
+      case PROP_INTERPRETER_HOST_PROVIDER:
+        /* Construct-only */
+        g_return_if_fail (self->interpreter_host_provider == NULL);
+        self->interpreter_host_provider = g_value_dup_object (value);
         break;
 
       case PROP_ORIGINAL_ENVIRON:
@@ -1351,7 +1365,10 @@ enumerate_arch (gpointer data)
   if (g_cancellable_is_cancelled (inputs->cancellable))
     goto out;
 
-  if (TRUE)
+  /* At the moment the real host is included only when FEX emulator is in use.
+   * Skipping VDPAU until there is a real use case for it, because
+   * it only supports one search path entry, which is problematic for us. */
+  if (pv_supported_architectures_include_machine_type (inputs->details->machine_type))
     {
       G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
         _srt_profiling_start ("Enumerating %s VDPAU drivers in thread",
@@ -1407,6 +1424,63 @@ out:
   return g_steal_pointer (&system_info);
 }
 
+static void
+cache_indep_graphics_stack (SrtSystemInfo *system_info,
+                            PvRuntimeFlags flags,
+                            const char * const *multiarch_tuples,
+                            GCancellable *cancellable)
+{
+  if (g_cancellable_is_cancelled (cancellable))
+    return;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating EGL ICDs in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
+
+      drivers = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
+    }
+
+  if (g_cancellable_is_cancelled (cancellable))
+    return;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating EGL external platforms in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
+
+      drivers = srt_system_info_list_egl_external_platforms (system_info, multiarch_tuples);
+    }
+
+  if (g_cancellable_is_cancelled (cancellable))
+    return;
+
+  if (TRUE)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating Vulkan ICDs in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
+
+      drivers = srt_system_info_list_vulkan_icds (system_info, multiarch_tuples);
+    }
+
+  if (g_cancellable_is_cancelled (cancellable))
+    return;
+
+  if (flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
+        _srt_profiling_start ("Enumerating Vulkan layers in thread");
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) exp_layers = NULL;
+      G_GNUC_UNUSED g_autoptr(SrtObjectList) imp_layers = NULL;
+
+      exp_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
+      imp_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
+    }
+}
+
 /* Called in enumeration thread */
 static gpointer
 enumerate_indep (gpointer data)
@@ -1417,57 +1491,9 @@ enumerate_indep (gpointer data)
   g_autoptr(SrtSystemInfo) system_info =
     pv_graphics_provider_create_system_info (inputs->provider);
 
-  if (g_cancellable_is_cancelled (inputs->cancellable))
-    goto out;
+  cache_indep_graphics_stack (system_info, inputs->flags, pv_multiarch_tuples,
+                              inputs->cancellable);
 
-  if (TRUE)
-    {
-      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
-        _srt_profiling_start ("Enumerating EGL ICDs in thread");
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
-
-      drivers = srt_system_info_list_egl_icds (system_info, pv_multiarch_tuples);
-    }
-
-  if (g_cancellable_is_cancelled (inputs->cancellable))
-    goto out;
-
-  if (TRUE)
-    {
-      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
-        _srt_profiling_start ("Enumerating EGL external platforms in thread");
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
-
-      drivers = srt_system_info_list_egl_external_platforms (system_info, pv_multiarch_tuples);
-    }
-
-  if (g_cancellable_is_cancelled (inputs->cancellable))
-    goto out;
-
-  if (TRUE)
-    {
-      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
-        _srt_profiling_start ("Enumerating Vulkan ICDs in thread");
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) drivers = NULL;
-
-      drivers = srt_system_info_list_vulkan_icds (system_info, pv_multiarch_tuples);
-    }
-
-  if (g_cancellable_is_cancelled (inputs->cancellable))
-    goto out;
-
-  if (inputs->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
-    {
-      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) part_timer =
-        _srt_profiling_start ("Enumerating Vulkan layers in thread");
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) exp_layers = NULL;
-      G_GNUC_UNUSED g_autoptr(SrtObjectList) imp_layers = NULL;
-
-      exp_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
-      imp_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
-    }
-
-out:
   enumeration_thread_inputs_free (inputs);
   return g_steal_pointer (&system_info);
 }
@@ -1539,14 +1565,16 @@ enumeration_thread_start_arch (EnumerationThread *self,
 static void
 enumeration_thread_start_indep (EnumerationThread *self,
                                 PvRuntimeFlags flags,
-                                PvGraphicsProvider *provider)
+                                PvGraphicsProvider *provider,
+                                const gchar *thread_name)
 {
   g_return_if_fail (self->cancellable == NULL);
   g_return_if_fail (self->system_info == NULL);
   g_return_if_fail (self->thread == NULL);
 
   self->cancellable = g_cancellable_new ();
-  self->thread = g_thread_new ("cross-architecture", enumerate_indep,
+  self->thread = g_thread_new (thread_name == NULL ? "cross-architecture" : thread_name,
+                               enumerate_indep,
                                enumeration_thread_inputs_new (NULL, flags,
                                                               provider,
                                                               self->cancellable));
@@ -1584,7 +1612,24 @@ pv_runtime_initable_init (GInitable *initable,
 
       enumeration_thread_start_indep (&self->indep_thread,
                                       self->flags,
-                                      self->provider);
+                                      self->provider, NULL);
+
+      if (self->interpreter_host_provider != NULL)
+        {
+          enumeration_thread_start_indep (&self->host_thread,
+                                          self->flags,
+                                          self->interpreter_host_provider,
+                                          "real-host");
+
+          self->arch_host_threads = g_new0 (EnumerationThread,
+                                            PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST);
+
+          for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST; i++)
+            enumeration_thread_start_arch (&self->arch_host_threads[i],
+                                           &pv_multiarch_as_emulator_details[i],
+                                           self->flags,
+                                           self->interpreter_host_provider);
+        }
 
       self->arch_threads = g_new0 (EnumerationThread,
                                    PV_N_SUPPORTED_ARCHITECTURES);
@@ -1903,7 +1948,11 @@ pv_runtime_dispose (GObject *object)
   PvRuntime *self = PV_RUNTIME (object);
 
   g_clear_object (&self->provider);
+  g_clear_object (&self->interpreter_host_provider);
   enumeration_thread_clear (&self->indep_thread);
+  enumeration_thread_clear (&self->host_thread);
+  enumeration_threads_clear (&self->arch_host_threads,
+                             PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST);
   enumeration_threads_clear (&self->arch_threads,
                              PV_N_SUPPORTED_ARCHITECTURES);
 
@@ -1967,6 +2016,14 @@ pv_runtime_class_init (PvRuntimeClass *cls)
                          (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
 
+  properties[PROP_INTERPRETER_HOST_PROVIDER] =
+    g_param_spec_object ("interpreter-host-provider",
+                         "Interpreter host graphics provider",
+                         "Sysroot used for the interpreter host graphics stack, or NULL",
+                         PV_TYPE_GRAPHICS_PROVIDER,
+                         (G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                          G_PARAM_STATIC_STRINGS));
+
   properties[PROP_ORIGINAL_ENVIRON] =
     g_param_spec_boxed ("original-environ", "Original environ",
                         "The original environ to use",
@@ -2012,6 +2069,7 @@ pv_runtime_new (const char *source,
                 const char *variable_dir,
                 const char *bubblewrap,
                 PvGraphicsProvider *provider,
+                PvGraphicsProvider *interpreter_host_provider,
                 const GStrv original_environ,
                 PvRuntimeFlags flags,
                 GError **error)
@@ -2024,6 +2082,7 @@ pv_runtime_new (const char *source,
                          error,
                          "bubblewrap", bubblewrap,
                          "graphics-provider", provider,
+                         "interpreter-host-provider", interpreter_host_provider,
                          "original-environ", original_environ,
                          "variable-dir", variable_dir,
                          "source", source,
@@ -6228,6 +6287,314 @@ collect_dri_drivers (PvRuntime *self,
   return TRUE;
 }
 
+/*
+ * @search_path: (inout):
+ */
+static void
+pv_append_host_dri_library_paths (SrtSystemInfo *system_info,
+                                  const char *multiarch_tuple,
+                                  GString *search_path)
+{
+  g_autoptr(SrtObjectList) dri_drivers = NULL;
+  g_autoptr(SrtObjectList) va_api_drivers = NULL;
+  g_autoptr(GHashTable) drivers_set = NULL;
+  const GList *icd_iter;
+  GHashTableIter iter;
+  const gchar *drivers_path = NULL;
+  gsize i;
+
+  g_return_if_fail (search_path != NULL);
+
+  drivers_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  g_debug ("Enumerating %s DRI drivers on host...", multiarch_tuple);
+  {
+    G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+      _srt_profiling_start ("Enumerating host DRI drivers");
+
+    dri_drivers = srt_system_info_list_dri_drivers (system_info,
+                                                    multiarch_tuple,
+                                                    SRT_DRIVER_FLAGS_NONE);
+  }
+
+  for (icd_iter = dri_drivers, i = 0; icd_iter != NULL; icd_iter = icd_iter->next, i++)
+    {
+      g_assert (SRT_IS_DRI_DRIVER (icd_iter->data));
+      SrtDriDriver *driver = icd_iter->data;
+      g_autofree gchar *driver_path = NULL;
+      const gchar *lib_path = srt_dri_driver_get_library_path (driver);
+
+      g_debug ("Found DRI driver: %s", lib_path);
+      driver_path = g_path_get_dirname (lib_path);
+      if (!g_hash_table_contains (drivers_set, driver_path))
+        g_hash_table_add (drivers_set, g_steal_pointer (&driver_path));
+    }
+
+  g_debug ("Enumerating %s VA-API drivers on host...", multiarch_tuple);
+    {
+      G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) enum_timer =
+        _srt_profiling_start ("Enumerating host VA-API drivers");
+
+      va_api_drivers = srt_system_info_list_va_api_drivers (system_info,
+                                                            multiarch_tuple,
+                                                            SRT_DRIVER_FLAGS_NONE);
+    }
+
+  for (icd_iter = va_api_drivers, i = 0; icd_iter != NULL; icd_iter = icd_iter->next, i++)
+    {
+      g_assert (SRT_IS_VA_API_DRIVER (icd_iter->data));
+      SrtVaApiDriver *driver = icd_iter->data;
+      g_autofree gchar *driver_path = NULL;
+      const gchar *lib_path = srt_va_api_driver_get_library_path (driver);
+
+      g_debug ("Found VA-API driver: %s", lib_path);
+      driver_path = g_path_get_dirname (lib_path);
+      if (!g_hash_table_contains (drivers_set, driver_path))
+        g_hash_table_add (drivers_set, g_steal_pointer (&driver_path));
+    }
+
+  g_hash_table_iter_init (&iter, drivers_set);
+  while (g_hash_table_iter_next (&iter, (gpointer *)&drivers_path, NULL))
+    pv_search_path_append (search_path, drivers_path);
+}
+
+/*
+ * Returns: (element-type IcdDetails):
+ */
+static GPtrArray *
+pv_enumerate_egl_ext_platforms (SrtSystemInfo *system_info,
+                                const char * const *multiarch_tuples,
+                                const gchar *which_system)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
+  g_autoptr(SrtObjectList) egl_ext_platforms = NULL;
+  g_autoptr(GPtrArray) egl_ext_platform_details = NULL;
+  gsize i;
+  const GList *icd_iter;
+
+  timer = _srt_profiling_start ("Enumerating EGL external platforms on %s system",
+                                which_system);
+  g_debug ("Enumerating EGL external platforms on %s system...", which_system);
+  egl_ext_platforms = srt_system_info_list_egl_external_platforms (system_info,
+                                                                   multiarch_tuples);
+  egl_ext_platform_details = g_ptr_array_new_full (g_list_length (egl_ext_platforms),
+                                                   (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = egl_ext_platforms, i = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, i++)
+    {
+      SrtEglExternalPlatform *ext = icd_iter->data;
+      const gchar *path = srt_egl_external_platform_get_json_path (ext);
+      GError *local_error = NULL;
+
+      if (!srt_egl_external_platform_check_error (ext, &local_error))
+        {
+          g_info ("Failed to load EGL external platform #%" G_GSIZE_FORMAT  " from %s: %s",
+                  i, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_info ("EGL external platform #%" G_GSIZE_FORMAT " at %s: %s",
+              i, path, srt_egl_external_platform_get_library_path (ext));
+
+      g_ptr_array_add (egl_ext_platform_details, icd_details_new (ext));
+    }
+
+  return g_steal_pointer (&egl_ext_platform_details);
+}
+
+/*
+ * Returns: (element-type IcdDetails):
+ */
+static GPtrArray *
+pv_enumerate_egl_icds (SrtSystemInfo *system_info,
+                       const char * const *multiarch_tuples,
+                       const gchar *which_system)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
+  g_autoptr(SrtObjectList) egl_icds = NULL;
+  g_autoptr(GPtrArray) egl_icd_details = NULL;
+  gsize i;
+  const GList *icd_iter;
+
+  timer = _srt_profiling_start ("Enumerating EGL ICDs on %s system", which_system);
+  g_debug ("Enumerating EGL ICDs on %s system...", which_system);
+  egl_icds = srt_system_info_list_egl_icds (system_info, multiarch_tuples);
+  egl_icd_details = g_ptr_array_new_full (g_list_length (egl_icds),
+                                          (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = egl_icds, i = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, i++)
+    {
+      SrtEglIcd *icd = icd_iter->data;
+      const gchar *path = srt_egl_icd_get_json_path (icd);
+      GError *local_error = NULL;
+
+      if (!srt_egl_icd_check_error (icd, &local_error))
+        {
+          g_info ("Failed to load EGL ICD #%" G_GSIZE_FORMAT  " from %s: %s",
+                  i, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_info ("EGL ICD #%" G_GSIZE_FORMAT " at %s: %s",
+              i, path, srt_egl_icd_get_library_path (icd));
+
+      g_ptr_array_add (egl_icd_details, icd_details_new (icd));
+    }
+
+  return g_steal_pointer (&egl_icd_details);
+}
+
+/*
+ * Returns: (element-type IcdDetails):
+ */
+static GPtrArray *
+pv_enumerate_vulkan_icds (SrtSystemInfo *system_info,
+                          const char * const *multiarch_tuples,
+                          const gchar *which_system)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
+  g_autoptr(SrtObjectList) vulkan_icds = NULL;
+  g_autoptr(GPtrArray) vulkan_icd_details = NULL;
+  gsize i;
+  const GList *icd_iter;
+
+  timer = _srt_profiling_start ("Enumerating Vulkan ICDs on %s system", which_system);
+  g_debug ("Enumerating Vulkan ICDs on %s system...", which_system);
+  vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
+                                                  multiarch_tuples);
+  vulkan_icd_details = g_ptr_array_new_full (g_list_length (vulkan_icds),
+                                             (GDestroyNotify) G_CALLBACK (icd_details_free));
+
+  for (icd_iter = vulkan_icds, i = 0;
+       icd_iter != NULL;
+       icd_iter = icd_iter->next, i++)
+    {
+      SrtVulkanIcd *icd = icd_iter->data;
+      const gchar *path = srt_vulkan_icd_get_json_path (icd);
+      GError *local_error = NULL;
+
+      if (!srt_vulkan_icd_check_error (icd, &local_error))
+        {
+          g_info ("Failed to load Vulkan ICD #%" G_GSIZE_FORMAT " from %s: %s",
+                  i, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      g_info ("Vulkan ICD #%" G_GSIZE_FORMAT " at %s: %s",
+              i, path, srt_vulkan_icd_get_library_path (icd));
+
+      g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
+    }
+
+  return g_steal_pointer (&vulkan_icd_details);
+}
+
+/*
+ * @vulkan_layer_details: (inout) (element-type IcdDetails):
+ */
+static void
+pv_append_vulkan_layers_details (GList *vulkan_layers,
+                                 const gchar *which,
+                                 GPtrArray *vulkan_layer_details)
+{
+  gsize i;
+  const GList *icd_i;
+
+  for (icd_i = vulkan_layers, i = 0; icd_i != NULL; icd_i = icd_i->next, i++)
+    {
+      SrtVulkanLayer *layer = icd_i->data;
+      const gchar *path = srt_vulkan_layer_get_json_path (layer);
+      GError *local_error = NULL;
+
+      if (!srt_vulkan_layer_check_error (layer, &local_error))
+        {
+          g_info ("Failed to load Vulkan %s layer #%" G_GSIZE_FORMAT
+                  " from %s: %s", which, i, path, local_error->message);
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      const gchar *description = srt_vulkan_layer_get_library_path (layer);
+
+      if (description == NULL)
+        description = "meta-layer";
+
+      g_info ("Vulkan %s layer #%" G_GSIZE_FORMAT " at %s: %s",
+              which, i, path, description);
+
+      g_ptr_array_add (vulkan_layer_details, icd_details_new (layer));
+    }
+}
+
+/*
+ * @vulkan_exp_layer_details: (out) (element-type IcdDetails):
+ * @vulkan_imp_layer_details: (out) (element-type IcdDetails):
+ */
+static void
+pv_enumerate_vulkan_layer_details (SrtSystemInfo *system_info,
+                                   const gchar *which_system,
+                                   GPtrArray **vulkan_exp_layer_details,
+                                   GPtrArray **vulkan_imp_layer_details)
+{
+  G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
+  g_autoptr(SrtObjectList) vulkan_exp_layers = NULL;
+  g_autoptr(SrtObjectList) vulkan_imp_layers = NULL;
+
+  g_return_if_fail (vulkan_exp_layer_details != NULL);
+  g_return_if_fail (*vulkan_exp_layer_details == NULL);
+  g_return_if_fail (vulkan_imp_layer_details != NULL);
+  g_return_if_fail (*vulkan_imp_layer_details == NULL);
+
+  timer = _srt_profiling_start ("Enumerating Vulkan layers on %s system", which_system);
+
+  g_debug ("Enumerating Vulkan explicit layers on %s system...", which_system);
+  vulkan_exp_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
+  *vulkan_exp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_exp_layers),
+                                                    (GDestroyNotify) G_CALLBACK (icd_details_free));
+  pv_append_vulkan_layers_details (vulkan_exp_layers, "explicit", *vulkan_exp_layer_details);
+
+  g_debug ("Enumerating Vulkan implicit layers on %s system...", which_system);
+  vulkan_imp_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
+  *vulkan_imp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_imp_layers),
+                                                    (GDestroyNotify) G_CALLBACK (icd_details_free));
+  pv_append_vulkan_layers_details (vulkan_imp_layers, "implicit", *vulkan_imp_layer_details);
+}
+
+typedef struct
+{
+  GPtrArray *egl_icd_details;   /* (element-type IcdDetails) */
+  GPtrArray *egl_ext_platform_details;   /* (element-type IcdDetails) */
+  GPtrArray *vulkan_icd_details;   /* (element-type IcdDetails) */
+  GPtrArray *vulkan_exp_layer_details;   /* (element-type IcdDetails) */
+  GPtrArray *vulkan_imp_layer_details;   /* (element-type IcdDetails) */
+} IcdStack;
+
+static IcdStack *
+icd_stack_new (void)
+{
+  return g_slice_new0 (IcdStack);
+}
+
+static void
+icd_stack_free (IcdStack *self)
+{
+  g_clear_pointer (&self->egl_icd_details, g_ptr_array_unref);
+  g_clear_pointer (&self->egl_ext_platform_details, g_ptr_array_unref);
+  g_clear_pointer (&self->vulkan_icd_details, g_ptr_array_unref);
+  g_clear_pointer (&self->vulkan_exp_layer_details, g_ptr_array_unref);
+  g_clear_pointer (&self->vulkan_imp_layer_details, g_ptr_array_unref);
+  g_slice_free (IcdStack, self);
+}
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdStack, icd_stack_free)
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -6246,22 +6613,11 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_autoptr(GString) va_api_path = g_string_new ("");
   gboolean any_architecture_works = FALSE;
   g_autoptr(SrtSystemInfo) system_info = NULL;
-  g_autoptr(SrtObjectList) egl_icds = NULL;
-  g_autoptr(SrtObjectList) egl_ext_platforms = NULL;
-  g_autoptr(SrtObjectList) vulkan_icds = NULL;
-  g_autoptr(SrtObjectList) vulkan_explicit_layers = NULL;
-  g_autoptr(SrtObjectList) vulkan_implicit_layers = NULL;
-  g_autoptr(GPtrArray) egl_icd_details = NULL;      /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) egl_ext_platform_details = NULL;   /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) vulkan_icd_details = NULL;   /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) vulkan_exp_layer_details = NULL;   /* (element-type IcdDetails) */
-  g_autoptr(GPtrArray) vulkan_imp_layer_details = NULL;   /* (element-type IcdDetails) */
+  g_autoptr(SrtSystemInfo) host_system_info = NULL;
+  g_autoptr(IcdStack) provider_stack = icd_stack_new ();
+  g_autoptr(IcdStack) host_stack = icd_stack_new ();
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   g_autoptr(SrtProfilingTimer) part_timer = NULL;
-  guint n_egl_icds;
-  guint n_egl_ext_platforms;
-  guint n_vulkan_icds;
-  const GList *icd_iter;
   gboolean all_libglx_from_provider = TRUE;
   gboolean all_libdrm_from_provider = TRUE;
   g_autoptr(GHashTable) drirc_data_in_provider = g_hash_table_new_full (g_str_hash,
@@ -6274,7 +6630,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                                                          g_str_equal,
                                                                          g_free, NULL);
   g_autoptr(GHashTable) gconv_in_provider = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                                     g_free, NULL);
+                                                                   g_free, NULL);
+  const gchar *provider = "provider";
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (self->provider != NULL, FALSE);
@@ -6290,171 +6647,48 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     return FALSE;
 
   if (self->flags & PV_RUNTIME_FLAGS_SINGLE_THREAD)
-    system_info = pv_graphics_provider_create_system_info (self->provider);
+    {
+      system_info = pv_graphics_provider_create_system_info (self->provider);
+      if (self->interpreter_host_provider != NULL)
+        host_system_info = pv_graphics_provider_create_system_info (self->interpreter_host_provider);
+    }
   else
-    system_info = g_object_ref (enumeration_thread_join (&self->indep_thread));
-
-  part_timer = _srt_profiling_start ("Enumerating EGL ICDs");
-  g_debug ("Enumerating EGL ICDs on provider system...");
-  egl_icds = srt_system_info_list_egl_icds (system_info, pv_multiarch_tuples);
-  n_egl_icds = g_list_length (egl_icds);
-
-  egl_icd_details = g_ptr_array_new_full (n_egl_icds,
-                                          (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-  for (icd_iter = egl_icds, j = 0;
-       icd_iter != NULL;
-       icd_iter = icd_iter->next, j++)
     {
-      SrtEglIcd *icd = icd_iter->data;
-      const gchar *path = srt_egl_icd_get_json_path (icd);
-      GError *local_error = NULL;
-
-      if (!srt_egl_icd_check_error (icd, &local_error))
-        {
-          g_info ("Failed to load EGL ICD #%" G_GSIZE_FORMAT  " from %s: %s",
-                  j, path, local_error->message);
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      g_info ("EGL ICD #%" G_GSIZE_FORMAT " at %s: %s",
-              j, path, srt_egl_icd_get_library_path (icd));
-
-      g_ptr_array_add (egl_icd_details, icd_details_new (icd));
+      system_info = g_object_ref (enumeration_thread_join (&self->indep_thread));
+      if (self->interpreter_host_provider != NULL)
+        host_system_info = g_object_ref (enumeration_thread_join (&self->host_thread));
     }
 
-  g_clear_pointer (&part_timer, _srt_profiling_end);
-
-  part_timer = _srt_profiling_start ("Enumerating EGL external platforms");
-  g_debug ("Enumerating EGL external platforms on provider system...");
-  egl_ext_platforms = srt_system_info_list_egl_external_platforms (system_info,
-                                                                   pv_multiarch_tuples);
-  n_egl_ext_platforms = g_list_length (egl_ext_platforms);
-
-  egl_ext_platform_details = g_ptr_array_new_full (n_egl_ext_platforms,
-                                                   (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-  for (icd_iter = egl_ext_platforms, j = 0;
-       icd_iter != NULL;
-       icd_iter = icd_iter->next, j++)
-    {
-      SrtEglExternalPlatform *ext = icd_iter->data;
-      const gchar *path = srt_egl_external_platform_get_json_path (ext);
-      GError *local_error = NULL;
-
-      if (!srt_egl_external_platform_check_error (ext, &local_error))
-        {
-          g_info ("Failed to load EGL external platform #%" G_GSIZE_FORMAT  " from %s: %s",
-                  j, path, local_error->message);
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      g_info ("EGL external platform #%" G_GSIZE_FORMAT " at %s: %s",
-              j, path, srt_egl_external_platform_get_library_path (ext));
-
-      g_ptr_array_add (egl_ext_platform_details, icd_details_new (ext));
-    }
-
-  g_clear_pointer (&part_timer, _srt_profiling_end);
-
-  part_timer = _srt_profiling_start ("Enumerating Vulkan ICDs");
-  g_debug ("Enumerating Vulkan ICDs on provider system...");
-  vulkan_icds = srt_system_info_list_vulkan_icds (system_info,
-                                                  pv_multiarch_tuples);
-  n_vulkan_icds = g_list_length (vulkan_icds);
-
-  vulkan_icd_details = g_ptr_array_new_full (n_vulkan_icds,
-                                             (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-  for (icd_iter = vulkan_icds, j = 0;
-       icd_iter != NULL;
-       icd_iter = icd_iter->next, j++)
-    {
-      SrtVulkanIcd *icd = icd_iter->data;
-      const gchar *path = srt_vulkan_icd_get_json_path (icd);
-      GError *local_error = NULL;
-
-      if (!srt_vulkan_icd_check_error (icd, &local_error))
-        {
-          g_info ("Failed to load Vulkan ICD #%" G_GSIZE_FORMAT " from %s: %s",
-                  j, path, local_error->message);
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      g_info ("Vulkan ICD #%" G_GSIZE_FORMAT " at %s: %s",
-              j, path, srt_vulkan_icd_get_library_path (icd));
-
-      g_ptr_array_add (vulkan_icd_details, icd_details_new (icd));
-    }
-
-  g_clear_pointer (&part_timer, _srt_profiling_end);
-
+  provider_stack->egl_icd_details = pv_enumerate_egl_icds (system_info,
+                                                           pv_multiarch_tuples, provider);
+  provider_stack->egl_ext_platform_details = pv_enumerate_egl_ext_platforms (system_info,
+                                                                             pv_multiarch_tuples,
+                                                                             provider);
+  provider_stack->vulkan_icd_details = pv_enumerate_vulkan_icds (system_info,
+                                                                 pv_multiarch_tuples,
+                                                                 provider);
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
-      part_timer = _srt_profiling_start ("Enumerating Vulkan layers");
-      g_debug ("Enumerating Vulkan explicit layers on provider system...");
-      vulkan_explicit_layers = srt_system_info_list_explicit_vulkan_layers (system_info);
+      pv_enumerate_vulkan_layer_details (system_info,
+                                         provider,
+                                         &provider_stack->vulkan_exp_layer_details,
+                                         &provider_stack->vulkan_imp_layer_details);
+    }
 
-      vulkan_exp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_explicit_layers),
-                                                       (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-      for (icd_iter = vulkan_explicit_layers, j = 0;
-          icd_iter != NULL;
-          icd_iter = icd_iter->next, j++)
+  if (host_system_info != NULL)
+    {
+      const gchar *which = "host";
+      host_stack->egl_icd_details = pv_enumerate_egl_icds (host_system_info, NULL, which);
+      host_stack->egl_ext_platform_details = pv_enumerate_egl_ext_platforms (host_system_info,
+                                                                             NULL, which);
+      host_stack->vulkan_icd_details = pv_enumerate_vulkan_icds (host_system_info, NULL, which);
+      if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
         {
-          SrtVulkanLayer *layer = icd_iter->data;
-          const gchar *path = srt_vulkan_layer_get_json_path (layer);
-          GError *local_error = NULL;
-
-          if (!srt_vulkan_layer_check_error (layer, &local_error))
-            {
-              g_info ("Failed to load Vulkan explicit layer #%" G_GSIZE_FORMAT
-                      " from %s: %s", j, path, local_error->message);
-              g_clear_error (&local_error);
-              continue;
-            }
-
-          g_info ("Vulkan explicit layer #%" G_GSIZE_FORMAT " at %s: %s",
-                  j, path, srt_vulkan_layer_get_library_path (layer));
-
-          g_ptr_array_add (vulkan_exp_layer_details, icd_details_new (layer));
+          pv_enumerate_vulkan_layer_details (host_system_info,
+                                             which,
+                                             &host_stack->vulkan_exp_layer_details,
+                                             &host_stack->vulkan_imp_layer_details);
         }
-
-      g_debug ("Enumerating Vulkan implicit layers on provider system...");
-      vulkan_implicit_layers = srt_system_info_list_implicit_vulkan_layers (system_info);
-
-      vulkan_imp_layer_details = g_ptr_array_new_full (g_list_length (vulkan_implicit_layers),
-                                                       (GDestroyNotify) G_CALLBACK (icd_details_free));
-
-      for (icd_iter = vulkan_implicit_layers, j = 0;
-          icd_iter != NULL;
-          icd_iter = icd_iter->next, j++)
-        {
-          SrtVulkanLayer *layer = icd_iter->data;
-          const gchar *path = srt_vulkan_layer_get_json_path (layer);
-          const gchar *library_path = NULL;
-          GError *local_error = NULL;
-
-          if (!srt_vulkan_layer_check_error (layer, &local_error))
-            {
-              g_info ("Failed to load Vulkan implicit layer #%" G_GSIZE_FORMAT
-                      " from %s: %s", j, path, local_error->message);
-              g_clear_error (&local_error);
-              continue;
-            }
-
-          library_path = srt_vulkan_layer_get_library_path (layer);
-
-          g_info ("Vulkan implicit layer #%" G_GSIZE_FORMAT " at %s: %s",
-                  j, path, library_path != NULL ? library_path : "meta-layer");
-
-          g_ptr_array_add (vulkan_imp_layer_details, icd_details_new (layer));
-        }
-
-      g_clear_pointer (&part_timer, _srt_profiling_end);
     }
 
   /* We set this FALSE later if we decide not to use the provider libc
@@ -6518,27 +6752,28 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           collect_core_libraries_patterns (patterns);
           collect_graphics_libraries_patterns (patterns);
 
-          if (!collect_egl_drivers (self, arch, egl_icd_details, patterns,
-                                    error))
+          if (!collect_egl_drivers (self, arch, provider_stack->egl_icd_details,
+                                    patterns, error))
             return FALSE;
 
-          if (!collect_egl_ext_platforms (self, arch, egl_ext_platform_details,
+          if (!collect_egl_ext_platforms (self, arch,
+                                          provider_stack->egl_ext_platform_details,
                                           patterns, error))
             return FALSE;
 
-          if (!collect_vulkan_icds (self, arch, vulkan_icd_details,
+          if (!collect_vulkan_icds (self, arch, provider_stack->vulkan_icd_details,
                                     patterns, error))
             return FALSE;
 
           if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
             {
               g_debug ("Collecting Vulkan explicit layers from provider...");
-              if (!collect_vulkan_layers (self, vulkan_exp_layer_details,
+              if (!collect_vulkan_layers (self, provider_stack->vulkan_exp_layer_details,
                                           patterns, arch, "vulkan_exp_layer", error))
                 return FALSE;
 
               g_debug ("Collecting Vulkan implicit layers from provider...");
-              if (!collect_vulkan_layers (self, vulkan_imp_layer_details,
+              if (!collect_vulkan_layers (self, provider_stack->vulkan_imp_layer_details,
                                           patterns, arch, "vulkan_imp_layer", error))
                 return FALSE;
             }
@@ -6623,8 +6858,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               all_libglx_from_provider = FALSE;
             }
 
-          collect_mesa_drirc (self, arch,
-                              egl_icd_details, vulkan_icd_details, system_info,
+          collect_mesa_drirc (self, arch, provider_stack->egl_icd_details,
+                              provider_stack->vulkan_icd_details, system_info,
                               drirc_data_in_provider);
 
           libglx_nvidia = g_build_filename (arch->libdir_in_current_namespace, "libGLX_nvidia.so.0", NULL);
@@ -6704,6 +6939,25 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
       g_clear_pointer (&part_timer, _srt_profiling_end);
     }
 
+  if (self->interpreter_host_provider != NULL)
+    {
+      g_assert (pv_multiarch_as_emulator_tuples[PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST] == NULL);
+
+      for (i = 0; i < PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST; i++)
+        {
+          SrtSystemInfo *arch_system_info;
+
+          if (self->flags & PV_RUNTIME_FLAGS_SINGLE_THREAD)
+            arch_system_info = host_system_info;
+          else
+            arch_system_info = enumeration_thread_join (&self->arch_host_threads[i]);
+
+          pv_append_host_dri_library_paths (arch_system_info,
+                                            pv_multiarch_as_emulator_tuples[i],
+                                            dri_path);
+        }
+    }
+
   part_timer = _srt_profiling_start ("Finishing graphics stack capture");
 
   if (!any_architecture_works)
@@ -6751,32 +7005,83 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   g_debug ("Setting up EGL ICD JSON...");
 
   if (!setup_each_json_manifest (self, bwrap, "glvnd/egl_vendor.d",
-                                 egl_icd_details, egl_path, error))
+                                 provider_stack->egl_icd_details, egl_path, error))
     return FALSE;
 
+  if (host_stack->egl_icd_details != NULL)
+    {
+      for (i = 0; i < host_stack->egl_icd_details->len; i++)
+        {
+          IcdDetails *details = g_ptr_array_index (host_stack->egl_icd_details, i);
+          SrtEglIcd *icd = SRT_EGL_ICD (details->icd);
+          pv_search_path_append (egl_path, srt_egl_icd_get_json_path (icd));
+        }
+    }
+
   if (!setup_each_json_manifest (self, bwrap, "egl/egl_external_platform.d",
-                                 egl_ext_platform_details,
+                                 provider_stack->egl_ext_platform_details,
                                  egl_ext_platform_path, error))
     return FALSE;
 
+  if (host_stack->egl_ext_platform_details != NULL)
+    {
+      for (i = 0; i < host_stack->egl_ext_platform_details->len; i++)
+        {
+          IcdDetails *details = g_ptr_array_index (host_stack->egl_ext_platform_details, i);
+          SrtEglExternalPlatform *ext_platform = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
+          pv_search_path_append (egl_ext_platform_path,
+                                 srt_egl_external_platform_get_json_path (ext_platform));
+        }
+    }
+
   g_debug ("Setting up Vulkan ICD JSON...");
   if (!setup_each_json_manifest (self, bwrap, "vulkan/icd.d",
-                                 vulkan_icd_details, vulkan_path, error))
+                                 provider_stack->vulkan_icd_details, vulkan_path, error))
     return FALSE;
+
+  if (host_stack->vulkan_icd_details != NULL)
+    {
+      for (i = 0; i < host_stack->vulkan_icd_details->len; i++)
+        {
+          IcdDetails *details = g_ptr_array_index (host_stack->vulkan_icd_details, i);
+          SrtVulkanIcd *icd = SRT_VULKAN_ICD (details->icd);
+          pv_search_path_append (vulkan_path, srt_vulkan_icd_get_json_path (icd));
+        }
+    }
 
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
       g_debug ("Setting up Vulkan explicit layer JSON...");
       if (!setup_each_json_manifest (self, bwrap, "vulkan/explicit_layer.d",
-                                     vulkan_exp_layer_details,
+                                     provider_stack->vulkan_exp_layer_details,
                                      vulkan_exp_layer_path, error))
         return FALSE;
 
+      if (host_stack->vulkan_exp_layer_details != NULL)
+        {
+          for (i = 0; i < host_stack->vulkan_exp_layer_details->len; i++)
+            {
+              IcdDetails *details = g_ptr_array_index (host_stack->vulkan_exp_layer_details, i);
+              SrtVulkanLayer *layer = SRT_VULKAN_LAYER (details->icd);
+              pv_search_path_append (vulkan_path, srt_vulkan_layer_get_json_path (layer));
+            }
+        }
+
       g_debug ("Setting up Vulkan implicit layer JSON...");
       if (!setup_each_json_manifest (self, bwrap, "vulkan/implicit_layer.d",
-                                     vulkan_imp_layer_details,
+                                     provider_stack->vulkan_imp_layer_details,
                                      vulkan_imp_layer_path, error))
         return FALSE;
+
+      if (host_stack->vulkan_imp_layer_details != NULL)
+        {
+          for (i = 0; i < host_stack->vulkan_imp_layer_details->len; i++)
+            {
+              IcdDetails *details = g_ptr_array_index (host_stack->vulkan_imp_layer_details, i);
+              SrtVulkanLayer *layer = SRT_VULKAN_LAYER (details->icd);
+              pv_search_path_append (vulkan_path, srt_vulkan_layer_get_json_path (layer));
+            }
+        }
     }
 
   if (dri_path->len != 0)

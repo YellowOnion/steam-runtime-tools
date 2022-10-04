@@ -128,6 +128,7 @@ void load_json_dir (const char *sysroot,
                     void (*load_json_cb) (const char *, const char *, void *),
                     void *user_data);
 void load_json_dirs (const char *sysroot,
+                     int sysroot_fd,
                      GStrv search_paths,
                      const char *suffix,
                      GCompareFunc sort,

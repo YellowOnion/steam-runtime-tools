@@ -641,6 +641,8 @@ load_json_dir (const char *sysroot,
 /*
  * load_json_dir:
  * @sysroot: (not nullable): The root directory, usually `/`
+ * @sysroot_fd: A file descriptor opened on @sysroot, or negative to
+ *  reopen it
  * @search_paths: Directories to search
  * @suffix: (nullable): A path to append to @dir, such as `"vulkan/icd.d"`
  * @sort: (nullable): If not %NULL, load ICDs sorted by filename in this order
@@ -652,6 +654,7 @@ load_json_dir (const char *sysroot,
  */
 void
 load_json_dirs (const char *sysroot,
+                int sysroot_fd,
                 GStrv search_paths,
                 const char *suffix,
                 GCompareFunc sort,
@@ -661,18 +664,23 @@ load_json_dirs (const char *sysroot,
   gchar **iter;
   g_autoptr(GHashTable) searched_set = NULL;
   g_autoptr(GError) error = NULL;
-  glnx_autofd int sysroot_fd = -1;
+  glnx_autofd int local_sysroot_fd = -1;
 
   g_return_if_fail (sysroot != NULL);
   g_return_if_fail (load_json_cb != NULL);
 
   searched_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
-  if (!glnx_opendirat (-1, sysroot, FALSE, &sysroot_fd, &error))
+  if (sysroot_fd < 0)
     {
-      g_warning ("An error occurred trying to open \"%s\": %s", sysroot,
-                 error->message);
-      return;
+      if (!glnx_opendirat (-1, sysroot, FALSE, &local_sysroot_fd, &error))
+        {
+          g_warning ("An error occurred trying to open \"%s\": %s", sysroot,
+                     error->message);
+          return;
+        }
+
+      sysroot_fd = local_sysroot_fd;
     }
 
   for (iter = search_paths;

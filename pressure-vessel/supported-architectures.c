@@ -1,5 +1,5 @@
 /*
- * Copyright © 2020 Collabora Ltd.
+ * Copyright © 2020-2022 Collabora Ltd.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -23,6 +23,7 @@
 
 #include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
+#include "steam-runtime-tools/architecture.h"
 #include "libglnx.h"
 
 /*
@@ -55,6 +56,7 @@ const PvMultiarchDetails pv_multiarch_details[PV_N_SUPPORTED_ARCHITECTURES] =
 #if defined(__i386__) || defined(__x86_64__)
   {
     .tuple = "x86_64-linux-gnu",
+    .machine_type = SRT_MACHINE_TYPE_X86_64,
     .multilib = { "x86_64-pc-linux-gnu/lib", "lib64", NULL },
     .other_ld_so_cache = { "ld-x86_64-pc-linux-gnu.cache", NULL },
     .platforms = { "xeon_phi", "haswell", "x86_64", NULL },
@@ -62,6 +64,7 @@ const PvMultiarchDetails pv_multiarch_details[PV_N_SUPPORTED_ARCHITECTURES] =
   },
   {
     .tuple = "i386-linux-gnu",
+    .machine_type = SRT_MACHINE_TYPE_386,
     .multilib = { "i686-pc-linux-gnu/lib", "lib32", NULL },
     .other_ld_so_cache = { "ld-i686-pc-linux-gnu.cache", NULL },
     .platforms = { "i686", "i586", "i486", "i386", NULL },
@@ -70,6 +73,7 @@ const PvMultiarchDetails pv_multiarch_details[PV_N_SUPPORTED_ARCHITECTURES] =
 #elif defined(__aarch64__)
   {
     .tuple = "aarch64-linux-gnu",
+    .machine_type = SRT_MACHINE_TYPE_AARCH64,
     .multilib = { "aarch64-unknown-linux-gnueabi/lib", "lib64", NULL },
     .other_ld_so_cache = { "ld-aarch64-unknown-linux-gnueabi.cache", NULL },
     .platforms = { "aarch64", NULL },
@@ -77,11 +81,41 @@ const PvMultiarchDetails pv_multiarch_details[PV_N_SUPPORTED_ARCHITECTURES] =
 #elif defined(_SRT_MULTIARCH)
   {
     .tuple = _SRT_MULTIARCH,
+    .machine_type = SRT_MACHINE_TYPE_UNKNOWN,
   },
 #else
 #error Architecture not supported by pressure-vessel
 #endif
 };
+
+const char * const pv_multiarch_as_emulator_tuples[PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST + 1] =
+{
+  /* The conditional branches here need to be kept in sync with
+   * pv_multiarch_as_emulator_details and
+   * PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST */
+#if defined(__i386__) || defined(__x86_64__)
+  "aarch64-linux-gnu",
+#else
+  /* No supported architectures as emulator */
+#endif
+  NULL
+};
+
+const PvMultiarchDetails pv_multiarch_as_emulator_details[PV_N_SUPPORTED_ARCHITECTURES_AS_EMULATOR_HOST] =
+{
+#if defined(__i386__) || defined(__x86_64__)
+  {
+    .tuple = "aarch64-linux-gnu",
+    .machine_type = SRT_MACHINE_TYPE_AARCH64,
+    .multilib = { "aarch64-unknown-linux-gnueabi/lib", "lib64", NULL },
+    .other_ld_so_cache = { "ld-aarch64-unknown-linux-gnueabi.cache", NULL },
+    .platforms = { "aarch64", NULL },
+  },
+#else
+  /* No supported architectures as emulator */
+#endif
+};
+
 
 /* Architecture-independent ld.so.cache filenames, other than the
  * conventional filename /etc/ld.so.cache used upstream and in Debian
@@ -155,4 +189,24 @@ pv_multiarch_details_get_libdirs (const PvMultiarchDetails *self,
   g_ptr_array_add (dirs, g_strdup ("/usr/lib"));
 
   return g_steal_pointer (&dirs);
+}
+
+/*
+ * Returns: %TRUE if @machine is included in the supported architectures list
+ */
+gboolean
+pv_supported_architectures_include_machine_type (SrtMachineType machine)
+{
+  gsize i;
+
+  if (machine == SRT_MACHINE_TYPE_UNKNOWN)
+    return FALSE;
+
+  for (i = 0; i < G_N_ELEMENTS (pv_multiarch_details); i++)
+    {
+      if (machine == pv_multiarch_details[i].machine_type)
+        return TRUE;
+    }
+
+  return FALSE;
 }

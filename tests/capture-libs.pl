@@ -710,6 +710,86 @@ SKIP: {
     is(tolerant_readlink("$libdir/libversionedprivatenothidden.so.1"),
        '/run/host/opt/libversionedprivatenothidden.so.1.1.1',
        "should take provider's version by default when they have the same symbol versions");
+
+    run_ok(['rm', '-fr', $libdir]);
+    mkdir($libdir);
+    $result = run_verbose([qw(bwrap --ro-bind / /),
+                           '--tmpfs', $host,
+                           bind_usr('/', $host),
+                           '--tmpfs', "$host/more",
+                           '--tmpfs', $container,
+                           bind_usr('/', $container),
+                           '--ro-bind', $version1, "$host/opt",
+                           '--ro-bind', $version2, "$container/opt",
+                           '--symlink', "$host/opt/libunversionedsymbols.so.1", "$host/more/libunversionedsymbols.so.0",
+                           '--bind', $libdir, $libdir,
+                           qw(--dev-bind /dev /dev),
+                           'env', 'CAPSULE_DEBUG=all',
+                           "LD_LIBRARY_PATH=/opt:/more",
+                           $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+                           "--dest=$libdir", "--provider=$host",
+                           "--container=$container",
+                           'soname:libunversionedsymbols.so.0'],
+                           '2>', \$stderr, '>&2');
+    diag $stderr;
+    ok($result);
+    is(tolerant_readlink("$libdir/libunversionedsymbols.so.0"),
+       '/run/host/opt/libunversionedsymbols.so.1.0.0',
+       "should take provider's version, even if the DT_SONAME is the unexpected libunversionedsymbols.so.1");
+
+    run_ok(['rm', '-fr', $libdir]);
+    mkdir($libdir);
+    $result = run_verbose([qw(bwrap --ro-bind / /),
+                           '--tmpfs', $host,
+                           bind_usr('/', $host),
+                           '--tmpfs', "$host/more",
+                           '--tmpfs', $container,
+                           bind_usr('/', $container),
+                           '--ro-bind', $version1, "$host/opt",
+                           '--ro-bind', $version2, "$container/opt",
+                           '--symlink', "$host/opt/libunversionedsymbols.so.1", "$host/more/libunversionedsymbols.so.0",
+                           '--bind', $libdir, $libdir,
+                           qw(--dev-bind /dev /dev),
+                           'env', 'CAPSULE_DEBUG=all',
+                           "LD_LIBRARY_PATH=/opt:/more",
+                           $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+                           "--dest=$libdir", "--provider=$host",
+                           "--container=$container",
+                           'if-exists:exact-soname:libunversionedsymbols.so.0',
+                           'if-exists:exact-soname:libunversionedsymbols.so.1'],
+                           '2>', \$stderr, '>&2');
+    diag $stderr;
+    ok($result);
+    ok (! -l "$libdir/libunversionedsymbols.so.0",
+       "should not take provider's version because the DT_SONAME is not the expected value");
+    is(tolerant_readlink("$libdir/libunversionedsymbols.so.1"),
+       '/run/host/opt/libunversionedsymbols.so.1.0.0',
+       "should take provider's version by default if name is the same");
+
+    run_ok(['rm', '-fr', $libdir]);
+    mkdir($libdir);
+    $result = run_verbose([qw(bwrap --ro-bind / /),
+                           '--tmpfs', $host,
+                           bind_usr('/', $host),
+                           '--tmpfs', "$host/more",
+                           '--tmpfs', $container,
+                           bind_usr('/', $container),
+                           '--ro-bind', $version1, "$host/opt",
+                           '--ro-bind', $version2, "$container/opt",
+                           '--symlink', "$host/opt/libunversionedsymbols.so.1", "$host/more/libunversionedsymbols.so.0",
+                           '--bind', $libdir, $libdir,
+                           qw(--dev-bind /dev /dev),
+                           'env', 'CAPSULE_DEBUG=all',
+                           "LD_LIBRARY_PATH=/opt:/more",
+                           $CAPSULE_CAPTURE_LIBS_TOOL, '--link-target=/run/host',
+                           "--dest=$libdir", "--provider=$host",
+                           "--container=$container",
+                           'exact-soname:libunversionedsymbols.so.0'],
+                           '2>', \$stderr, '>&2');
+    diag $stderr;
+    ok(! $result, 'library with the wrong DT_SONAME yields an error');
+    ok (! -l "$libdir/libunversionedsymbols.so.0",
+       "should not take provider's version because the DT_SONAME is not the expected value");
 }
 
 my $testlibs = "$builddir/tests";

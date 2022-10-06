@@ -1,3 +1,19 @@
+libcapsule (0.20221006.0-0co1) upstream; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * capture-libs: Add exact-soname option.
+    This is a stricter version of `soname:`, where a library is considered
+    to be a match only if its DT_SONAME is exactly what capture-libs was
+    asked to look for.
+    This can be used as a protection against misconfigured systems
+    where two incompatible libraries have been symlinked. For example,
+    if there is an unexpected symlink `libudev.so.0 -> libudev.so.1`,
+    with `soname:libudev.so.0` we would import `libudev.so.0` inside the
+    container even if its DT_SONAME is `libudev.so.1`, but with
+    `exact-soname:libudev.so.0` we will not.
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 06 Oct 2022 11:17:48 +0100
+
 libcapsule (0.20220623.0-0co1) upstream; urgency=medium
 
   * ld-libs: Parse and use DT_RUNPATH to find dependencies

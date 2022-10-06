@@ -266,6 +266,10 @@ static void usage (int code)
   fprintf( fh, "soname:SONAME\n"
                "\tCapture the library in ld.so.cache whose name is\n"
                "\texactly SONAME\n" );
+  fprintf( fh, "exact-soname:SONAME\n"
+               "\tStricter version of \"soname:\" that capture the library\n"
+               "\tin ld.so.cache only if the DT_SONAME is an exact match\n"
+               "\tcompared to what was initially requested\n" );
   fprintf( fh, "soname-match:GLOB\n"
                "\tCapture every library in ld.so.cache that matches\n"
                "\ta shell-style glob (which will usually need to be\n"
@@ -314,6 +318,7 @@ typedef enum
   CAPTURE_FLAG_LIBRARY_ITSELF = ( 1 << 2 ),
   CAPTURE_FLAG_DEPENDENCIES = ( 1 << 3 ),
   CAPTURE_FLAG_IF_SAME_ABI = ( 1 << 4 ),
+  CAPTURE_FLAG_IF_EXACT_SONAME = ( 1 << 5 ),
 } capture_flags;
 
 typedef struct
@@ -406,6 +411,71 @@ capture_one( const char *soname, const capture_options *options,
         _capsule_propagate_error( code, message, local_code,
                                   _capsule_steal_pointer( &local_message ) );
         return false;
+    }
+
+    if( options->flags & CAPTURE_FLAG_IF_EXACT_SONAME )
+    {
+        const char *dt_soname = NULL;
+        Elf_Scn *scn = NULL;
+
+        while( ( scn = elf_nextscn( provider.needed[0].dso, scn ) ) != NULL &&
+               dt_soname == NULL )
+        {
+            Elf_Data *edata = NULL;
+            GElf_Dyn dyn = {};
+            GElf_Shdr shdr = {};
+            i = 0;
+            gelf_getshdr( scn, &shdr );
+
+            if( shdr.sh_type != SHT_DYNAMIC )
+                continue;
+
+            edata = elf_getdata( scn, edata );
+
+            while( gelf_getdyn( edata, i++, &dyn ) &&
+                   dyn.d_tag != DT_NULL )
+            {
+                if( dyn.d_tag == DT_SONAME )
+                {
+                    dt_soname = elf_strptr( provider.needed[0].dso, shdr.sh_link,
+                                            dyn.d_un.d_val );
+                    break;
+                }
+            }
+        }
+
+        if( dt_soname == NULL )
+        {
+            if( ( options->flags & CAPTURE_FLAG_IF_EXISTS ) )
+            {
+                DEBUG( DEBUG_TOOL,
+                       "Unable to obtain the library %s DT_SONAME, ignoring",
+                       soname );
+                return true;
+            }
+
+            xasprintf( &local_message, "Unable to obtain the library %s DT_SONAME",
+                       soname );
+            _capsule_propagate_error( code, message, EIO,
+                                      _capsule_steal_pointer( &local_message ) );
+            return false;
+        }
+
+        if( strcmp( dt_soname, soname ) != 0 )
+        {
+            if( ( options->flags & CAPTURE_FLAG_IF_EXISTS ) )
+            {
+                DEBUG( DEBUG_TOOL, "%s has a different DT_SONAME: %s",
+                       soname, dt_soname );
+                return true;
+            }
+
+            xasprintf( &local_message, "%s has an unexpected DT_SONAME: %s",
+                       soname, dt_soname );
+            _capsule_propagate_error( code, message, EIO,
+                                      _capsule_steal_pointer( &local_message ) );
+            return false;
+        }
     }
 
     if( !ld_libs_find_dependencies( &provider, &local_code, &local_message ) )
@@ -688,6 +758,9 @@ capture_one( const char *soname, const capture_options *options,
             new_options.flags |= CAPTURE_FLAG_IF_EXISTS;
             new_options.flags |= CAPTURE_FLAG_EVEN_IF_OLDER;
 
+            /* Exact SONAME is not expected to be used for the dependencies */
+            new_options.flags &= ~CAPTURE_FLAG_IF_EXACT_SONAME;
+
             if( !capture_patterns( libc_patterns, &new_options,
                                    code, message ) )
             {
@@ -968,6 +1041,15 @@ capture_pattern( const char *pattern, const capture_options *options,
     {
         return capture_one( pattern + strlen( "soname:" ),
                             options, code, message );
+    }
+
+    if( strstarts( pattern, "exact-soname:" ) )
+    {
+        capture_options new_options = *options;
+
+        new_options.flags |= CAPTURE_FLAG_IF_EXACT_SONAME;
+        return capture_one( pattern + strlen( "exact-soname:" ),
+                            &new_options, code, message );
     }
 
     if( strstarts( pattern, "soname-match:" ) )

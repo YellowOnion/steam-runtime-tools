@@ -821,7 +821,7 @@ load_icd_from_json (GType type,
       /*
        * For EGL, all 1.0.x versions are officially backwards compatible
        * with 1.0.0.
-       * https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
+       * https://github.com/NVIDIA/libglvnd/blob/HEAD/src/EGL/icd_enumeration.md
        * There's no specification or public loader for external platforms,
        * but we assume the same is true for those.
        */

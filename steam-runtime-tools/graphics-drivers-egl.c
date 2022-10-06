@@ -958,7 +958,7 @@ _srt_load_egl_things (GType which,
   g_return_val_if_fail (envp != NULL, NULL);
 
   /* See
-   * https://github.com/NVIDIA/libglvnd/blob/master/src/EGL/icd_enumeration.md
+   * https://github.com/NVIDIA/libglvnd/blob/HEAD/src/EGL/icd_enumeration.md
    * for details of the search order for ICDs, and
    * https://github.com/NVIDIA/eglexternalplatform/issues/3,
    * https://github.com/NVIDIA/egl-wayland/issues/39 for attempts to

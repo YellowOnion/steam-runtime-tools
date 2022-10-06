@@ -10,7 +10,7 @@ SPDX-License-Identifier: MIT
 Our main bug tracking system for the whole Steam Runtime is
 <https://github.com/ValveSoftware/steam-runtime/issues>. Before reporting
 an issue, please take a look at the
-[bug reporting information](https://github.com/ValveSoftware/steam-runtime/blob/master/doc/reporting-steamlinuxruntime-bugs.md)
+[bug reporting information](https://github.com/ValveSoftware/steam-runtime/blob/HEAD/doc/reporting-steamlinuxruntime-bugs.md)
 to make sure your issue report contains all the information we need.
 
 The issue tracker on our Gitlab installation, `gitlab.steamos.cloud`, is

@@ -1,3 +1,31 @@
+steam-runtime-tools (0.20221006.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * pressure-vessel: Add support for FEX-Emu graphics library thunking.
+    When emulating x86 on aarch64, FEX-Emu optionally loads thin x86
+    graphics driver libraries that make calls into the underlying aarch64
+    graphics drivers, instead of implementing the whole user-space part
+    of the graphics driver in x86 code that needs to be emulated. To
+    make this work as intended, we have to ensure that the search path
+    for each of these categories includes both the x86 version from the
+    FEX-Emu rootfs and the aarch64 version from the host system:
+    - Vulkan drivers and layers
+    - EGL drivers and external platforms
+    - GLX drivers
+    - Mesa DRI drivers
+    - VA-API drivers
+    Doing this for VDPAU drivers is not currently supported, because VDPAU
+    only searches a single directory, not a search path.
+  * pv-runtime, pv-graphics-provider: Refactoring to support the above
+  * graphics: Refactoring to support the above
+
+  [ Simon McVittie ]
+  * Tests:
+    - Add a script to run the tests in a LD_LIBRARY_PATH environment
+  * Adjust for rename of default branch name to main
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 06 Oct 2022 11:33:53 +0100
+
 steam-runtime-tools (0.20220927.0) steamrt; urgency=medium
 
   [ Simon McVittie ]

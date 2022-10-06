@@ -5017,7 +5017,11 @@ collect_graphics_libraries_patterns (GPtrArray *patterns)
 static void
 collect_core_libraries_patterns (GPtrArray *patterns)
 {
-  static const char * const sonames[] =
+  /* libudev.so.0 and libudev.so.1 have an ABI that is so close that people
+   * sometimes create a symlink libudev.so.0 -> libudev.so.1, even though
+   * that's technically incorrect. However, if we capture that library into
+   * the container, it breaks our use of ldconfig. */
+  static const char * const exact_sonames[] =
   {
     /* If we have libudev from the graphics-stack provider (in practice
      * the host system), it's a lot more likely to be able to understand
@@ -5025,15 +5029,20 @@ collect_core_libraries_patterns (GPtrArray *patterns)
      * and its corresponding libudev. However, it's only safe to do this
      * if it's equal to or newer than the version in the runtime. */
     "libudev.so.1",
+    /* Some newer distributions (at least Arch and Debian) have a
+     * libudev.so.0 shim implemented in terms of libudev.so.1, which
+     * we'll want to use if available. Meanwhile, some older distributions
+     * genuinely used libudev.so.0. */
+    "libudev.so.0",
   };
   gsize i;
 
   g_return_if_fail (patterns != NULL);
 
-  for (i = 0; i < G_N_ELEMENTS (sonames); i++)
+  for (i = 0; i < G_N_ELEMENTS (exact_sonames); i++)
     g_ptr_array_add (patterns,
-                     g_strdup_printf ("if-exists:if-same-abi:soname:%s",
-                                      sonames[i]));
+                     g_strdup_printf ("if-exists:if-same-abi:exact-soname:%s",
+                                      exact_sonames[i]));
 }
 
 /*

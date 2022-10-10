@@ -43,16 +43,6 @@
 #define g_assert_false(x) g_assert (!(x))
 #endif
 
-#ifndef g_assert_cmpmem
-#define g_assert_cmpmem(m1, l1, m2, l2) \
-    g_assert (l1 == l2 && memcmp (m1, m2, l1) == 0)
-#endif
-
-#ifndef g_assert_no_errno
-#define g_assert_no_errno(expr) \
-  g_assert_cmpstr ((expr) >= 0 ? NULL : g_strerror (errno), ==, NULL)
-#endif
-
 /*
  * Other assorted test helpers.
  */

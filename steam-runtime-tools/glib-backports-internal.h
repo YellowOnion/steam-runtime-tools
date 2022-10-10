@@ -26,14 +26,6 @@
 
 #include <libglnx.h>
 
-#if !GLIB_CHECK_VERSION (2, 42, 0)
-# define G_OPTION_FLAG_NONE (0)
-#endif
-
-#ifndef G_SPAWN_DEFAULT
-#define G_SPAWN_DEFAULT 0
-#endif
-
 #if !GLIB_CHECK_VERSION(2, 34, 0)
 /**
  * G_SPAWN_EXIT_ERROR:
@@ -115,11 +107,6 @@ gpointer *my_g_hash_table_get_keys_as_array (GHashTable *hash,
                                              guint *len);
 #endif
 
-#if !GLIB_CHECK_VERSION (2, 67, 0)
-#define G_DBUS_METHOD_INVOCATION_HANDLED TRUE
-#define G_DBUS_METHOD_INVOCATION_UNHANDLED FALSE
-#endif
-
 #if !GLIB_CHECK_VERSION(2, 52, 0)
 #define g_utf8_make_valid(s,l) my_g_utf8_make_valid (s, l)
 gchar *my_g_utf8_make_valid (const gchar *str,
@@ -132,12 +119,6 @@ gboolean my_g_ptr_array_find_with_equal_func (GPtrArray *haystack,
                                               gconstpointer needle,
                                               GEqualFunc equal_func,
                                               guint *index_);
-#endif
-
-#ifndef g_info
-#define g_info(...)     g_log (G_LOG_DOMAIN,         \
-                               G_LOG_LEVEL_INFO,     \
-                               __VA_ARGS__)
 #endif
 
 #if !GLIB_CHECK_VERSION(2, 64, 0)

@@ -395,10 +395,8 @@ test_rlimit (Fixture *f,
   if (getrlimit (RLIMIT_NOFILE, &original) < 0)
     {
       int saved_errno = errno;
-      g_autofree gchar *message = NULL;
 
-      message = g_strdup_printf ("getrlimit: %s", g_strerror (saved_errno));
-      g_test_skip (message);
+      g_test_skip_printf ("getrlimit: %s", g_strerror (saved_errno));
       return;
     }
 

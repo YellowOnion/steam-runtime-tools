@@ -63,10 +63,4 @@ void tests_check_fd_leaks_leave (TestsOpenFdSet fds);
 gchar *_srt_global_setup_sysroots (const char *argv0);
 gboolean _srt_global_teardown_sysroots (void);
 
-#if !GLIB_CHECK_VERSION (2, 70, 0)
-/* Before 2.70, diagnostic messages containing newlines were problematic */
-#define g_test_message(...) _srt_test_message_safe (__VA_ARGS__)
-void _srt_test_message_safe (const char *format, ...) G_GNUC_PRINTF (1, 2);
-#endif
-
 gboolean _srt_tests_skip_if_really_in_steam_runtime (void);

@@ -73,7 +73,6 @@ test_utils = static_library(
   'test-utils',
   sources : [
     'fake-home.c',
-    'test-backports.c',
     'test-init.c',
     'test-utils.c',
   ],

@@ -47,6 +47,8 @@ test_assertions (void)
   const char * const strv2[] = {"one", "two", NULL};
   GStatBuf statbuf;
 
+  g_assert_true (null == NULL);
+  g_assert_false (null != NULL);
   g_assert_null (null);
   g_assert_nonnull (nonnull);
   g_assert_cmpmem (null, 0, null, 0);
@@ -64,6 +66,8 @@ test_assertion_failures (void)
 {
   static const char * const assertion_failures[] =
   {
+    "true",
+    "false",
     "nonnull",
     "null",
     "mem_null_nonnull",
@@ -171,7 +175,7 @@ test_failures (void)
       int wait_status = -1;
       const char *argv[] = { NULL, NULL, NULL, NULL };
       char *line;
-      char *saveptr;
+      char *saveptr = NULL;
 
       argv[0] = exe;
       argv[1] = failures[i];
@@ -194,6 +198,8 @@ test_failures (void)
            line != NULL;
            line = strtok_r (NULL, "\n", &saveptr))
         g_test_message ("stdout: %s", line);
+
+      saveptr = NULL;
 
       for (line = strtok_r (err, "\n", &saveptr);
            line != NULL;
@@ -241,7 +247,7 @@ test_skips (void)
       int wait_status = -1;
       const char *argv[] = { NULL, NULL, NULL, NULL };
       char *line;
-      char *saveptr;
+      char *saveptr = NULL;
 
       argv[0] = exe;
       argv[1] = skips[i];
@@ -264,6 +270,8 @@ test_skips (void)
            line != NULL;
            line = strtok_r (NULL, "\n", &saveptr))
         g_test_message ("stdout: %s", line);
+
+      saveptr = NULL;
 
       for (line = strtok_r (err, "\n", &saveptr);
            line != NULL;
@@ -311,7 +319,7 @@ test_successes (void)
       int wait_status = -1;
       const char *argv[] = { NULL, NULL, NULL, NULL };
       char *line;
-      char *saveptr;
+      char *saveptr = NULL;
 
       argv[0] = exe;
       argv[1] = successes[i];
@@ -334,6 +342,8 @@ test_successes (void)
            line != NULL;
            line = strtok_r (NULL, "\n", &saveptr))
         g_test_message ("stdout: %s", line);
+
+      saveptr = NULL;
 
       for (line = strtok_r (err, "\n", &saveptr);
            line != NULL;

@@ -25,23 +25,10 @@
 
 #pragma once
 
-/*
- * Simplified implementations of some of the GLib test assertion macros,
- * for use with older GLib versions.
- */
-
 #include <glib.h>
 
 /* for its backports of g_test_skip(), etc. */
 #include <libglnx.h>
-
-#ifndef g_assert_true
-#define g_assert_true(x) g_assert ((x))
-#endif
-
-#ifndef g_assert_false
-#define g_assert_false(x) g_assert (!(x))
-#endif
 
 /*
  * Other assorted test helpers.

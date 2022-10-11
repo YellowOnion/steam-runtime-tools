@@ -7,12 +7,17 @@ project(
   'c',
   default_options : [
     'c_std=gnu99',
-    'warning_level=3',
+    'warning_level=2',
   ],
 )
 
 add_project_arguments('-D_GNU_SOURCE', language: 'c')
 add_project_arguments('-Wno-unused-local-typedefs', language: 'c')
+
+# We are intentionally using non-ISO features in this (sub)project,
+# even if a parent project wants to use pedantic warnings
+add_project_arguments('-Wno-pedantic', language: 'c')
+add_project_arguments('-Wno-variadic-macros', language: 'c')
 
 cc = meson.get_compiler('c')
 
@@ -57,6 +62,8 @@ libglnx_inc = include_directories('.')
 libglnx_sources = [
   'glnx-backport-autocleanups.h',
   'glnx-backport-autoptr.h',
+  'glnx-backport-testutils.c',
+  'glnx-backport-testutils.h',
   'glnx-backports.c',
   'glnx-backports.h',
   'glnx-console.c',

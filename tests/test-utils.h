@@ -25,41 +25,10 @@
 
 #pragma once
 
-/*
- * Simplified implementations of some of the GLib test assertion macros,
- * for use with older GLib versions.
- */
-
 #include <glib.h>
 
 /* for its backports of g_test_skip(), etc. */
 #include <libglnx.h>
-
-#ifndef g_assert_true
-#define g_assert_true(x) g_assert ((x))
-#endif
-
-#ifndef g_assert_false
-#define g_assert_false(x) g_assert (!(x))
-#endif
-
-#ifndef g_assert_cmpint
-#define g_assert_cmpint(a, op, b) g_assert ((a) op (b))
-#endif
-
-#ifndef g_assert_cmpmem
-#define g_assert_cmpmem(m1, l1, m2, l2) \
-    g_assert (l1 == l2 && memcmp (m1, m2, l1) == 0)
-#endif
-
-#ifndef g_assert_cmpstr
-#define g_assert_cmpstr(a, op, b) g_assert (g_strcmp0 ((a), (b)) op 0)
-#endif
-
-#ifndef g_assert_no_errno
-#define g_assert_no_errno(expr) \
-  g_assert_cmpstr ((expr) >= 0 ? NULL : g_strerror (errno), ==, NULL)
-#endif
 
 /*
  * Other assorted test helpers.
@@ -80,11 +49,5 @@ void tests_check_fd_leaks_leave (TestsOpenFdSet fds);
 
 gchar *_srt_global_setup_sysroots (const char *argv0);
 gboolean _srt_global_teardown_sysroots (void);
-
-#if !GLIB_CHECK_VERSION (2, 70, 0)
-/* Before 2.70, diagnostic messages containing newlines were problematic */
-#define g_test_message(...) _srt_test_message_safe (__VA_ARGS__)
-void _srt_test_message_safe (const char *format, ...) G_GNUC_PRINTF (1, 2);
-#endif
 
 gboolean _srt_tests_skip_if_really_in_steam_runtime (void);

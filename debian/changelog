@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20221006.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20221011.0) UNRELEASED; urgency=medium
 
   [ Ludovico de Nittis ]
   * pressure-vessel: Add support for FEX-Emu graphics library thunking.
@@ -26,11 +26,14 @@ steam-runtime-tools (0.20221006.0) UNRELEASED; urgency=medium
     like the one in ValveSoftware/steam-runtime#533.
 
   [ Simon McVittie ]
+  * Update libglnx
+    - Make cloning a file consistently seek to the end
+    - More backports from newer GLib
   * Tests:
     - Add a script to run the tests in a LD_LIBRARY_PATH environment
   * Adjust for rename of default branch name to main
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 06 Oct 2022 14:54:27 +0100
+ -- Simon McVittie <smcv@collabora.com>  Tue, 11 Oct 2022 17:38:08 +0100
 
 steam-runtime-tools (0.20220927.0) steamrt; urgency=medium
 

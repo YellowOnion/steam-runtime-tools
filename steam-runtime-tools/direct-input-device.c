@@ -25,6 +25,7 @@
 
 #include "steam-runtime-tools/direct-input-device-internal.h"
 
+#include <dirent.h>
 #include <linux/input.h>
 #include <sys/inotify.h>
 #include <sys/ioctl.h>
@@ -951,10 +952,13 @@ enumerate_cb (gpointer user_data)
 
   if (self->want_hidraw)
     {
-      g_auto(GLnxDirFdIterator) iter = { FALSE };
+      g_auto(SrtDirIter) iter = SRT_DIR_ITER_CLEARED;
       g_autoptr(GError) error = NULL;
 
-      if (!glnx_dirfd_iterator_init_at (AT_FDCWD, "/dev", TRUE, &iter, &error))
+      if (!_srt_dir_iter_init_at (&iter, AT_FDCWD, "/dev",
+                                  SRT_DIR_ITER_FLAGS_FOLLOW,
+                                  versionsort,
+                                  &error))
         {
           g_debug ("Unable to open /dev/: %s", error->message);
         }
@@ -963,7 +967,7 @@ enumerate_cb (gpointer user_data)
         {
           struct dirent *dent;
 
-          if (!glnx_dirfd_iterator_next_dent (&iter, &dent, NULL, &error))
+          if (!_srt_dir_iter_next_dent (&iter, &dent, NULL, &error))
             {
               g_debug ("Unable to iterate over /dev/: %s",
                        error->message);
@@ -984,11 +988,13 @@ enumerate_cb (gpointer user_data)
 
   if (self->want_evdev)
     {
-      g_auto(GLnxDirFdIterator) iter = { FALSE };
+      g_auto(SrtDirIter) iter = SRT_DIR_ITER_CLEARED;
       g_autoptr(GError) error = NULL;
 
-      if (!glnx_dirfd_iterator_init_at (AT_FDCWD, "/dev/input", TRUE, &iter,
-                                        &error))
+      if (!_srt_dir_iter_init_at (&iter, AT_FDCWD, "/dev/input",
+                                  SRT_DIR_ITER_FLAGS_FOLLOW,
+                                  versionsort,
+                                  &error))
         {
           g_debug ("Unable to open /dev/input/: %s", error->message);
         }
@@ -997,7 +1003,7 @@ enumerate_cb (gpointer user_data)
         {
           struct dirent *dent;
 
-          if (!glnx_dirfd_iterator_next_dent (&iter, &dent, NULL, &error))
+          if (!_srt_dir_iter_next_dent (&iter, &dent, NULL, &error))
             {
               g_debug ("Unable to iterate over /dev/input/: %s",
                        error->message);

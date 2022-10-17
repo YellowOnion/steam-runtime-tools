@@ -486,6 +486,7 @@ test_export_root_dirs (Fixture *f,
   fixture_populate_dir (f, f->mock_host_fd, paths, G_N_ELEMENTS (paths));
   ret = pv_export_root_dirs_like_filesystem_host (f->mock_host_fd, exports,
                                                   FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                                  _srt_dirent_strcmp,
                                                   &local_error);
   g_assert_no_error (local_error);
   g_assert_true (ret);
@@ -1027,7 +1028,8 @@ test_use_host_os (Fixture *f,
   gboolean ret;
 
   fixture_populate_dir (f, f->mock_host_fd, paths, G_N_ELEMENTS (paths));
-  ret = pv_wrap_use_host_os (f->mock_host_fd, exports, f->bwrap, &local_error);
+  ret = pv_wrap_use_host_os (f->mock_host_fd, exports, f->bwrap,
+                             _srt_dirent_strcmp, &local_error);
   g_assert_no_error (local_error);
   g_assert_true (ret);
   flatpak_exports_append_bwrap_args (exports, f->bwrap);

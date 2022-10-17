@@ -1763,12 +1763,18 @@ main (int argc,
     }
   else
     {
+      SrtDirentCompareFunc cmp = NULL;
+
+      if (opt_deterministic)
+        cmp = _srt_dirent_strcmp;
+
       g_assert (!is_flatpak_env);
       g_assert (bwrap != NULL);
       g_assert (bwrap_filesystem_arguments != NULL);
       g_assert (exports != NULL);
 
-      if (!pv_wrap_use_host_os (root_fd, exports, bwrap_filesystem_arguments, error))
+      if (!pv_wrap_use_host_os (root_fd, exports, bwrap_filesystem_arguments,
+                                cmp, error))
         goto out;
     }
 

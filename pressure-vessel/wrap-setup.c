@@ -404,9 +404,10 @@ gboolean
 pv_export_root_dirs_like_filesystem_host (int root_fd,
                                           FlatpakExports *exports,
                                           FlatpakFilesystemMode mode,
+                                          SrtDirentCompareFunc arbitrary_dirent_order,
                                           GError **error)
 {
-  g_auto(GLnxDirFdIterator) iter = { .initialized = FALSE };
+  g_auto(SrtDirIter) iter = SRT_DIR_ITER_CLEARED;
   const char *member = NULL;
 
   g_return_val_if_fail (root_fd >= 0, FALSE);
@@ -414,7 +415,10 @@ pv_export_root_dirs_like_filesystem_host (int root_fd,
   g_return_val_if_fail ((unsigned) mode <= FLATPAK_FILESYSTEM_MODE_LAST, FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
 
-  if (!glnx_dirfd_iterator_init_at (root_fd, ".", TRUE, &iter, error))
+  if (!_srt_dir_iter_init_at (&iter, root_fd, ".",
+                              SRT_DIR_ITER_FLAGS_FOLLOW,
+                              arbitrary_dirent_order,
+                              error))
     return FALSE;
 
   while (TRUE)
@@ -422,7 +426,7 @@ pv_export_root_dirs_like_filesystem_host (int root_fd,
       g_autofree gchar *path = NULL;
       struct dirent *dent;
 
-      if (!glnx_dirfd_iterator_next_dent (&iter, &dent, NULL, error))
+      if (!_srt_dir_iter_next_dent (&iter, &dent, NULL, error))
         return FALSE;
 
       if (dent == NULL)
@@ -450,6 +454,7 @@ pv_export_root_dirs_like_filesystem_host (int root_fd,
 static gboolean
 export_contents_of_run (int root_fd,
                         FlatpakBwrap *bwrap,
+                        SrtDirentCompareFunc arbitrary_dirent_order,
                         GError **error)
 {
   static const char *ignore[] =
@@ -460,7 +465,7 @@ export_contents_of_run (int root_fd,
     "pressure-vessel",  /* created by pressure-vessel */
     NULL
   };
-  g_auto(GLnxDirFdIterator) iter = { .initialized = FALSE };
+  g_auto(SrtDirIter) iter = SRT_DIR_ITER_CLEARED;
   const char *member = NULL;
 
   g_return_val_if_fail (root_fd >= 0, FALSE);
@@ -469,7 +474,10 @@ export_contents_of_run (int root_fd,
   g_return_val_if_fail (!g_file_test ("/.flatpak-info", G_FILE_TEST_IS_REGULAR),
                         FALSE);
 
-  if (!glnx_dirfd_iterator_init_at (root_fd, "run", TRUE, &iter, error))
+  if (!_srt_dir_iter_init_at (&iter, root_fd, "run",
+                              SRT_DIR_ITER_FLAGS_FOLLOW,
+                              arbitrary_dirent_order,
+                              error))
     return FALSE;
 
   while (TRUE)
@@ -477,7 +485,7 @@ export_contents_of_run (int root_fd,
       g_autofree gchar *path = NULL;
       struct dirent *dent;
 
-      if (!glnx_dirfd_iterator_next_dent (&iter, &dent, NULL, error))
+      if (!_srt_dir_iter_next_dent (&iter, &dent, NULL, error))
         return FALSE;
 
       if (dent == NULL)
@@ -510,6 +518,7 @@ gboolean
 pv_wrap_use_host_os (int root_fd,
                      FlatpakExports *exports,
                      FlatpakBwrap *bwrap,
+                     SrtDirentCompareFunc arbitrary_dirent_order,
                      GError **error)
 {
   static const char * const export_os_mutable[] = { "/etc", "/tmp", "/var" };
@@ -536,7 +545,7 @@ pv_wrap_use_host_os (int root_fd,
 
   /* We do each subdirectory of /run separately, so that we can
    * always create /run/host and /run/pressure-vessel. */
-  if (!export_contents_of_run (root_fd, bwrap, error))
+  if (!export_contents_of_run (root_fd, bwrap, arbitrary_dirent_order, error))
     return FALSE;
 
   /* This handles everything except:
@@ -558,6 +567,7 @@ pv_wrap_use_host_os (int root_fd,
   if (!pv_export_root_dirs_like_filesystem_host (root_fd,
                                                  exports,
                                                  FLATPAK_FILESYSTEM_MODE_READ_WRITE,
+                                                 arbitrary_dirent_order,
                                                  error))
     return FALSE;
 

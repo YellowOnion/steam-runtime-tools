@@ -24,6 +24,8 @@
 
 #include "environ.h"
 
+#include "steam-runtime-tools/utils-internal.h"
+
 #include "flatpak-bwrap-private.h"
 #include "flatpak-exports-private.h"
 #include "runtime.h"
@@ -43,11 +45,13 @@ void pv_wrap_set_icons_env_vars (PvEnviron *container_env,
 gboolean pv_wrap_use_host_os (int root_fd,
                               FlatpakExports *exports,
                               FlatpakBwrap *bwrap,
+                              SrtDirentCompareFunc arbitrary_dirent_order,
                               GError **error);
 
 gboolean pv_export_root_dirs_like_filesystem_host (int root_fd,
                                                    FlatpakExports *exports,
                                                    FlatpakFilesystemMode mode,
+                                                   SrtDirentCompareFunc arbitrary_dirent_order,
                                                    GError **error);
 
 void pv_wrap_move_into_scope (const char *steam_app_id);

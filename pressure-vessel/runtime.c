@@ -3099,7 +3099,6 @@ bind_runtime_base (PvRuntime *self,
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
   gsize i;
-  const gchar *member;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (exports != NULL, FALSE);
@@ -3217,17 +3216,18 @@ bind_runtime_base (PvRuntime *self,
       g_autofree gchar *path = g_build_filename (self->runtime_files,
                                                  bind_mutable[i],
                                                  NULL);
-      g_autoptr(GDir) dir = NULL;
+      g_auto(SrtDirIter) dir = SRT_DIR_ITER_CLEARED;
+      struct dirent *dent;
 
-      dir = g_dir_open (path, 0, NULL);
-
-      if (dir == NULL)
+      if (!_srt_dir_iter_init_at (&dir, AT_FDCWD, path,
+                                  SRT_DIR_ITER_FLAGS_FOLLOW,
+                                  self->arbitrary_dirent_order,
+                                  NULL))
         continue;
 
-      for (member = g_dir_read_name (dir);
-           member != NULL;
-           member = g_dir_read_name (dir))
+      while (_srt_dir_iter_next_dent (&dir, &dent, NULL, NULL) && dent != NULL)
         {
+          const char *member = dent->d_name;
           g_autofree gchar *dest = g_build_filename ("/", bind_mutable[i],
                                                      member, NULL);
           g_autofree gchar *full = NULL;

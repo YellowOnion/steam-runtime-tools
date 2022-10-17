@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include <dirent.h>
 #include <fcntl.h>
 #include <gelf.h>
 #include <stdio.h>
@@ -261,3 +262,173 @@ _srt_hash_table_iter_clear (SrtHashTableIter *iter)
 }
 
 G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(SrtHashTableIter, _srt_hash_table_iter_clear)
+
+typedef enum
+{
+  SRT_DIR_ITER_FLAGS_ENSURE_DTYPE = (1 << 0),
+  SRT_DIR_ITER_FLAGS_FOLLOW = (1 << 1),
+  SRT_DIR_ITER_FLAGS_SORTED = (1 << 2),
+  SRT_DIR_ITER_FLAGS_NONE = 0
+} SrtDirIterFlags;
+
+/*
+ * SrtDirentCompareFunc:
+ *
+ * Function to compare two `struct dirent` data structures, as used in
+ * #SrtDirIter, `scandir` and `scandirat`.
+ */
+typedef int (*SrtDirentCompareFunc) (const struct dirent **,
+                                     const struct dirent **);
+
+/*
+ * SrtDirIter:
+ * @real_iter: The underlying iterator
+ *
+ * Similar to `GLnxDirFdIterator`, but optionally sorts the filenames in a
+ * user-specified order (which is implemented by caching a sorted list
+ * of filenames the first time _srt_dir_iter_next_dent() is called).
+ *
+ * Like `GLnxDirFdIterator`, this data structure allocates resources, which
+ * must be cleared after use by using _srt_dir_iter_clear() or automatically
+ * by using `g_auto(SrtDirIter) = SRT_DIR_ITER_CLEARED`.
+ */
+typedef struct
+{
+  /*< public >*/
+  GLnxDirFdIterator real_iter;
+  /*< private >*/
+  SrtDirentCompareFunc cmp;
+  GPtrArray *members;
+  SrtDirIterFlags flags;
+  gsize next_member;
+} SrtDirIter;
+
+int _srt_dirent_strcmp (const struct dirent **,
+                        const struct dirent **);
+
+/*
+ * SRT_DIR_ITER_CLEARED:
+ *
+ * Constant initializer to set a #SrtDirIter to a state from which
+ * it can be cleared or initialized, but no other actions.
+ */
+#define SRT_DIR_ITER_CLEARED { { .initialized = FALSE }, NULL, NULL, 0, 0 }
+
+/*
+ * _srt_dir_iter_init_at:
+ * @self: (out caller-allocates): A directory iterator
+ * @dfd: A directory fd, or AT_FDCWD, or -1
+ * @path: A path relative to @dfd
+ * @flags: Flags affecting iteration
+ * @cmp: (nullable): If non-%NULL, sort the members of the directory
+ *  using this function, typically _srt_dirent_strcmp() or `versionsort`
+ * @error: Error indicator
+ *
+ * Start iterating over @path, relative to @dfd.
+ *
+ * If the #SrtDirIterFlags include %SRT_DIR_ITER_FLAGS_FOLLOW and the
+ * last component of @path is a symlink, follow it.
+ *
+ * Other flags are stored in the iterator and used to modify the result
+ * of _srt_dir_iter_next_dent().
+ *
+ * Returns: %FALSE on I/O error
+ */
+static inline gboolean
+_srt_dir_iter_init_at (SrtDirIter *self,
+                       int dfd,
+                       const char *path,
+                       SrtDirIterFlags flags,
+                       SrtDirentCompareFunc cmp,
+                       GError **error)
+{
+  SrtDirIter zero = SRT_DIR_ITER_CLEARED;
+  gboolean follow = FALSE;
+
+  *self = zero;
+  self->flags = flags;
+  self->cmp = cmp;
+
+  if (flags & SRT_DIR_ITER_FLAGS_FOLLOW)
+    follow = TRUE;
+
+  if (!glnx_dirfd_iterator_init_at (dfd, path, follow, &self->real_iter, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+/*
+ * _srt_dir_iter_init_take_fd:
+ * @self: (out caller-allocates): A directory iterator
+ * @dfdp: (inout) (transfer full): A pointer to a directory fd, or AT_FDCWD, or -1
+ * @flags: Flags affecting iteration
+ * @error: Error indicator
+ *
+ * Start iterating over @dfdp.
+ *
+ * %SRT_DIR_ITER_FLAGS_FOLLOW is ignored if set.
+ * Other flags are stored in the iterator and used to modify the result
+ * of _srt_dir_iter_next_dent().
+ *
+ * Returns: %FALSE on I/O error
+ */
+static inline gboolean
+_srt_dir_iter_init_take_fd (SrtDirIter *self,
+                            int *dfdp,
+                            SrtDirIterFlags flags,
+                            SrtDirentCompareFunc cmp,
+                            GError **error)
+{
+  SrtDirIter zero = SRT_DIR_ITER_CLEARED;
+
+  *self = zero;
+  self->flags = flags;
+  self->cmp = cmp;
+
+  if (!glnx_dirfd_iterator_init_take_fd (dfdp, &self->real_iter, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+gboolean _srt_dir_iter_next_dent (SrtDirIter *self,
+                                  struct dirent **out_dent,
+                                  GCancellable *cancellable,
+                                  GError **error);
+
+/*
+ * _srt_dir_iter_rewind:
+ * @self: A directory iterator
+ *
+ * Return to the beginning of @self.
+ */
+static inline void
+_srt_dir_iter_rewind (SrtDirIter *self)
+{
+  self->next_member = 0;
+  g_clear_pointer (&self->members, g_ptr_array_unref);
+  glnx_dirfd_iterator_rewind (&self->real_iter);
+}
+
+/*
+ * _srt_dir_iter_clear:
+ * @iter: An iterator
+ *
+ * Free resources used by the directory iterator.
+ *
+ * Unlike the rest of the #SrtDirIter interface, it is valid to call
+ * this function on a #SrtDirIter that has already been cleared, or
+ * was initialized to %SRT_DIR_ITER_CLEARED and never subsequently used.
+ */
+static inline void
+_srt_dir_iter_clear (SrtDirIter *self)
+{
+  SrtDirIter zero = SRT_DIR_ITER_CLEARED;
+
+  g_clear_pointer (&self->members, g_ptr_array_unref);
+  glnx_dirfd_iterator_clear (&self->real_iter);
+  *self = zero;
+}
+
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(SrtDirIter, _srt_dir_iter_clear)

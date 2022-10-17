@@ -1855,3 +1855,122 @@ _srt_hash_table_iter_next (SrtHashTableIter *iter,
 
   return FALSE;
 }
+
+/*
+ * copy_dirent:
+ * @other: Another struct dirent
+ *
+ * Returns: a copy of @other. Free with g_free().
+ */
+static struct dirent *
+copy_dirent (const struct dirent *other)
+{
+  struct dirent *self;
+  size_t len;
+
+  /* We can't just use sizeof (struct dirent) for the length to copy,
+   * because filenames are allowed to be longer than NAME_MAX bytes. */
+  len = G_STRUCT_OFFSET (struct dirent, d_name) + strlen (other->d_name) + 1;
+
+  if (len < other->d_reclen)
+    len = other->d_reclen;
+
+  if (len < sizeof (struct dirent))
+    len = sizeof (struct dirent);
+
+  self = g_malloc0 (len);
+  memcpy (self, other, len);
+  return self;
+}
+
+/*
+ * _srt_dirent_strcmp:
+ *
+ * A #SrtDirentCompareFunc that compares lexicographically.
+ * In the `C` locale, this is effectively the same as GNU `alphasort`.
+ * In other locales, it ignores the locale settings and continues to
+ * provide lexicographic order.
+ */
+int
+_srt_dirent_strcmp (const struct dirent **a,
+                    const struct dirent **b)
+{
+  return strcmp ((*a)->d_name, (*b)->d_name);
+}
+
+/*
+ * _srt_dir_iter_next_dent:
+ * @self: A directory iterator
+ * @out_dent: (out) (nullable) (not optional) (transfer none): Used to
+ *  emit the next entry, or %NULL at end of iteration
+ * @cancellable: Cancellation indicator
+ * @error: Error indicator
+ *
+ * If there are more entries in @self, set @out_dent to the next entry,
+ * advance the iterator and return %TRUE.
+ *
+ * At the end of iteration, set @out_dent to %NULL and return %TRUE.
+ *
+ * If the #SrtDirIter has a non-%NULL #SrtDirentCompareFunc, then
+ * directory entries will be read into a cache at the beginning of
+ * iteration so that they can be emitted in the specified order,
+ * and subsequent iteration will iterate through the cache.
+ *
+ * If the #SrtDirIterFlags include %SRT_DIR_ITER_FLAGS_ENSURE_DTYPE,
+ * then all directory entries will have the `d_type` field set.
+ *
+ * Returns: %FALSE on error, %TRUE on success
+ */
+gboolean
+_srt_dir_iter_next_dent (SrtDirIter *self,
+                         struct dirent **out_dent,
+                         GCancellable *cancellable,
+                         GError **error)
+{
+  gboolean (*next_dent) (GLnxDirFdIterator *, struct dirent **,
+                         GCancellable *, GError **);
+
+  g_return_val_if_fail (out_dent != NULL, FALSE);
+
+  if (g_cancellable_set_error_if_cancelled (cancellable, error))
+    return FALSE;
+
+  if (self->flags & SRT_DIR_ITER_FLAGS_ENSURE_DTYPE)
+    next_dent = glnx_dirfd_iterator_next_dent_ensure_dtype;
+  else
+    next_dent = glnx_dirfd_iterator_next_dent;
+
+  if (self->cmp != NULL)
+    {
+      if (self->members == NULL)
+        {
+          struct dirent *member;
+
+          /* arbitrarily guess 8 members per directory */
+          self->members = g_ptr_array_new_full (8, g_free);
+          g_assert (self->next_member == 0);
+
+          do
+            {
+              if (!next_dent (&self->real_iter, &member, cancellable, error))
+                return FALSE;
+
+              if (member != NULL)
+                g_ptr_array_add (self->members, copy_dirent (member));
+            }
+          while (member != NULL);
+
+          g_ptr_array_sort (self->members,
+                            (GCompareFunc) (GCallback) self->cmp);
+        }
+
+      if (self->next_member >= self->members->len)
+        *out_dent = NULL;
+      else
+        *out_dent = g_ptr_array_index (self->members, self->next_member++);
+
+      return TRUE;
+    }
+
+  return next_dent (&self->real_iter, out_dent, cancellable, error);
+}

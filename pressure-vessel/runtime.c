@@ -95,6 +95,7 @@ struct _PvRuntime
   EnumerationThread host_thread;
   EnumerationThread *arch_host_threads;
   EnumerationThread *arch_threads;
+  SrtDirentCompareFunc arbitrary_dirent_order;
   GCompareFunc arbitrary_str_order;
 
   PvRuntimeFlags flags;
@@ -1776,6 +1777,7 @@ pv_runtime_initable_init (GInitable *initable,
 
   if (self->flags & PV_RUNTIME_FLAGS_DETERMINISTIC)
     {
+      self->arbitrary_dirent_order = _srt_dirent_strcmp;
       self->arbitrary_str_order = _srt_generic_strcmp0;
     }
 

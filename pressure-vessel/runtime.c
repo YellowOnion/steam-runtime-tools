@@ -935,11 +935,11 @@ pv_runtime_create_copy (PvRuntime *self,
 {
   g_autofree gchar *dest_usr = NULL;
   g_autofree gchar *temp_dir = NULL;
-  g_autoptr(GDir) dir = NULL;
+  g_auto(SrtDirIter) dir = SRT_DIR_ITER_CLEARED;
   g_autoptr(PvBwrapLock) copy_lock = NULL;
   G_GNUC_UNUSED g_autoptr(PvBwrapLock) source_lock = NULL;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
-  const char *member;
+  struct dirent *dent;
   glnx_autofd int temp_dir_fd = -1;
   gboolean is_just_usr;
 
@@ -1071,15 +1071,16 @@ pv_runtime_create_copy (PvRuntime *self,
                                         temp_dir);
     }
 
-  dir = g_dir_open (dest_usr, 0, error);
-
-  if (dir == NULL)
+  if (!_srt_dir_iter_init_at (&dir, AT_FDCWD, dest_usr,
+                              SRT_DIR_ITER_FLAGS_FOLLOW,
+                              self->arbitrary_dirent_order,
+                              error))
     return FALSE;
 
-  for (member = g_dir_read_name (dir);
-       member != NULL;
-       member = g_dir_read_name (dir))
+  while (_srt_dir_iter_next_dent (&dir, &dent, NULL, NULL) && dent != NULL)
     {
+      const char *member = dent->d_name;
+
       /* Create symlinks ${temp_dir}/bin -> usr/bin, etc. if missing.
        *
        * Also make ${temp_dir}/etc, ${temp_dir}/var symlinks to etc

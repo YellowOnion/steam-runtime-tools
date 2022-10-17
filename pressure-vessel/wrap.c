@@ -384,6 +384,7 @@ typedef enum
 
 static gboolean opt_batch = FALSE;
 static gboolean opt_copy_runtime = FALSE;
+static gboolean opt_deterministic = FALSE;
 static gboolean opt_devel = FALSE;
 static char **opt_env_if_host = NULL;
 static char **opt_filesystems = NULL;
@@ -753,6 +754,11 @@ static GOptionEntry options[] =
     G_OPTION_FLAG_FILENAME|G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK,
     &opt_copy_runtime_into_cb,
     "Deprecated alias for --copy-runtime and --variable-dir", "DIR" },
+  { "deterministic", '\0',
+    G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_deterministic,
+    "Enforce a deterministic sort order on arbitrarily-ordered things, "
+    "even if that's slower. [Default if $PRESSURE_VESSEL_DETERMINISTIC is 1]",
+    NULL },
   { "devel", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_NONE, &opt_devel,
     "Use a more permissive configuration that is helpful during development "
@@ -1099,6 +1105,8 @@ main (int argc,
                             NULL, NULL);
   opt_copy_runtime = _srt_boolean_environment ("PRESSURE_VESSEL_COPY_RUNTIME",
                                                opt_copy_runtime);
+  opt_deterministic = _srt_boolean_environment ("PRESSURE_VESSEL_DETERMINISTIC",
+                                                FALSE);
   opt_devel = _srt_boolean_environment ("PRESSURE_VESSEL_DEVEL", FALSE);
   opt_runtime_id = g_strdup (g_getenv ("PRESSURE_VESSEL_RUNTIME_ID"));
 
@@ -1630,6 +1638,9 @@ main (int argc,
       g_autofree gchar *runtime_resolved = NULL;
       const char *runtime_path = NULL;
 
+      if (opt_deterministic)
+        flags |= PV_RUNTIME_FLAGS_DETERMINISTIC;
+
       if (opt_gc_runtimes)
         flags |= PV_RUNTIME_FLAGS_GC_RUNTIMES;
 
@@ -1656,7 +1667,7 @@ main (int argc,
       if (opt_copy_runtime)
         flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
 
-      if (opt_single_thread)
+      if (opt_deterministic || opt_single_thread)
         flags |= PV_RUNTIME_FLAGS_SINGLE_THREAD;
 
       if (flatpak_subsandbox != NULL)

@@ -95,6 +95,7 @@ struct _PvRuntime
   EnumerationThread host_thread;
   EnumerationThread *arch_host_threads;
   EnumerationThread *arch_threads;
+  GCompareFunc arbitrary_str_order;
 
   PvRuntimeFlags flags;
   int variable_dir_fd;
@@ -1769,6 +1770,11 @@ pv_runtime_initable_init (GInitable *initable,
    * we're using a mutable sysroot, which is a lot simpler. */
   if (self->flags & PV_RUNTIME_FLAGS_INTERPRETER_ROOT)
     self->flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
+
+  if (self->flags & PV_RUNTIME_FLAGS_DETERMINISTIC)
+    {
+      self->arbitrary_str_order = _srt_generic_strcmp0;
+    }
 
   if (self->flags & PV_RUNTIME_FLAGS_COPY_RUNTIME)
     {

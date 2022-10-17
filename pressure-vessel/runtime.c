@@ -5622,7 +5622,7 @@ pv_runtime_finish_lib_data (PvRuntime *self,
                             GError **error)
 {
   g_autofree gchar *canonical_path = NULL;
-  GHashTableIter iter;
+  g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
   const gchar *data_path = NULL;
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
@@ -5643,9 +5643,10 @@ pv_runtime_finish_lib_data (PvRuntime *self,
   /* We might have more than one data directory in the provider,
    * e.g. one for each supported multiarch tuple */
 
-  g_hash_table_iter_init (&iter, data_in_provider);
+  _srt_hash_table_iter_init_sorted (&iter, data_in_provider,
+                                    self->arbitrary_str_order);
 
-  while (g_hash_table_iter_next (&iter, (gpointer *)&data_path, NULL))
+  while (_srt_hash_table_iter_next (&iter, &data_path, NULL))
     {
       g_warn_if_fail (data_path != NULL && data_path[0] != '/');
 
@@ -5710,7 +5711,8 @@ pv_runtime_finish_lib_data (PvRuntime *self,
                  dir_basename);
     }
 
-  data_path = pv_hash_table_get_arbitrary_key (data_in_provider);
+  data_path = pv_hash_table_get_first_key (data_in_provider,
+                                           self->arbitrary_str_order);
 
   if (data_path != NULL)
     return pv_runtime_take_from_provider (self, bwrap,

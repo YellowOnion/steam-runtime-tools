@@ -383,6 +383,95 @@ test_gstring_replace (Fixture *f,
     }
 }
 
+static void
+test_hash_iter (Fixture *f,
+                gconstpointer context)
+{
+  g_autoptr(GHashTable) table = g_hash_table_new_full (g_str_hash,
+                                                       g_str_equal,
+                                                       g_free,
+                                                       g_free);
+  g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
+  const char *prev = NULL;
+  const char *k;
+  const char *v;
+
+  g_hash_table_replace (table, g_strdup ("1"), g_strdup ("one"));
+  g_hash_table_replace (table, g_strdup ("2"), g_strdup ("two"));
+  g_hash_table_replace (table, g_strdup ("3"), g_strdup ("three"));
+
+  _srt_hash_table_iter_init (&iter, table);
+  _srt_hash_table_iter_clear (&iter);
+
+  _srt_hash_table_iter_init_sorted (&iter, table, NULL);
+  _srt_hash_table_iter_clear (&iter);
+
+  _srt_hash_table_iter_init_sorted (&iter, table, _srt_generic_strcmp0);
+  _srt_hash_table_iter_clear (&iter);
+
+  g_test_message ("Iterating in arbitrary order");
+  _srt_hash_table_iter_init (&iter, table);
+
+  while (_srt_hash_table_iter_next (&iter, &k, &v))
+    g_test_message ("%s -> %s", k, v);
+
+  _srt_hash_table_iter_clear (&iter);
+
+  g_test_message ("Iterating in arbitrary order, keys only");
+  _srt_hash_table_iter_init_sorted (&iter, table, NULL);
+
+  while (_srt_hash_table_iter_next (&iter, &k, NULL))
+    g_test_message ("%s -> (value)", k);
+
+  _srt_hash_table_iter_clear (&iter);
+
+  g_test_message ("Iterating in arbitrary order, values only");
+  _srt_hash_table_iter_init_sorted (&iter, table, NULL);
+
+  while (_srt_hash_table_iter_next (&iter, NULL, &v))
+    g_test_message ("(key) -> %s", v);
+
+  _srt_hash_table_iter_clear (&iter);
+
+  g_test_message ("Iterating in sorted order");
+  prev = NULL;
+  _srt_hash_table_iter_init_sorted (&iter, table, _srt_generic_strcmp0);
+
+  while (_srt_hash_table_iter_next (&iter, &k, &v))
+    {
+      g_test_message ("%s -> %s", k, v);
+
+      if (prev != NULL)
+        g_assert_cmpstr (k, >, prev);
+
+      prev = k;
+    }
+
+  _srt_hash_table_iter_clear (&iter);
+
+  g_test_message ("Iterating in sorted order, keys only");
+  prev = NULL;
+  _srt_hash_table_iter_init_sorted (&iter, table, _srt_generic_strcmp0);
+
+  while (_srt_hash_table_iter_next (&iter, &k, NULL))
+    {
+      g_test_message ("%s -> (value)", k);
+
+      if (prev != NULL)
+        g_assert_cmpstr (k, >, prev);
+
+      prev = k;
+    }
+
+  _srt_hash_table_iter_clear (&iter);
+
+  g_test_message ("Iterating in sorted order, values only");
+  _srt_hash_table_iter_init_sorted (&iter, table, _srt_generic_strcmp0);
+
+  while (_srt_hash_table_iter_next (&iter, NULL, &v))
+    g_test_message ("(key) -> %s", v);
+}
+
 G_STATIC_ASSERT (FD_SETSIZE == 1024);
 
 static void
@@ -568,6 +657,8 @@ main (int argc,
               setup, test_get_path_after, teardown);
   g_test_add ("/utils/gstring-replace", Fixture, NULL,
               setup, test_gstring_replace, teardown);
+  g_test_add ("/utils/hash-iter", Fixture, NULL,
+              setup, test_hash_iter, teardown);
   g_test_add ("/utils/rlimit", Fixture, NULL,
               setup, test_rlimit, teardown);
   g_test_add ("/utils/same-file", Fixture, NULL,

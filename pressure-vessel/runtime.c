@@ -6308,7 +6308,8 @@ collect_dri_drivers (PvRuntime *self,
  * @search_path: (inout):
  */
 static void
-pv_append_host_dri_library_paths (SrtSystemInfo *system_info,
+pv_append_host_dri_library_paths (PvRuntime *self,
+                                  SrtSystemInfo *system_info,
                                   const char *multiarch_tuple,
                                   GString *search_path)
 {
@@ -6316,7 +6317,7 @@ pv_append_host_dri_library_paths (SrtSystemInfo *system_info,
   g_autoptr(SrtObjectList) va_api_drivers = NULL;
   g_autoptr(GHashTable) drivers_set = NULL;
   const GList *icd_iter;
-  GHashTableIter iter;
+  g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
   const gchar *drivers_path = NULL;
   gsize i;
 
@@ -6370,8 +6371,10 @@ pv_append_host_dri_library_paths (SrtSystemInfo *system_info,
         g_hash_table_add (drivers_set, g_steal_pointer (&driver_path));
     }
 
-  g_hash_table_iter_init (&iter, drivers_set);
-  while (g_hash_table_iter_next (&iter, (gpointer *)&drivers_path, NULL))
+  _srt_hash_table_iter_init_sorted (&iter, drivers_set,
+                                    self->arbitrary_str_order);
+
+  while (_srt_hash_table_iter_next (&iter, &drivers_path, NULL))
     pv_search_path_append (search_path, drivers_path);
 }
 
@@ -6969,7 +6972,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           else
             arch_system_info = enumeration_thread_join (&self->arch_host_threads[i]);
 
-          pv_append_host_dri_library_paths (arch_system_info,
+          pv_append_host_dri_library_paths (self,
+                                            arch_system_info,
                                             pv_multiarch_as_emulator_tuples[i],
                                             dri_path);
         }

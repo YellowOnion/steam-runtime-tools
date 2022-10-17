@@ -5752,7 +5752,7 @@ pv_runtime_finish_libc_family (PvRuntime *self,
                                GHashTable *gconv_in_provider,
                                GError **error)
 {
-  GHashTableIter iter;
+  g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
   const gchar *gconv_path;
   gsize i;
   /* List of paths where we expect to find "locale", sorted by the most
@@ -5892,8 +5892,10 @@ pv_runtime_finish_libc_family (PvRuntime *self,
 
       g_debug ("Making provider gconv modules visible in container");
 
-      g_hash_table_iter_init (&iter, gconv_in_provider);
-      while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
+      _srt_hash_table_iter_init_sorted (&iter, gconv_in_provider,
+                                        self->arbitrary_str_order);
+
+      while (_srt_hash_table_iter_next (&iter, &gconv_path, NULL))
         {
           if (!pv_runtime_take_from_provider (self, bwrap,
                                               gconv_path,

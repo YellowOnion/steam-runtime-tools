@@ -699,20 +699,21 @@ is_old_runtime_deployment (const char *name)
 gboolean
 pv_runtime_garbage_collect_legacy (const char *variable_dir,
                                    const char *runtime_base,
+                                   SrtDirentCompareFunc arbitrary_dirent_order,
                                    GError **error)
 {
   g_autoptr(GError) local_error = NULL;
   g_autoptr(PvBwrapLock) variable_lock = NULL;
   g_autoptr(PvBwrapLock) base_lock = NULL;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
-  g_auto(GLnxDirFdIterator) variable_dir_iter = { FALSE };
-  g_auto(GLnxDirFdIterator) runtime_base_iter = { FALSE };
+  g_auto(SrtDirIter) variable_dir_iter = SRT_DIR_ITER_CLEARED;
+  g_auto(SrtDirIter) runtime_base_iter = SRT_DIR_ITER_CLEARED;
   glnx_autofd int variable_dir_fd = -1;
   glnx_autofd int runtime_base_fd = -1;
   struct
   {
     const char *path;
-    GLnxDirFdIterator *iter;
+    SrtDirIter *iter;
   } iters[] = {
     { variable_dir, &variable_dir_iter },
     { runtime_base, &runtime_base_iter },
@@ -766,8 +767,11 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
       const char * const symlinks[] = { "scout", "soldier" };
       gsize j;
 
-      if (!glnx_dirfd_iterator_init_at (AT_FDCWD, iters[i].path,
-                                        TRUE, iters[i].iter, error))
+      if (!_srt_dir_iter_init_at (iters[i].iter, AT_FDCWD, iters[i].path,
+                                  (SRT_DIR_ITER_FLAGS_FOLLOW
+                                   | SRT_DIR_ITER_FLAGS_ENSURE_DTYPE),
+                                  arbitrary_dirent_order,
+                                  error))
         return FALSE;
 
       g_debug ("Cleaning up old subdirectories in %s...",
@@ -777,8 +781,7 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
         {
           struct dirent *dent;
 
-          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (iters[i].iter,
-                                                           &dent, NULL, error))
+          if (!_srt_dir_iter_next_dent (iters[i].iter, &dent, NULL, error))
             return FALSE;
 
           if (dent == NULL)
@@ -807,7 +810,7 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
 
           pv_runtime_maybe_garbage_collect_subdir ("legacy runtime",
                                                    iters[i].path,
-                                                   iters[i].iter->fd,
+                                                   iters[i].iter->real_iter.fd,
                                                    dent->d_name);
         }
 
@@ -815,7 +818,7 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
                iters[i].path);
 
       for (j = 0; j < G_N_ELEMENTS (symlinks); j++)
-        pv_delete_dangling_symlink (iters[i].iter->fd, iters[i].path,
+        pv_delete_dangling_symlink (iters[i].iter->real_iter.fd, iters[i].path,
                                     symlinks[j]);
     }
 

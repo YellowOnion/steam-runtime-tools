@@ -1618,8 +1618,14 @@ main (int argc,
       && opt_runtime_base[0] != '\0'
       && opt_variable_dir != NULL)
     {
+      SrtDirentCompareFunc cmp = NULL;
+
+      if (opt_deterministic)
+        cmp = _srt_dirent_strcmp;
+
       if (!pv_runtime_garbage_collect_legacy (opt_variable_dir,
                                               opt_runtime_base,
+                                              cmp,
                                               &local_error))
         {
           g_warning ("Unable to clean up old runtimes: %s",

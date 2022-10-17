@@ -24,6 +24,7 @@
 #include <glib-object.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "libglnx.h"
 
 #include "environ.h"
@@ -121,6 +122,7 @@ void pv_runtime_cleanup (PvRuntime *self);
 
 gboolean pv_runtime_garbage_collect_legacy (const char *variable_dir,
                                             const char *runtime_base,
+                                            SrtDirentCompareFunc arbitrary_dirent_order,
                                             GError **error);
 
 gboolean pv_runtime_use_shared_sockets (PvRuntime *self,

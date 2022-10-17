@@ -4363,7 +4363,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
   for (i = 0; i < dirs->len; i++)
     {
+      g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
       const char *libdir = g_ptr_array_index (dirs, i);
+      const char *name;
+      const char *reason;
 
       if (delete[i] == NULL)
         continue;
@@ -4371,9 +4374,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
       g_assert (iters[i].initialized);
       g_assert (iters[i].fd >= 0);
 
-      GLNX_HASH_TABLE_FOREACH_KV (delete[i],
-                                  const char *, name,
-                                  const char *, reason)
+      _srt_hash_table_iter_init_sorted (&iter, delete[i],
+                                        self->arbitrary_str_order);
+
+      while (_srt_hash_table_iter_next (&iter, &name, &reason))
         {
           g_autoptr(GError) local_error = NULL;
 

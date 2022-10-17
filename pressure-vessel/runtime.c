@@ -831,7 +831,7 @@ pv_runtime_garbage_collect (PvRuntime *self,
                             PvBwrapLock *variable_dir_lock,
                             GError **error)
 {
-  g_auto(GLnxDirFdIterator) iter = { FALSE };
+  g_auto(SrtDirIter) iter = SRT_DIR_ITER_CLEARED;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
@@ -844,16 +844,18 @@ pv_runtime_garbage_collect (PvRuntime *self,
   timer = _srt_profiling_start ("Cleaning up temporary runtimes in %s",
                                 self->variable_dir);
 
-  if (!glnx_dirfd_iterator_init_at (AT_FDCWD, self->variable_dir,
-                                    TRUE, &iter, error))
+  if (!_srt_dir_iter_init_at (&iter, AT_FDCWD, self->variable_dir,
+                              (SRT_DIR_ITER_FLAGS_FOLLOW
+                               | SRT_DIR_ITER_FLAGS_ENSURE_DTYPE),
+                              self->arbitrary_dirent_order,
+                              error))
     return FALSE;
 
   while (TRUE)
     {
       struct dirent *dent;
 
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iter, &dent,
-                                                       NULL, error))
+      if (!_srt_dir_iter_next_dent (&iter, &dent, NULL, error))
         return FALSE;
 
       if (dent == NULL)

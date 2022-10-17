@@ -4071,7 +4071,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
   g_autoptr(GPtrArray) dirs = NULL;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   GHashTable **delete = NULL;
-  GLnxDirFdIterator *iters = NULL;
+  SrtDirIter *iters = NULL;
   gboolean ret = FALSE;
   gsize i;
 
@@ -4089,7 +4089,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
   dirs = pv_multiarch_details_get_libdirs (arch->details,
                                            PV_MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN);
   delete = g_new0 (GHashTable *, dirs->len);
-  iters = g_new0 (GLnxDirFdIterator, dirs->len);
+  iters = g_new0 (SrtDirIter, dirs->len);
 
   /* We have to figure out what we want to delete before we delete anything,
    * because we can't tell whether a symlink points to a library of a
@@ -4124,9 +4124,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             {
               /* No need to inspect a directory if it's one we already
                * looked at (perhaps via symbolic links) */
-              if (iters[j].initialized
+              if (iters[j].real_iter.initialized
                   && _srt_fstatat_is_same_file (libdir_fd, "",
-                                                iters[j].fd, ""))
+                                                iters[j].real_iter.fd, ""))
                 break;
             }
 
@@ -4141,7 +4141,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
       g_debug ("Removing overridden %s libraries from \"%s\" in \"%s\"...",
                arch->details->tuple, libdir, self->mutable_sysroot);
 
-      if (!glnx_dirfd_iterator_init_take_fd (&libdir_fd, &iters[i], error))
+      if (!_srt_dir_iter_init_take_fd (&iters[i], &libdir_fd,
+                                       SRT_DIR_ITER_FLAGS_ENSURE_DTYPE,
+                                       self->arbitrary_dirent_order,
+                                       error))
         {
           glnx_prefix_error (error, "Unable to start iterating \"%s/%s\"",
                              self->mutable_sysroot,
@@ -4157,8 +4160,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
           g_autofree gchar *target = NULL;
           const char *target_base;
 
-          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
-                                                           NULL, error))
+          if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
               glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
                                  self->mutable_sysroot, libdir);
@@ -4191,7 +4193,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
               strstr (dent->d_name, ".so.") == NULL)
             continue;
 
-          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
+          target = glnx_readlinkat_malloc (iters[i].real_iter.fd, dent->d_name,
                                            NULL, NULL);
           if (target != NULL)
             target_base = glnx_basename (target);
@@ -4333,15 +4335,14 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
       /* Iterate over the directory again, to clean up dangling development
        * symlinks */
-      glnx_dirfd_iterator_rewind (&iters[i]);
+      _srt_dir_iter_rewind (&iters[i]);
 
       while (TRUE)
         {
           g_autofree gchar *target = NULL;
           gpointer reason;
 
-          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
-                                                           NULL, error))
+          if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
               glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
                                  self->mutable_sysroot, libdir);
@@ -4358,7 +4359,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
           if (g_hash_table_lookup_extended (delete[i], dent->d_name, NULL, NULL))
             continue;
 
-          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
+          target = glnx_readlinkat_malloc (iters[i].real_iter.fd, dent->d_name,
                                            NULL, NULL);
 
           /* If we're going to delete the target, also delete the symlink
@@ -4379,8 +4380,8 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
       if (delete[i] == NULL)
         continue;
 
-      g_assert (iters[i].initialized);
-      g_assert (iters[i].fd >= 0);
+      g_assert (iters[i].real_iter.initialized);
+      g_assert (iters[i].real_iter.fd >= 0);
 
       _srt_hash_table_iter_init_sorted (&iter, delete[i],
                                         self->arbitrary_str_order);
@@ -4392,7 +4393,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
           g_debug ("Deleting %s/%s/%s because %s replaces it",
                    self->mutable_sysroot, libdir, name, reason);
 
-          if (!glnx_unlinkat (iters[i].fd, name, 0, &local_error))
+          if (!glnx_unlinkat (iters[i].real_iter.fd, name, 0, &local_error))
             {
               g_warning ("Unable to delete %s/%s/%s: %s",
                          self->mutable_sysroot, libdir,
@@ -4413,7 +4414,7 @@ out:
       for (i = 0; i < dirs->len; i++)
         {
           g_clear_pointer (&delete[i], g_hash_table_unref);
-          glnx_dirfd_iterator_clear (&iters[i]);
+          _srt_dir_iter_clear (&iters[i]);
         }
     }
 

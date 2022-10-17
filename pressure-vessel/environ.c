@@ -19,6 +19,8 @@
 
 #include "environ.h"
 
+#include "steam-runtime-tools/utils-internal.h"
+
 /*
  * PvEnviron:
  *
@@ -88,13 +90,6 @@ pv_environ_inherit_env (PvEnviron *self,
   g_hash_table_remove (self->values, var);
 }
 
-static int
-generic_strcmp (gconstpointer a,
-                gconstpointer b)
-{
-  return strcmp (a, b);
-}
-
 /*
  * Returns: (transfer container): The variables that are set or forced
  *  to be unset, but not the variables that are inherited
@@ -104,7 +99,8 @@ pv_environ_get_vars (PvEnviron *self)
 {
   g_return_val_if_fail (self != NULL, NULL);
 
-  return g_list_sort (g_hash_table_get_keys (self->values), generic_strcmp);
+  return g_list_sort (g_hash_table_get_keys (self->values),
+                      _srt_generic_strcmp0);
 }
 
 /*

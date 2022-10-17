@@ -93,6 +93,126 @@ test_bits_set (Fixture *f,
 }
 
 static void
+test_dir_iter (Fixture *f,
+               gconstpointer context)
+{
+  g_auto(SrtDirIter) iter = SRT_DIR_ITER_CLEARED;
+  g_autoptr(GError) error = NULL;
+  g_autofree char *prev = NULL;
+  struct dirent *dent;
+
+  _srt_dir_iter_init_at (&iter, -1, "/",
+                         SRT_DIR_ITER_FLAGS_NONE,
+                         NULL,
+                         &error);
+  g_assert_no_error (error);
+  _srt_dir_iter_clear (&iter);
+
+  _srt_dir_iter_init_at (&iter, -1, "/",
+                         SRT_DIR_ITER_FLAGS_ENSURE_DTYPE,
+                         _srt_dirent_strcmp,
+                         &error);
+  g_assert_no_error (error);
+  _srt_dir_iter_clear (&iter);
+
+  g_test_message ("Iterating over '/' in arbitrary order");
+  _srt_dir_iter_init_at (&iter, -1, "/",
+                         SRT_DIR_ITER_FLAGS_ENSURE_DTYPE,
+                         NULL,
+                         &error);
+  g_assert_no_error (error);
+
+  while (TRUE)
+    {
+      gboolean ok = _srt_dir_iter_next_dent (&iter, &dent, NULL, &error);
+
+      g_assert_no_error (error);
+      g_assert_true (ok);
+
+      if (dent == NULL)
+        break;
+
+      g_assert_cmpstr (dent->d_name, !=, ".");
+      g_assert_cmpstr (dent->d_name, !=, "..");
+      g_assert_cmpint (dent->d_type, !=, DT_UNKNOWN);
+      g_test_message ("%u ino#%lld %s",
+                      dent->d_type, (long long) dent->d_ino, dent->d_name);
+    }
+
+  g_test_message ("And again");
+  _srt_dir_iter_rewind (&iter);
+
+  while (TRUE)
+    {
+      gboolean ok = _srt_dir_iter_next_dent (&iter, &dent, NULL, &error);
+
+      g_assert_no_error (error);
+      g_assert_true (ok);
+
+      if (dent == NULL)
+        break;
+
+      g_assert_cmpstr (dent->d_name, !=, ".");
+      g_assert_cmpstr (dent->d_name, !=, "..");
+      g_assert_cmpint (dent->d_type, !=, DT_UNKNOWN);
+      g_test_message ("%u ino#%lld %s",
+                      dent->d_type, (long long) dent->d_ino, dent->d_name);
+    }
+
+  _srt_dir_iter_clear (&iter);
+
+  g_test_message ("Iterating over '/' in sorted order");
+  _srt_dir_iter_init_at (&iter, -1, "/",
+                         SRT_DIR_ITER_FLAGS_NONE,
+                         _srt_dirent_strcmp,
+                         &error);
+  g_assert_no_error (error);
+
+  while (TRUE)
+    {
+      gboolean ok = _srt_dir_iter_next_dent (&iter, &dent, NULL, &error);
+
+      g_assert_no_error (error);
+      g_assert_true (ok);
+
+      if (dent == NULL)
+        break;
+
+      g_assert_cmpstr (dent->d_name, !=, ".");
+      g_assert_cmpstr (dent->d_name, !=, "..");
+      g_test_message ("ino#%lld %s",
+                      (long long) dent->d_ino, dent->d_name);
+
+      if (prev != NULL)
+        {
+          g_assert_cmpstr (dent->d_name, >, prev);
+          g_clear_pointer (&prev, g_free);
+        }
+
+      prev = g_strdup (dent->d_name);
+    }
+
+  g_test_message ("And again");
+  _srt_dir_iter_rewind (&iter);
+
+  while (TRUE)
+    {
+      gboolean ok = _srt_dir_iter_next_dent (&iter, &dent, NULL, &error);
+
+      g_assert_no_error (error);
+      g_assert_true (ok);
+
+      if (dent == NULL)
+        break;
+
+      g_assert_cmpstr (dent->d_name, !=, ".");
+      g_assert_cmpstr (dent->d_name, !=, "..");
+      g_test_message ("ino#%lld %s",
+                      (long long) dent->d_ino, dent->d_name);
+    }
+}
+
+static void
 test_evdev_bits (Fixture *f,
                  gconstpointer context)
 {
@@ -647,6 +767,8 @@ main (int argc,
   g_test_add ("/utils/avoid-gvfs", Fixture, NULL, setup, test_avoid_gvfs, teardown);
   g_test_add ("/utils/bits-set", Fixture, NULL,
               setup, test_bits_set, teardown);
+  g_test_add ("/utils/dir-iter", Fixture, NULL,
+              setup, test_dir_iter, teardown);
   g_test_add ("/utils/evdev-bits", Fixture, NULL,
               setup, test_evdev_bits, teardown);
   g_test_add ("/utils/test-file-in-sysroot", Fixture, NULL,

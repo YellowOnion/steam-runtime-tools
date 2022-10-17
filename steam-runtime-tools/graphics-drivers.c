@@ -490,10 +490,8 @@ _srt_get_modules_from_path (int sysroot_fd,
   SrtLibraryIssues issues;
   struct dirent *dent;
   glnx_autofd int module_dirfd = -1;
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  g_autoptr(GPtrArray) in_this_dir = g_ptr_array_new_with_free_func (g_free);
+  g_auto(SrtDirIter) dfd_iter = SRT_DIR_ITER_CLEARED;
   g_autoptr(GError) error = NULL;
-  gsize i;
 
   g_return_if_fail (sysroot_fd >= 0);
   g_return_if_fail (envp != NULL);
@@ -541,39 +539,39 @@ _srt_get_modules_from_path (int sysroot_fd,
       return;
     }
 
-  if (!glnx_dirfd_iterator_init_take_fd (&module_dirfd, &dfd_iter, &error))
+  if (!_srt_dir_iter_init_take_fd (&dfd_iter, &module_dirfd,
+                                   SRT_DIR_ITER_FLAGS_NONE,
+                                   _srt_dirent_strcmp,
+                                   &error))
     {
       g_debug ("Unable to start iterating \"%s\": %s",
                module_directory_path, error->message);
       return;
     }
 
-  while (glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, NULL, NULL) && dent != NULL)
-    {
-      for (i = 0; module_suffix[i] != NULL; i++)
-        {
-          if (g_str_has_suffix (dent->d_name, module_suffix[i]) &&
-              (module_prefix == NULL || g_str_has_prefix (dent->d_name, module_prefix)))
-            {
-              g_ptr_array_add (in_this_dir, g_strdup (dent->d_name));
-            }
-        }
-    }
-
-  g_ptr_array_sort (in_this_dir, _srt_indirect_strcmp0);
-
-  for (i = 0; i < in_this_dir->len; i++)
+  while (_srt_dir_iter_next_dent (&dfd_iter, &dent, NULL, NULL) && dent != NULL)
     {
       SrtVaApiVersion libva_version = SRT_VA_API_VERSION_UNKNOWN;
       gchar *this_driver_link = NULL;
       const gchar *library_multiarch = NULL;
-      const gchar *this_driver_name = g_ptr_array_index (in_this_dir, i);
-      g_autofree gchar *this_driver_in_provider = g_build_filename (module_directory_path,
-                                                                    this_driver_name,
-                                                                    NULL);
+      g_autofree gchar *this_driver_in_provider = NULL;
+      gsize i;
 
-      library_multiarch = _srt_architecture_guess_from_elf (dfd_iter.fd,
-                                                            this_driver_name, &error);
+      for (i = 0; module_suffix[i] != NULL; i++)
+        {
+          if (g_str_has_suffix (dent->d_name, module_suffix[i]) &&
+              (module_prefix == NULL || g_str_has_prefix (dent->d_name, module_prefix)))
+            break;
+        }
+
+      if (module_suffix[i] == NULL)
+        continue;
+
+      this_driver_in_provider = g_build_filename (module_directory_path,
+                                                  dent->d_name, NULL);
+
+      library_multiarch = _srt_architecture_guess_from_elf (dfd_iter.real_iter.fd,
+                                                            dent->d_name, &error);
 
       if (library_multiarch == NULL)
         {
@@ -583,8 +581,10 @@ _srt_get_modules_from_path (int sysroot_fd,
           g_clear_error (&error);
 
           g_debug ("Falling back to inspect-library...");
-          driver_proc_path = g_strdup_printf ("/proc/%ld/fd/%d/%s", (long) getpid (),
-                                              dfd_iter.fd, this_driver_name);
+          driver_proc_path = g_strdup_printf ("/proc/%ld/fd/%d/%s",
+                                              (long) getpid (),
+                                              dfd_iter.real_iter.fd,
+                                              dent->d_name);
           issues = _srt_check_library_presence (helpers_path, driver_proc_path,
                                                 multiarch_tuple, NULL, NULL, envp,
                                                 SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, NULL);
@@ -611,7 +611,7 @@ _srt_get_modules_from_path (int sysroot_fd,
 
           case SRT_GRAPHICS_VAAPI_MODULE:
             if (!(check_flags & SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS))
-              libva_version = _srt_va_api_driver_version (dfd_iter.fd, this_driver_name);
+              libva_version = _srt_va_api_driver_version (dfd_iter.real_iter.fd, dent->d_name);
 
             *drivers_out = g_list_prepend (*drivers_out,
                                            srt_va_api_driver_new (this_driver_in_provider,
@@ -620,7 +620,8 @@ _srt_get_modules_from_path (int sysroot_fd,
             break;
 
           case SRT_GRAPHICS_VDPAU_MODULE:
-            this_driver_link = glnx_readlinkat_malloc (dfd_iter.fd, this_driver_name,
+            this_driver_link = glnx_readlinkat_malloc (dfd_iter.real_iter.fd,
+                                                       dent->d_name,
                                                        NULL, NULL);
             *drivers_out = g_list_prepend (*drivers_out,
                                             srt_vdpau_driver_new (this_driver_in_provider,

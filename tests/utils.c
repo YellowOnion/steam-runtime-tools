@@ -472,6 +472,76 @@ test_hash_iter (Fixture *f,
     g_test_message ("(key) -> %s", v);
 }
 
+static void
+test_recursive_list (Fixture *f,
+                     gconstpointer context)
+{
+  g_auto(GStrv) listing = NULL;
+  const char * const *const_listing;
+  g_autofree gchar *target = NULL;
+  gsize i;
+
+  if (G_LIKELY (!g_file_test ("/nonexistent", G_FILE_TEST_EXISTS)))
+    {
+      listing = _srt_recursive_list_content ("/", -1, "/nonexistent",
+                                             environ, NULL);
+      g_assert_nonnull (listing);
+      g_assert_null (listing[0]);
+      g_strfreev (g_steal_pointer (&listing));
+    }
+  else
+    {
+      /* Assume this is an OS bug, but if it somehow happens on real systems
+       * we can reduce this to a g_test_skip(). */
+      g_warning ("/nonexistent exists! Check your system");
+    }
+
+  if (G_LIKELY (g_file_test ("/dev/null", G_FILE_TEST_EXISTS)))
+    {
+      listing = _srt_recursive_list_content ("/", -1, "/dev",
+                                             environ, NULL);
+      g_assert_nonnull (listing);
+      g_assert_nonnull (listing[0]);
+      const_listing = (const char * const *) listing;
+
+      for (i = 0; listing[i] != NULL; i++)
+        g_test_message ("%s", listing[i]);
+
+      g_assert_true (g_strv_contains (const_listing, "/dev/null"));
+
+      if (G_LIKELY (g_file_test ("/dev/shm", G_FILE_TEST_IS_DIR)))
+        {
+          g_assert_true (g_strv_contains (const_listing, "/dev/shm/"));
+        }
+      else
+        {
+          /* This could conceivably be false in some containers.
+           * Mark the test as skipped but intentionally don't early-return
+           * here: we can still check for /dev/stderr. */
+          g_test_skip ("/dev/shm doesn't exist");
+        }
+
+      target = glnx_readlinkat_malloc (AT_FDCWD, "/dev/stderr", NULL, NULL);
+
+      if (G_LIKELY (target != NULL))
+        {
+          g_autofree gchar *expected = g_strdup_printf ("/dev/stderr -> %s", target);
+
+          g_assert_true (g_strv_contains (const_listing, expected));
+        }
+      else
+        {
+          /* This could conceivably be false in some containers.
+           * Again, intentionally not early-returning here. */
+          g_test_skip ("/dev/stderr isn't a symlink");
+        }
+    }
+  else
+    {
+      g_warning ("/dev/null doesn't exist! Check your system");
+    }
+}
+
 G_STATIC_ASSERT (FD_SETSIZE == 1024);
 
 static void
@@ -659,6 +729,8 @@ main (int argc,
               setup, test_gstring_replace, teardown);
   g_test_add ("/utils/hash-iter", Fixture, NULL,
               setup, test_hash_iter, teardown);
+  g_test_add ("/utils/recursive_list", Fixture, NULL,
+              setup, test_recursive_list, teardown);
   g_test_add ("/utils/rlimit", Fixture, NULL,
               setup, test_rlimit, teardown);
   g_test_add ("/utils/same-file", Fixture, NULL,

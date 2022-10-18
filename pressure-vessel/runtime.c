@@ -7704,3 +7704,41 @@ pv_runtime_has_library (PvRuntime *self,
   g_debug ("-> no");
   return FALSE;
 }
+
+/*
+ * Log the files and directories that will be included in /overrides.
+ */
+void
+pv_runtime_log_overrides (PvRuntime *self)
+{
+  g_auto(GStrv) listing = NULL;
+  gsize i;
+
+  g_debug ("Overrides in %s:", self->overrides_in_container);
+  listing = _srt_recursive_list_content (self->overrides, -1, ".",
+                                         environ, NULL);
+
+  for (i = 0; listing[i] != NULL; i++)
+    g_debug ("\t%s", listing[i]);
+
+  g_debug ("End of overrides in %s", self->overrides_in_container);
+}
+
+/*
+ * Log the files and directories that will be included in the container.
+ */
+void
+pv_runtime_log_container (PvRuntime *self)
+{
+  g_auto(GStrv) listing = NULL;
+  gsize i;
+
+  g_debug ("All files in container, excluding any extra bind mounts:");
+  listing = _srt_recursive_list_content (self->runtime_files, -1, ".",
+                                         environ, NULL);
+
+  for (i = 0; listing[i] != NULL; i++)
+    g_debug ("\t%s", listing[i]);
+
+  g_debug ("End of files in container");
+}

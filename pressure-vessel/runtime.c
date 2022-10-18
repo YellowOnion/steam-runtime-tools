@@ -306,6 +306,8 @@ pv_runtime_make_symlink_in_container (PvRuntime *self,
     dest = alloc_dest = g_build_filename (PV_RUNTIME_PATH_INTERPRETER_ROOT,
                                           path, NULL);
 
+  g_debug ("Creating symlink \"${container}/%s\" -> \"%s\"", dest, target);
+
   if (_srt_get_path_after (path, "usr") != NULL)
     {
       if (self->mutable_sysroot_fd >= 0)
@@ -3838,7 +3840,13 @@ pv_runtime_take_from_provider (PvRuntime *self,
       if (!_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
                                       self->provider->fd,
                                       source_in_provider, G_FILE_TEST_IS_DIR))
-        return TRUE;
+        {
+          g_debug ("Not replacing \"${container}/%s\" with \"%s/%s\": "
+                   "source is not a directory",
+                   dest_in_container,
+                   self->provider->path_in_current_ns, source_in_provider);
+          return TRUE;
+        }
     }
 
   if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_REGULAR)
@@ -3846,7 +3854,13 @@ pv_runtime_take_from_provider (PvRuntime *self,
       if (!_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
                                       self->provider->fd,
                                       source_in_provider, G_FILE_TEST_IS_REGULAR))
-        return TRUE;
+        {
+          g_debug ("Not replacing \"${container}/%s\" with \"%s/%s\": "
+                   "source is not a regular file",
+                   dest_in_container,
+                   self->provider->path_in_current_ns, source_in_provider);
+          return TRUE;
+        }
     }
 
   if (flags & TAKE_FROM_PROVIDER_FLAGS_IF_EXISTS)
@@ -3854,7 +3868,13 @@ pv_runtime_take_from_provider (PvRuntime *self,
       if (!_srt_file_test_in_sysroot (self->provider->path_in_current_ns,
                                       self->provider->fd,
                                       source_in_provider, G_FILE_TEST_EXISTS))
-        return TRUE;
+        {
+          g_debug ("Not replacing \"${container}/%s\" with \"%s/%s\": "
+                   "source does not exist",
+                   dest_in_container,
+                   self->provider->path_in_current_ns, source_in_provider);
+          return TRUE;
+        }
     }
 
   if (self->mutable_sysroot != NULL)
@@ -3876,6 +3896,8 @@ pv_runtime_take_from_provider (PvRuntime *self,
         return FALSE;
 
       base = glnx_basename (dest_in_container);
+
+      g_debug ("Removing \"${container}/%s\"", dest_in_container);
 
       if (!glnx_shutil_rm_rf_at (parent_dirfd, base, NULL, error))
         return FALSE;
@@ -3901,6 +3923,10 @@ pv_runtime_take_from_provider (PvRuntime *self,
               glnx_autofd int file_fd = -1;
               glnx_autofd int dest_fd = -1;
 
+              g_debug ("Creating \"${container}/%s\" by copying \"%s/%s\"",
+                       dest_in_container,
+                       self->provider->path_in_current_ns,
+                       source_in_provider);
               file_fd = _srt_resolve_in_sysroot (self->provider->fd,
                                                  source_in_provider,
                                                  SRT_RESOLVE_FLAGS_READABLE,
@@ -3956,6 +3982,9 @@ pv_runtime_take_from_provider (PvRuntime *self,
       g_return_val_if_fail (target != NULL, FALSE);
       g_return_val_if_fail (target[0] == '/', FALSE);
 
+      g_debug ("Creating symlink \"${container}/%s\" -> \"%s\"",
+               dest_in_container, target);
+
       if (TEMP_FAILURE_RETRY (symlinkat (target, parent_dirfd, base)) != 0)
         return glnx_throw_errno_prefix (error,
                                         "Unable to create symlink \"%s/%s\" -> \"%s\"",
@@ -3973,6 +4002,10 @@ pv_runtime_take_from_provider (PvRuntime *self,
        * a new version over the top */
       g_assert (bwrap != NULL);
 
+      g_debug ("Trying to replace \"${container}/%s\" with \"%s/%s\" via "
+               "bind mount",
+               dest_in_container, self->provider->path_in_current_ns,
+               source_in_provider);
       source_fd = _srt_resolve_in_sysroot (self->provider->fd,
                                            source_in_provider,
                                            SRT_RESOLVE_FLAGS_NONE,

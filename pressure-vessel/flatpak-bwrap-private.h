@@ -62,6 +62,8 @@ void          flatpak_bwrap_add_arg_printf (FlatpakBwrap *bwrap,
 void          flatpak_bwrap_append_argsv (FlatpakBwrap *bwrap,
                                           char        **args,
                                           int           len);
+int *         flatpak_bwrap_steal_fds (FlatpakBwrap *bwrap,
+                                       gsize        *len_out);
 void          flatpak_bwrap_append_bwrap (FlatpakBwrap *bwrap,
                                           FlatpakBwrap *other);       /* Steals the fds */
 void          flatpak_bwrap_append_args (FlatpakBwrap *bwrap,

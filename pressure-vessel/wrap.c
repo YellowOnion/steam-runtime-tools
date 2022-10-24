@@ -211,26 +211,38 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
 }
 
 /*
- * @bwrap: Arguments produced by flatpak_exports_append_bwrap_args(),
+ * @to: The exported files and directories of @from will be adjusted and
+  appended to this FlatpakBwrap
+ * @from: Arguments produced by flatpak_exports_append_bwrap_args(),
  *  not including an executable name (the 0'th argument must be
  *  `--bind` or similar)
  * @home: The home directory
+ * @interpreter_root (nullable): Path to the interpreter root, or %NULL if
+ *  there isn't one
  *
- * Adjust arguments in @bwrap to cope with potentially running in a
- * container or interpreter.
+ * Adjust arguments in @from to cope with potentially running in a
+ * container or interpreter and append them to @to.
+ * This function will steal the fds of @from.
  */
 static void
-adjust_exports (FlatpakBwrap *bwrap,
-                const char *home,
-                const char *interpreter_root)
+append_adjusted_exports (FlatpakBwrap *to,
+                         FlatpakBwrap *from,
+                         const char *home,
+                         const char *interpreter_root)
 {
-  gsize i = 0;
+  g_autofree int *fds = NULL;
+  gsize n_fds;
+  gsize i;
+
+  fds = flatpak_bwrap_steal_fds (from, &n_fds);
+  for (i = 0; i < n_fds; i++)
+    flatpak_bwrap_add_fd (to, fds[i]);
 
   g_debug ("Exported directories:");
 
-  while (i < bwrap->argv->len)
+  for (i = 0; i < from->argv->len;)
     {
-      const char *opt = bwrap->argv->pdata[i];
+      const char *opt = from->argv->pdata[i];
 
       g_assert (opt != NULL);
 
@@ -240,13 +252,17 @@ adjust_exports (FlatpakBwrap *bwrap,
           g_str_equal (opt, "--file") ||
           g_str_equal (opt, "--symlink"))
         {
-          g_assert (i + 3 <= bwrap->argv->len);
+          g_assert (i + 3 <= from->argv->len);
           /* pdata[i + 1] is the target, fd or permissions: unchanged. */
           /* pdata[i + 2] is a path in the final container: unchanged. */
           g_debug ("%s %s %s",
                    opt,
-                   (const char *) bwrap->argv->pdata[i + 1],
-                   (const char *) bwrap->argv->pdata[i + 2]);
+                   (const char *) from->argv->pdata[i + 1],
+                   (const char *) from->argv->pdata[i + 2]);
+
+          flatpak_bwrap_add_args (to, opt, from->argv->pdata[i + 1],
+                                  from->argv->pdata[i + 2], NULL);
+
           i += 3;
         }
       else if (g_str_equal (opt, "--dev") ||
@@ -257,12 +273,15 @@ adjust_exports (FlatpakBwrap *bwrap,
                g_str_equal (opt, "--remount-ro") ||
                g_str_equal (opt, "--tmpfs"))
         {
-          g_assert (i + 2 <= bwrap->argv->len);
+          g_assert (i + 2 <= from->argv->len);
           /* pdata[i + 1] is a path in the final container, or a non-path:
            * unchanged. */
           g_debug ("%s %s",
                    opt,
-                   (const char *) bwrap->argv->pdata[i + 1]);
+                   (const char *) from->argv->pdata[i + 1]);
+
+          flatpak_bwrap_add_args (to, opt, from->argv->pdata[i + 1], NULL);
+
           i += 2;
         }
       else if (g_str_equal (opt, "--bind") ||
@@ -272,11 +291,11 @@ adjust_exports (FlatpakBwrap *bwrap,
                g_str_equal (opt, "--ro-bind") ||
                g_str_equal (opt, "--ro-bind-try"))
         {
-          g_autofree gchar *src = NULL;
-
-          g_assert (i + 3 <= bwrap->argv->len);
-          src = g_steal_pointer (&bwrap->argv->pdata[i + 1]);
+          g_assert (i + 3 <= from->argv->len);
+          const char *from_src = from->argv->pdata[i + 1];
           /* pdata[i + 2] is a path in the final container: unchanged. */
+          const char *from_dest = from->argv->pdata[i + 2];
+          g_autofree gchar *src = NULL;
 
           /* If we're using FEX-Emu or similar, Flatpak code might think it
            * has found a particular file either because it's in the rootfs,
@@ -285,11 +304,13 @@ adjust_exports (FlatpakBwrap *bwrap,
            * so we need to supply it with the file's real location. */
           if (interpreter_root != NULL
               && _srt_file_test_in_sysroot (interpreter_root, -1,
-                                            src, G_FILE_TEST_EXISTS))
+                                            from_src, G_FILE_TEST_EXISTS))
             {
-              g_autofree gchar *old = g_steal_pointer (&src);
-
-              src = g_build_filename (interpreter_root, old, NULL);
+              src = g_build_filename (interpreter_root, from_src, NULL);
+            }
+          else
+            {
+              src = g_strdup (from_src);
             }
 
           /* Paths in the home directory might need adjusting.
@@ -298,14 +319,14 @@ adjust_exports (FlatpakBwrap *bwrap,
            * flatpak_exports_take_host_fd(), and if not, they appear in
            * the container with the same path as on the host. */
           if (flatpak_has_path_prefix (src, home))
-            bwrap->argv->pdata[i + 1] = pv_current_namespace_path_to_host_path (src);
-          else
-            bwrap->argv->pdata[i + 1] = g_steal_pointer (&src);
+            {
+              g_autofree gchar *old = g_steal_pointer (&src);
+              src = pv_current_namespace_path_to_host_path (old);
+            }
 
-          g_debug ("%s %s %s",
-                   opt,
-                   (const char *) bwrap->argv->pdata[i + 1],
-                   (const char *) bwrap->argv->pdata[i + 2]);
+          g_debug ("%s %s %s", opt, src, from_dest);
+          flatpak_bwrap_add_args (to, opt, src, from_dest, NULL);
+
           i += 3;
         }
       else
@@ -1994,9 +2015,8 @@ main (int argc,
         }
 
       flatpak_exports_append_bwrap_args (exports, exports_bwrap);
-      adjust_exports (exports_bwrap, home, interpreter_root);
       g_warn_if_fail (g_strv_length (exports_bwrap->envp) == 0);
-      flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
+      append_adjusted_exports (bwrap, exports_bwrap, home, interpreter_root);
 
       /* The other filesystem arguments have to come after the exports
        * so that if the exports set up symlinks, the other filesystem
@@ -2015,8 +2035,7 @@ main (int argc,
                                              (runtime != NULL),
                                              is_flatpak_env);
       g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
-      adjust_exports (sharing_bwrap, home, interpreter_root);
-      flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
+      append_adjusted_exports (bwrap, sharing_bwrap, home, interpreter_root);
     }
   else if (flatpak_subsandbox != NULL)
     {

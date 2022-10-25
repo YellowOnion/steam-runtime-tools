@@ -47,12 +47,6 @@
 #include "tree-copy.h"
 #include "utils.h"
 
-/* If we're in an emulator like FEX-Emu, we need to use the host
- * OS's /usr as our real root directory, and set the runtime up
- * in a different directory. We use /run/p-v/interpreter-root
- * for the latter. */
-#define PV_RUNTIME_PATH_INTERPRETER_ROOT "/run/pressure-vessel/interpreter-root"
-
 typedef struct
 {
   GCancellable *cancellable;

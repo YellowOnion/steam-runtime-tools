@@ -4569,8 +4569,6 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
  * @bwrap: Append arguments to this bubblewrap invocation to make files
  *  available in the container
  * @sub_dir: `vulkan/icd.d`, `glvnd/egl_vendor.d` or similar
- * @write_to_dir: Path to `/overrides/share/${sub_dir}` in the
- *  current execution environment
  * @details: An #IcdDetails holding a #SrtVulkanLayer or #SrtVulkanIcd,
  *  whichever is appropriate for @sub_dir
  * @digits: Number of digits to pad length of numeric prefix
@@ -4584,7 +4582,6 @@ static gboolean
 setup_json_manifest (PvRuntime *self,
                      FlatpakBwrap *bwrap,
                      const gchar *sub_dir,
-                     const gchar *write_to_dir,
                      IcdDetails *details,
                      int digits,
                      gsize seq,
@@ -4639,6 +4636,7 @@ setup_json_manifest (PvRuntime *self,
 
       if (details->kinds[i] == ICD_KIND_ABSOLUTE)
         {
+          g_autofree gchar *relative_to_overrides = NULL;
           g_autofree gchar *write_to_file = NULL;
           g_autofree gchar *json_in_container = NULL;
           g_autofree gchar *json_base = NULL;
@@ -4647,14 +4645,15 @@ setup_json_manifest (PvRuntime *self,
 
           json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT "-%s.json",
                                        digits, seq, pv_multiarch_tuples[i]);
-          write_to_file = g_build_filename (write_to_dir, json_base, NULL);
+          relative_to_overrides = g_build_filename ("share", sub_dir,
+                                                    json_base, NULL);
+          write_to_file = g_build_filename (self->overrides,
+                                            relative_to_overrides, NULL);
           json_in_container = g_build_filename (self->overrides_in_container,
-                                                "share", sub_dir,
-                                                json_base, NULL);
+                                                relative_to_overrides, NULL);
 
-          g_debug ("Generating \"%s\" with path \"%s\", implementing \"%s\" in container",
-                   write_to_file, details->paths_in_container[i],
-                   json_in_container);
+          g_debug ("Generating \"overrides/%s\" with path \"%s\"",
+                   relative_to_overrides, details->paths_in_container[i]);
 
           if (layer != NULL)
             {
@@ -4784,7 +4783,7 @@ setup_each_json_manifest (PvRuntime *self,
 
   for (j = 0; j < details->len; j++)
     {
-      if (!setup_json_manifest (self, bwrap, sub_dir, write_to_dir,
+      if (!setup_json_manifest (self, bwrap, sub_dir,
                                 g_ptr_array_index (details, j),
                                 digits, j, search_path, error))
         return FALSE;

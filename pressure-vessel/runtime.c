@@ -3664,7 +3664,7 @@ bind_runtime_finish (PvRuntime *self,
   g_return_if_fail (exports != NULL);
   g_return_if_fail (!pv_bwrap_was_finished (bwrap));
 
-  pv_export_symlink_targets (exports, self->overrides);
+  pv_export_symlink_targets (exports, self->overrides, "overrides");
 
   if (self->mutable_sysroot == NULL)
     {

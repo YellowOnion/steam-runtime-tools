@@ -4394,8 +4394,8 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         {
           g_autoptr(GError) local_error = NULL;
 
-          g_debug ("Deleting %s%s/%s because %s replaces it",
-                   self->mutable_sysroot, libdir, name, reason);
+          g_debug ("Deleting tmp-*%s/%s because %s replaces it",
+                   libdir, name, reason);
 
           if (!glnx_unlinkat (iters[i].real_iter.fd, name, 0, &local_error))
             {

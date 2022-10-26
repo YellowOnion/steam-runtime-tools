@@ -44,6 +44,9 @@ export_targets_helper (const char *fpath,
         if (target[0] != '/')
           break;
 
+        if (g_str_has_prefix (target, "/run/gfx/"))
+          break;
+
         if (g_str_has_prefix (target, "/run/host/"))
           break;
 

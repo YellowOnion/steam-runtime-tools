@@ -211,26 +211,59 @@ bind_and_propagate_from_environ (FlatpakExports *exports,
 }
 
 /*
- * @bwrap: Arguments produced by flatpak_exports_append_bwrap_args(),
+ * @to: The exported files and directories of @from will be adjusted and
+  appended to this FlatpakBwrap
+ * @from: Arguments produced by flatpak_exports_append_bwrap_args(),
  *  not including an executable name (the 0'th argument must be
  *  `--bind` or similar)
  * @home: The home directory
+ * @interpreter_root (nullable): Path to the interpreter root, or %NULL if
+ *  there isn't one
+ * @error: Used to return an error on failure
  *
- * Adjust arguments in @bwrap to cope with potentially running in a
- * container or interpreter.
+ * Adjust arguments in @from to cope with potentially running in a
+ * container or interpreter and append them to @to.
+ * This function will steal the fds of @from.
  */
-static void
-adjust_exports (FlatpakBwrap *bwrap,
-                const char *home,
-                const char *interpreter_root)
+static gboolean
+append_adjusted_exports (FlatpakBwrap *to,
+                         FlatpakBwrap *from,
+                         const char *home,
+                         const char *interpreter_root,
+                         GError **error)
 {
-  gsize i = 0;
+  g_autofree int *fds = NULL;
+  glnx_autofd int interpreter_fd = -1;
+  glnx_autofd int root_fd = -1;
+  /* Bypass FEX-Emu transparent rewrite by using
+   * "/proc/self/root" as the root path. */
+  const gchar *root = "/proc/self/root";
+  gsize n_fds;
+  gsize i;
+
+  g_return_val_if_fail (to != NULL, FALSE);
+  g_return_val_if_fail (from != NULL, FALSE);
+  g_return_val_if_fail (home != NULL, FALSE);
+  g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
+
+  fds = flatpak_bwrap_steal_fds (from, &n_fds);
+  for (i = 0; i < n_fds; i++)
+    flatpak_bwrap_add_fd (to, fds[i]);
+
+  if (interpreter_root != NULL)
+    {
+      if (!glnx_opendirat (-1, root, TRUE, &root_fd, error))
+        return FALSE;
+
+      if (!glnx_opendirat (-1, interpreter_root, TRUE, &interpreter_fd, error))
+        return FALSE;
+    }
 
   g_debug ("Exported directories:");
 
-  while (i < bwrap->argv->len)
+  for (i = 0; i < from->argv->len;)
     {
-      const char *opt = bwrap->argv->pdata[i];
+      const char *opt = from->argv->pdata[i];
 
       g_assert (opt != NULL);
 
@@ -240,13 +273,17 @@ adjust_exports (FlatpakBwrap *bwrap,
           g_str_equal (opt, "--file") ||
           g_str_equal (opt, "--symlink"))
         {
-          g_assert (i + 3 <= bwrap->argv->len);
+          g_assert (i + 3 <= from->argv->len);
           /* pdata[i + 1] is the target, fd or permissions: unchanged. */
           /* pdata[i + 2] is a path in the final container: unchanged. */
           g_debug ("%s %s %s",
                    opt,
-                   (const char *) bwrap->argv->pdata[i + 1],
-                   (const char *) bwrap->argv->pdata[i + 2]);
+                   (const char *) from->argv->pdata[i + 1],
+                   (const char *) from->argv->pdata[i + 2]);
+
+          flatpak_bwrap_add_args (to, opt, from->argv->pdata[i + 1],
+                                  from->argv->pdata[i + 2], NULL);
+
           i += 3;
         }
       else if (g_str_equal (opt, "--dev") ||
@@ -257,12 +294,15 @@ adjust_exports (FlatpakBwrap *bwrap,
                g_str_equal (opt, "--remount-ro") ||
                g_str_equal (opt, "--tmpfs"))
         {
-          g_assert (i + 2 <= bwrap->argv->len);
+          g_assert (i + 2 <= from->argv->len);
           /* pdata[i + 1] is a path in the final container, or a non-path:
            * unchanged. */
           g_debug ("%s %s",
                    opt,
-                   (const char *) bwrap->argv->pdata[i + 1]);
+                   (const char *) from->argv->pdata[i + 1]);
+
+          flatpak_bwrap_add_args (to, opt, from->argv->pdata[i + 1], NULL);
+
           i += 2;
         }
       else if (g_str_equal (opt, "--bind") ||
@@ -272,47 +312,67 @@ adjust_exports (FlatpakBwrap *bwrap,
                g_str_equal (opt, "--ro-bind") ||
                g_str_equal (opt, "--ro-bind-try"))
         {
-          g_autofree gchar *src = NULL;
-
-          g_assert (i + 3 <= bwrap->argv->len);
-          src = g_steal_pointer (&bwrap->argv->pdata[i + 1]);
-          /* pdata[i + 2] is a path in the final container: unchanged. */
+          g_assert (i + 3 <= from->argv->len);
+          const char *from_src = from->argv->pdata[i + 1];
+          const char *from_dest = from->argv->pdata[i + 2];
 
           /* If we're using FEX-Emu or similar, Flatpak code might think it
            * has found a particular file either because it's in the rootfs,
            * or because it's in the real root filesystem.
-           * bwrap's mount(2) calls are not subject to that remapping,
-           * so we need to supply it with the file's real location. */
+           * If it exists in FEX rootfs, we add an additional mount entry
+           * where the source is from the FEX rootfs and the destination is
+           * prefixed with the pressure-vessel interpreter root location. */
           if (interpreter_root != NULL
-              && _srt_file_test_in_sysroot (interpreter_root, -1,
-                                            src, G_FILE_TEST_EXISTS))
+              && _srt_file_test_in_sysroot (interpreter_root, interpreter_fd,
+                                            from_src, G_FILE_TEST_EXISTS))
             {
-              g_autofree gchar *old = g_steal_pointer (&src);
+              g_autofree gchar *inter_src = g_build_filename (interpreter_root,
+                                                              from_src, NULL);
+              g_autofree gchar *inter_dest = g_build_filename (PV_RUNTIME_PATH_INTERPRETER_ROOT,
+                                                               from_dest, NULL);
 
-              src = g_build_filename (interpreter_root, old, NULL);
+              g_debug ("Adjusted \"%s\" to \"%s\" and \"%s\" to \"%s\" for the interpreter root",
+                       from_src, inter_src, from_dest, inter_dest);
+              g_debug ("%s %s %s", opt, inter_src, inter_dest);
+              flatpak_bwrap_add_args (to, opt, inter_src, inter_dest, NULL);
             }
 
-          /* Paths in the home directory might need adjusting.
-           * Paths outside the home directory do not: if they're part of
-           * /run/host, they've been adjusted already by
-           * flatpak_exports_take_host_fd(), and if not, they appear in
-           * the container with the same path as on the host. */
-          if (flatpak_has_path_prefix (src, home))
-            bwrap->argv->pdata[i + 1] = pv_current_namespace_path_to_host_path (src);
-          else
-            bwrap->argv->pdata[i + 1] = g_steal_pointer (&src);
+          if (interpreter_root == NULL
+              || _srt_file_test_in_sysroot (root, root_fd, from_src,
+                                            G_FILE_TEST_EXISTS))
+            {
+              g_autofree gchar *src = NULL;
+              /* Paths in the home directory might need adjusting.
+               * Paths outside the home directory do not: if they're part of
+               * /run/host, they've been adjusted already by
+               * flatpak_exports_take_host_fd(), and if not, they appear in
+               * the container with the same path as on the host. */
+              if (flatpak_has_path_prefix (from_src, home))
+                {
+                  src = pv_current_namespace_path_to_host_path (from_src);
 
-          g_debug ("%s %s %s",
-                   opt,
-                   (const char *) bwrap->argv->pdata[i + 1],
-                   (const char *) bwrap->argv->pdata[i + 2]);
+                  if (!g_str_equal (from_src, src))
+                    g_debug ("Adjusted \"%s\" to \"%s\" to be reachable from host",
+                             from_src, src);
+                }
+              else
+                {
+                  src = g_strdup (from_src);
+                }
+
+              g_debug ("%s %s %s", opt, src, from_dest);
+              flatpak_bwrap_add_args (to, opt, src, from_dest, NULL);
+            }
+
           i += 3;
         }
       else
         {
-          g_return_if_reached ();
+          g_return_val_if_reached (FALSE);
         }
     }
+
+  return TRUE;
 }
 
 typedef enum
@@ -1994,9 +2054,9 @@ main (int argc,
         }
 
       flatpak_exports_append_bwrap_args (exports, exports_bwrap);
-      adjust_exports (exports_bwrap, home, interpreter_root);
       g_warn_if_fail (g_strv_length (exports_bwrap->envp) == 0);
-      flatpak_bwrap_append_bwrap (bwrap, exports_bwrap);
+      if (!append_adjusted_exports (bwrap, exports_bwrap, home, interpreter_root, error))
+        goto out;
 
       /* The other filesystem arguments have to come after the exports
        * so that if the exports set up symlinks, the other filesystem
@@ -2015,8 +2075,9 @@ main (int argc,
                                              (runtime != NULL),
                                              is_flatpak_env);
       g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
-      adjust_exports (sharing_bwrap, home, interpreter_root);
-      flatpak_bwrap_append_bwrap (bwrap, sharing_bwrap);
+
+      if (!append_adjusted_exports (bwrap, sharing_bwrap, home, interpreter_root, error))
+        goto out;
     }
   else if (flatpak_subsandbox != NULL)
     {

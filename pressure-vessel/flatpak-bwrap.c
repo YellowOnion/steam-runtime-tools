@@ -189,7 +189,7 @@ flatpak_bwrap_append_args (FlatpakBwrap *bwrap,
                               other_array->len);
 }
 
-static int *
+int *
 flatpak_bwrap_steal_fds (FlatpakBwrap *bwrap,
                          gsize        *len_out)
 {

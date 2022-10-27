@@ -64,6 +64,12 @@ typedef enum
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
+/* If we're in an emulator like FEX-Emu, we need to use the host
+ * OS's /usr as our real root directory, and set the runtime up
+ * in a different directory. We use /run/p-v/interpreter-root
+ * for the latter. */
+#define PV_RUNTIME_PATH_INTERPRETER_ROOT "/run/pressure-vessel/interpreter-root"
+
 #define PV_RUNTIME_FLAGS_MASK \
   (PV_RUNTIME_FLAGS_SINGLE_THREAD \
    | PV_RUNTIME_FLAGS_GENERATE_LOCALES \

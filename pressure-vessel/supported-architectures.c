@@ -138,8 +138,8 @@ const char * const pv_other_ld_so_conf[] =
 };
 
 /*
- * Get the library directories associated with @self, most important or
- * unambiguous first.
+ * Get the absolute paths of the library directories associated with @self,
+ * most important or unambiguous first.
  *
  * Returns: (transfer container) (element-type filename):
  */

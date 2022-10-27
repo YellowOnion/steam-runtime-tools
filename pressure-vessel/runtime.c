@@ -4091,6 +4091,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
   delete = g_new0 (GHashTable *, dirs->len);
   iters = g_new0 (SrtDirIter, dirs->len);
 
+  for (i = 0; i < dirs->len; i++)
+    g_assert (g_path_is_absolute (g_ptr_array_index (dirs, i)));
+
   /* We have to figure out what we want to delete before we delete anything,
    * because we can't tell whether a symlink points to a library of a
    * particular SONAME if we already deleted the library. */
@@ -4146,7 +4149,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                                        self->arbitrary_dirent_order,
                                        error))
         {
-          glnx_prefix_error (error, "Unable to start iterating \"%s/%s\"",
+          glnx_prefix_error (error, "Unable to start iterating \"%s%s\"",
                              self->mutable_sysroot,
                              libdir);
           goto out;
@@ -4162,7 +4165,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
-              glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+              glnx_prefix_error (error, "Unable to iterate over \"%s%s\"",
                                  self->mutable_sysroot, libdir);
               goto out;
             }
@@ -4344,7 +4347,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
-              glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+              glnx_prefix_error (error, "Unable to iterate over \"%s%s\"",
                                  self->mutable_sysroot, libdir);
               goto out;
             }
@@ -4390,12 +4393,12 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         {
           g_autoptr(GError) local_error = NULL;
 
-          g_debug ("Deleting %s/%s/%s because %s replaces it",
+          g_debug ("Deleting %s%s/%s because %s replaces it",
                    self->mutable_sysroot, libdir, name, reason);
 
           if (!glnx_unlinkat (iters[i].real_iter.fd, name, 0, &local_error))
             {
-              g_warning ("Unable to delete %s/%s/%s: %s",
+              g_warning ("Unable to delete %s%s/%s: %s",
                          self->mutable_sysroot, libdir,
                          name, local_error->message);
               g_clear_error (&local_error);

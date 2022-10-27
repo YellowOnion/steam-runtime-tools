@@ -48,7 +48,7 @@ class TestAdverb(BaseTest):
         super().setUp()
         self.uname = os.uname()
 
-        if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
+        if 'SRT_TEST_UNINSTALLED' in os.environ:
             self.adverb = self.command_prefix + [
                 'env',
                 '-u', 'LD_AUDIT',
@@ -74,7 +74,7 @@ class TestAdverb(BaseTest):
         else:
             self.skipTest('Not available as an installed-test')
 
-        self.multiarch = os.environ.get('PRESSURE_VESSEL_MULTIARCH')
+        self.multiarch = os.environ.get('SRT_TEST_MULTIARCH')
         if not self.multiarch:
             self.skipTest('No multiarch tuple has been set')
 

@@ -21,18 +21,10 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-test_env = environment()
-test_env.set('SRT_TEST_TOP_SRCDIR', meson.project_source_root())
-test_env.set('SRT_TEST_TOP_BUILDDIR', meson.project_build_root())
+test_env = environment(common_test_env_vars)
 test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
 test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
-test_env.set('SRT_HELPERS_PATH', join_paths(meson.current_build_dir(), '..', 'helpers'))
-test_env.set('SRT_TEST_UNINSTALLED', 'yes')
 test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))
-
-if multiarch != ''
-  test_env.set('SRT_TEST_MULTIARCH', multiarch)
-endif
 
 no_activation_session_conf = files('session.conf')
 

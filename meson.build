@@ -377,6 +377,16 @@ tests_metadir = join_paths(
   meson.project_name() + '-' + api_major,
 )
 
+common_test_env_vars = {
+  'SRT_TEST_TOP_BUILDDIR': meson.project_build_root(),
+  'SRT_TEST_TOP_SRCDIR': meson.project_source_root(),
+  'SRT_TEST_UNINSTALLED': 'yes',
+}
+
+if multiarch != ''
+  common_test_env_vars += {'SRT_TEST_MULTIARCH': multiarch}
+endif
+
 subdir('steam-runtime-tools')
 
 if multiarch != ''

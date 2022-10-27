@@ -67,7 +67,7 @@ class TestLauncher(BaseTest):
     def setUp(self) -> None:
         super().setUp()
 
-        if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
+        if 'SRT_TEST_UNINSTALLED' in os.environ:
             self.launcher = self.command_prefix + [
                 'env', '-u', 'SRT_LAUNCHER_SERVICE_STOP_ON_EXIT',
                 os.path.join(

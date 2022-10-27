@@ -73,7 +73,7 @@ Influential environment variables:
 * PRESSURE_VESSEL_TEST_CONTAINERS:
     A complete relocatable pressure-vessel installation, including its
     dependencies such as libsteam-runtime-tools
-* PRESSURE_VESSEL_UNINSTALLED:
+* SRT_TEST_UNINSTALLED:
     Set when running from the source/build trees
 * STEAM_RUNTIME_SYSTEM_INFO:
     Path to a steam-runtime-system-info executable for the host system
@@ -206,7 +206,12 @@ class TestContainers(BaseTest):
 
             os.environ[var.name] = ':'.join(paths)
 
-        if 'PRESSURE_VESSEL_UNINSTALLED' in os.environ:
+        # We rely on steam-runtime-system-info finding the bundled helpers
+        # for both i386 and x86_64, and not just the x86_64 helpers from
+        # the build tree
+        os.environ.pop('SRT_HELPERS_PATH', None)
+
+        if 'SRT_TEST_UNINSTALLED' in os.environ:
             os.makedirs(os.path.join(cls.pv_dir, 'bin'))
             os.makedirs(
                 os.path.join(cls.pv_dir, 'libexec', 'steam-runtime-tools-0'),
@@ -273,6 +278,7 @@ class TestContainers(BaseTest):
                     symlinks=True,
                 )
 
+            # We need both i386 and x86_64 helper utilities
             for multiarch in ('i386-linux-gnu', 'x86_64-linux-gnu'):
                 for tool in (
                     'capsule-capture-libs',

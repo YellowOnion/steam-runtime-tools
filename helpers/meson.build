@@ -21,6 +21,8 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+common_test_env_vars += {'SRT_HELPERS_PATH': meson.current_build_dir()}
+
 executable(
   multiarch + '-true',
   'true.c',

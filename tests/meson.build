@@ -21,7 +21,7 @@
 # TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-test_env = environment(common_test_env_vars)
+test_env = environment(common_test_env_vars + uninstalled_env_vars)
 test_env.set('G_TEST_SRCDIR', meson.current_source_dir())
 test_env.set('G_TEST_BUILDDIR', meson.current_build_dir())
 test_env.prepend('PATH', join_paths(meson.current_build_dir(), '..', 'bin'))

@@ -1748,3 +1748,110 @@ _srt_open_elf (int dfd,
 
   return TRUE;
 }
+
+/*
+ * _srt_hash_table_iter_init:
+ * @iter: An iterator
+ * @table: A hash table
+ *
+ * Same as g_hash_table_iter_init().
+ */
+void
+_srt_hash_table_iter_init (SrtHashTableIter *iter,
+                           GHashTable *table)
+{
+  SrtHashTableIter zero = SRT_HASH_TABLE_ITER_CLEARED;
+
+  *iter = zero;
+  g_hash_table_iter_init (&iter->real_iter, table);
+}
+
+/*
+ * Adapter to compare two pointers to items with a #GCompareFunc, in a
+ * container that compares pointers to pointers to the items themselves.
+ * For example, this can be used to pass g_strcmp0() into g_qsort_with_data().
+ */
+static int
+indirect_cmp (const void *a,
+              const void *b,
+              void *user_data)
+{
+  const void * const *ap = a;
+  const void * const *bp = b;
+  GCompareFunc cmp = user_data;
+
+  return cmp (*ap, *bp);
+}
+
+/*
+ * _srt_hash_table_iter_init_sorted:
+ * @iter: An iterator
+ * @table: A hash table
+ * @cmp: Function to compare two items, or %NULL to iterate in
+ *  arbitrary order
+ *
+ * Same as g_hash_table_iter_init(), but if @cmp is non-%NULL, then
+ * iteration will be done in a sorted order.
+ * It is a programming error to modify @table during this iteration.
+ */
+void
+_srt_hash_table_iter_init_sorted (SrtHashTableIter *iter,
+                                  GHashTable *table,
+                                  GCompareFunc cmp)
+{
+  _srt_hash_table_iter_init (iter, table);
+  iter->table = g_hash_table_ref (table);
+
+  if (cmp != NULL)
+    {
+      iter->sorted_keys = g_hash_table_get_keys_as_array (table, &iter->sorted_n);
+
+      if (iter->sorted_n > 0)
+        g_qsort_with_data (iter->sorted_keys, iter->sorted_n,
+                           sizeof (gpointer), indirect_cmp, cmp);
+
+      iter->sorted_next = 0;
+    }
+}
+
+/*
+ * _srt_hash_table_iter_next:
+ * @iter: An iterator
+ * @key_p: A pointer to gpointer used to return the key, or %NULL to ignore
+ * @value_p: A pointer to gpointer used to return the value, or %NULL to ignore
+ *
+ * Same as g_hash_table_iter_next(), but return items sorted by key
+ * if @iter was initialized with a sort order.
+ */
+gboolean
+_srt_hash_table_iter_next (SrtHashTableIter *iter,
+                           gpointer key_p,
+                           gpointer value_p)
+{
+  gpointer *key_out = key_p;
+  gpointer *value_out = value_p;
+
+  if (iter->sorted_keys == NULL)
+    return g_hash_table_iter_next (&iter->real_iter, key_out, value_out);
+
+  if (iter->sorted_next < iter->sorted_n)
+    {
+      gpointer k = iter->sorted_keys[iter->sorted_next++];
+
+      if (key_out != NULL)
+        *key_out = k;
+
+      if (value_out != NULL)
+        *value_out = g_hash_table_lookup (iter->table, k);
+
+      return TRUE;
+    }
+
+  if (key_out != NULL)
+    *key_out = NULL;
+
+  if (value_out != NULL)
+    *value_out = NULL;
+
+  return FALSE;
+}

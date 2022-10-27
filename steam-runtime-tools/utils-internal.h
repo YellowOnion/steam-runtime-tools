@@ -88,6 +88,11 @@ void _srt_unblock_signals (void);
 G_GNUC_INTERNAL int _srt_indirect_strcmp0 (gconstpointer left,
                                            gconstpointer right);
 
+/*
+ * Same as g_strcmp0(), but with the signature of a #GCompareFunc
+ */
+#define _srt_generic_strcmp0 ((GCompareFunc) (GCallback) g_strcmp0)
+
 _SRT_PRIVATE_EXPORT
 gboolean _srt_rm_rf (const char *directory);
 
@@ -192,3 +197,67 @@ gboolean _srt_open_elf (int dfd,
                         int *fd,
                         Elf **elf,
                         GError **error);
+
+/*
+ * SrtHashTableIter:
+ * @real_iter: The underlying iterator
+ *
+ * Similar to #GHashTableIter, but optionally sorts the keys in a
+ * user-specified order (which is implemented by caching a sorted list
+ * of keys the first time _str_hash_table_iter_next() is called).
+ *
+ * Unlike #GHashTableIter, this data structure allocates resources, which
+ * must be cleared after use by using _srt_hash_table_iter_clear() or
+ * automatically by using
+ * `g_auto(SrtHashTableIter) = SRT_HASH_TABLE_ITER_CLEARED`.
+ */
+typedef struct
+{
+  /*< public >*/
+  GHashTableIter real_iter;
+  /*< private >*/
+  GHashTable *table;
+  gpointer *sorted_keys;
+  guint sorted_n;
+  guint sorted_next;
+} SrtHashTableIter;
+
+/*
+ * SRT_HASH_TABLE_ITER_CLEARED:
+ *
+ * Constant initializer to set a #SrtHashTableIter to a state from which
+ * it can be cleared or initialized, but no other actions.
+ */
+#define SRT_HASH_TABLE_ITER_CLEARED { {}, NULL, NULL, 0, 0 }
+
+void _srt_hash_table_iter_init (SrtHashTableIter *iter,
+                                GHashTable *table);
+void _srt_hash_table_iter_init_sorted (SrtHashTableIter *iter,
+                                       GHashTable *table,
+                                       GCompareFunc cmp);
+gboolean _srt_hash_table_iter_next (SrtHashTableIter *iter,
+                                    gpointer key_p,
+                                    gpointer value_p);
+
+/*
+ * _srt_hash_table_iter_clear:
+ * @iter: An iterator
+ *
+ * Free memory used to cache the sorted keys of @iter, if any.
+ *
+ * Unlike the rest of the #SrtHashTableIter interface, it is valid to call
+ * this function on a #SrtHashTableIter that has already been cleared, or
+ * was initialized to %SRT_HASH_TABLE_ITER_CLEARED and never subsequently
+ * used.
+ */
+static inline void
+_srt_hash_table_iter_clear (SrtHashTableIter *iter)
+{
+  SrtHashTableIter zero = SRT_HASH_TABLE_ITER_CLEARED;
+
+  g_free (iter->sorted_keys);
+  g_clear_pointer (&iter->table, g_hash_table_unref);
+  *iter = zero;
+}
+
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(SrtHashTableIter, _srt_hash_table_iter_clear)

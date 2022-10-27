@@ -126,7 +126,6 @@ srt_loadable_write_to_file (const SrtLoadable *self,
   gchar *json_output;
   gboolean ret = FALSE;
   const gchar *member;
-  GHashTableIter iter;
   gpointer key;
   gpointer value;
   const GList *l;
@@ -252,10 +251,14 @@ srt_loadable_write_to_file (const SrtLoadable *self,
 
               if (self->functions != NULL)
                 {
+                  g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
+
                   json_builder_set_member_name (builder, "functions");
                   json_builder_begin_object (builder);
-                  g_hash_table_iter_init (&iter, self->functions);
-                  while (g_hash_table_iter_next (&iter, &key, &value))
+                  _srt_hash_table_iter_init_sorted (&iter,
+                                                    self->functions,
+                                                    _srt_generic_strcmp0);
+                  while (_srt_hash_table_iter_next (&iter, &key, &value))
                     {
                       json_builder_set_member_name (builder, key);
                       json_builder_add_string_value (builder, value);
@@ -265,10 +268,14 @@ srt_loadable_write_to_file (const SrtLoadable *self,
 
               if (self->pre_instance_functions != NULL)
                 {
+                  g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
+
                   json_builder_set_member_name (builder, "pre_instance_functions");
                   json_builder_begin_object (builder);
-                  g_hash_table_iter_init (&iter, self->pre_instance_functions);
-                  while (g_hash_table_iter_next (&iter, &key, &value))
+                  _srt_hash_table_iter_init_sorted (&iter,
+                                                    self->pre_instance_functions,
+                                                    _srt_generic_strcmp0);
+                  while (_srt_hash_table_iter_next (&iter, &key, &value))
                     {
                       json_builder_set_member_name (builder, key);
                       json_builder_add_string_value (builder, value);

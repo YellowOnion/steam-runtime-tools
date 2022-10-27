@@ -443,8 +443,8 @@ with open('debian10/custom_path/MangoHud.json', 'w') as writer:
     "implementation_version" : "1",
     "description" : "Vulkan Hud Overlay",
     "functions" : {
-      "vkGetInstanceProcAddr" : "overlay_GetInstanceProcAddr",
-      "vkGetDeviceProcAddr" : "overlay_GetDeviceProcAddr"
+      "vkGetDeviceProcAddr" : "overlay_GetDeviceProcAddr",
+      "vkGetInstanceProcAddr" : "overlay_GetInstanceProcAddr"
     },
     "enable_environment" : {
       "MANGOHUD" : "1"
@@ -467,8 +467,8 @@ with open('debian10/expectations/MangoHud.json', 'w') as writer:
     "implementation_version" : "1",
     "description" : "Vulkan Hud Overlay",
     "functions" : {
-      "vkGetInstanceProcAddr" : "overlay_GetInstanceProcAddr",
-      "vkGetDeviceProcAddr" : "overlay_GetDeviceProcAddr"
+      "vkGetDeviceProcAddr" : "overlay_GetDeviceProcAddr",
+      "vkGetInstanceProcAddr" : "overlay_GetInstanceProcAddr"
     },
     "enable_environment" : {
       "MANGOHUD" : "1"
@@ -835,8 +835,8 @@ with open(
         "description": "Vulkan Hud Overlay",
         "implementation_version": "1",
         "functions": {
-             "vkGetInstanceProcAddr": "overlay_GetInstanceProcAddr",
-             "vkGetDeviceProcAddr": "overlay_GetDeviceProcAddr"
+             "vkGetDeviceProcAddr": "overlay_GetDeviceProcAddr",
+             "vkGetInstanceProcAddr": "overlay_GetInstanceProcAddr"
         },
         "enable_environment": {
             "MANGOHUD": "1"
@@ -881,8 +881,8 @@ with open(
         "description": "Runtime's implicit layer",
         "implementation_version": "1",
         "functions": {
-             "vkGetInstanceProcAddr": "overlay_GetInstanceProcAddr",
-             "vkGetDeviceProcAddr": "overlay_GetDeviceProcAddr"
+             "vkGetDeviceProcAddr": "overlay_GetDeviceProcAddr",
+             "vkGetInstanceProcAddr": "overlay_GetInstanceProcAddr"
         },
         "enable_environment": {
             "IMPLICIT": "1"
@@ -946,8 +946,8 @@ with open(
         "description": "GL extension's implicit layer",
         "implementation_version": "1",
         "functions": {
-             "vkGetInstanceProcAddr": "overlay_GetInstanceProcAddr",
-             "vkGetDeviceProcAddr": "overlay_GetDeviceProcAddr"
+             "vkGetDeviceProcAddr": "overlay_GetDeviceProcAddr",
+             "vkGetInstanceProcAddr": "overlay_GetInstanceProcAddr"
         },
         "enable_environment": {
             "IMPLICIT": "1"

@@ -6065,10 +6065,10 @@ pv_runtime_create_aliases (PvRuntime *self,
 
       for (guint j = 0; j < json_array_get_length (aliases_array); j++)
         {
-          g_autofree gchar *dest = g_build_filename (arch->aliases_in_current_namespace,
+          g_autofree gchar *dest = g_build_filename (arch->aliases_relative_to_overrides,
                                                      json_array_get_string_element (aliases_array, j),
                                                      NULL);
-          if (symlink (target, dest) != 0)
+          if (symlinkat (target, self->overrides_fd, dest) != 0)
             return glnx_throw_errno_prefix (error,
                                             "Unable to create symlink %s -> %s",
                                             dest, target);

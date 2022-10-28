@@ -81,7 +81,7 @@ if [ -z "${G_TEST_BUILDDIR-}" ]; then
     G_TEST_BUILDDIR="${here}"
 fi
 
-if [ -n "${PRESSURE_VESSEL_UNINSTALLED-}" ]; then
+if [ -n "${SRT_TEST_UNINSTALLED-}" ]; then
     PATH="${G_TEST_BUILDDIR}/../../pressure-vessel:${G_TEST_SRCDIR}/../../pressure-vessel:${PATH}"
 fi
 

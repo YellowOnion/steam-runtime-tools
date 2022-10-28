@@ -377,6 +377,17 @@ tests_metadir = join_paths(
   meson.project_name() + '-' + api_major,
 )
 
+common_test_env_vars = {
+  'SRT_TEST_TOP_BUILDDIR': meson.project_build_root(),
+  'SRT_TEST_TOP_SRCDIR': meson.project_source_root(),
+  'SRT_TEST_UNINSTALLED': 'yes',
+}
+uninstalled_env_vars = {}
+
+if multiarch != ''
+  common_test_env_vars += {'SRT_TEST_MULTIARCH': multiarch}
+endif
+
 subdir('steam-runtime-tools')
 
 if multiarch != ''
@@ -397,5 +408,10 @@ endif
 
 subdir('docs')
 subdir('tests')
+
+if meson.version().version_compare('>=0.58')
+  uninstalled_env = environment(uninstalled_env_vars)
+  meson.add_devenv(uninstalled_env)
+endif
 
 # vim:set sw=2 sts=2 et:

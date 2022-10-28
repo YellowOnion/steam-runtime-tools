@@ -454,6 +454,8 @@ pv_runtime_init (PvRuntime *self)
 {
   self->any_libc_from_provider = FALSE;
   self->all_libc_from_provider = FALSE;
+  self->root_fd = -1;
+  self->runtime_files_fd = -1;
   self->variable_dir_fd = -1;
   self->mutable_sysroot_fd = -1;
   self->host_fd = -1;

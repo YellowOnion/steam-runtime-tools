@@ -2256,7 +2256,10 @@ pinned_libraries_missing (Fixture *f,
   g_assert_cmpint (g_rmdir (fake_home->pinned_32), ==, 0);
 
   values = srt_system_info_list_pinned_libs_32 (info, &messages);
-  g_assert_null (values);
+  g_assert_nonnull (values);
+  g_assert_cmpstr (values[0], ==, NULL);
+
+  g_clear_pointer (&values, g_strfreev);
 
   g_assert_nonnull (messages);
   g_assert_cmpstr (strstr (messages[0], "pinned_libs_32"), !=, NULL);
@@ -2269,7 +2272,10 @@ pinned_libraries_missing (Fixture *f,
   g_assert_cmpint (g_rmdir (fake_home->pinned_64), ==, 0);
 
   values = srt_system_info_list_pinned_libs_64 (info, &messages);
-  g_assert_null (values);
+  g_assert_nonnull (values);
+  g_assert_cmpstr (values[0], ==, NULL);
+
+  g_clear_pointer (&values, g_strfreev);
 
   g_assert_nonnull (messages);
   g_assert_cmpstr (strstr (messages[0], "pinned_libs_64"), !=, NULL);

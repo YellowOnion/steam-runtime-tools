@@ -1416,8 +1416,7 @@ _srt_recursive_list_content (const gchar *sysroot,
   g_ptr_array_sort (content, _srt_indirect_strcmp0);
 
 out:
-  if (content->len > 0)
-    g_ptr_array_add (content, NULL);
+  g_ptr_array_add (content, NULL);
 
   if (messages_out != NULL && messages->len > 0)
     {

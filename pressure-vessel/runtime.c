@@ -6031,6 +6031,7 @@ pv_runtime_create_aliases (PvRuntime *self,
       g_autofree gchar *soname_in_overrides = NULL;
       g_autofree gchar *target = NULL;
       g_autoptr(GList) members = NULL;
+      struct stat stat_buf;
 
       node = json_array_get_element (libraries_array, i);
       if (!JSON_NODE_HOLDS_OBJECT (node))
@@ -6052,7 +6053,7 @@ pv_runtime_create_aliases (PvRuntime *self,
       if (aliases_array == NULL || json_array_get_length (aliases_array) == 0)
         continue;
 
-      soname_in_overrides = g_build_filename (arch->libdir_in_current_namespace,
+      soname_in_overrides = g_build_filename (arch->libdir_relative_to_overrides,
                                               soname, NULL);
       soname_in_runtime_usr = g_build_filename (self->runtime_usr, "lib",
                                                 arch->details->tuple, soname, NULL);
@@ -6061,8 +6062,8 @@ pv_runtime_create_aliases (PvRuntime *self,
       soname_in_runtime = g_build_filename (self->runtime_files, "lib",
                                             arch->details->tuple, soname, NULL);
 
-      if (g_file_test (soname_in_overrides,
-                       (G_FILE_TEST_IS_REGULAR | G_FILE_TEST_IS_SYMLINK)))
+      if (fstatat (self->overrides_fd, soname_in_overrides, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+          && (S_ISLNK (stat_buf.st_mode) || S_ISREG (stat_buf.st_mode)))
         target = g_build_filename (arch->libdir_in_container, soname, NULL);
       else if (g_file_test (soname_in_runtime_usr,
                             (G_FILE_TEST_IS_REGULAR | G_FILE_TEST_IS_SYMLINK)))

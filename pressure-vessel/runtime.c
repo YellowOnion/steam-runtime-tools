@@ -2448,7 +2448,8 @@ collect_s2tc (PvRuntime *self,
       expr = g_strdup_printf ("path-match:%s", s2tc);
 
       if (!pv_runtime_capture_libraries (self, arch,
-                                         arch->libdir_in_current_namespace, expr,
+                                         arch->libdir_relative_to_overrides,
+                                         expr,
                                          (const char * const *) &expr, 1, error))
         return FALSE;
     }
@@ -5146,7 +5147,8 @@ pv_runtime_collect_libc_family (PvRuntime *self,
                                             bwrap, error))
     return FALSE;
 
-  if (!pv_runtime_capture_libraries (self, arch, arch->libdir_in_current_namespace,
+  if (!pv_runtime_capture_libraries (self, arch,
+                                     arch->libdir_relative_to_overrides,
                                      NULL, patterns, G_N_ELEMENTS (patterns), error))
     return FALSE;
 
@@ -6872,7 +6874,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_assert (patterns->pdata != NULL);
 
           if (!pv_runtime_capture_libraries (self, arch,
-                                             arch->libdir_in_current_namespace,
+                                             arch->libdir_relative_to_overrides,
                                              "Main capsule-capture-libs call",
                                              (const char * const *) patterns->pdata,
                                              patterns->len, error))

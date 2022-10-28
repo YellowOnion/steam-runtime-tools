@@ -360,9 +360,11 @@ typedef struct
 {
   gsize multiarch_index;
   const PvMultiarchDetails *details;
+  gchar *aliases_relative_to_overrides;
   gchar *aliases_in_current_namespace;
   gchar *capsule_capture_libs_basename;
   gchar *capsule_capture_libs;
+  gchar *libdir_relative_to_overrides;
   gchar *libdir_in_current_namespace;
   gchar *libdir_in_container;
   gchar *ld_so;
@@ -389,13 +391,19 @@ runtime_architecture_init (RuntimeArchitecture *self,
   self->capsule_capture_libs = g_build_filename (runtime->helpers_path,
                                                  self->capsule_capture_libs_basename,
                                                  NULL);
-  self->libdir_in_current_namespace = g_build_filename (runtime->overrides, "lib",
-                                                        self->details->tuple, NULL);
+  self->libdir_relative_to_overrides = g_strdup_printf ("lib/%s",
+                                                        self->details->tuple);
+  self->libdir_in_current_namespace = g_build_filename (runtime->overrides,
+                                                        self->libdir_relative_to_overrides,
+                                                        NULL);
   self->libdir_in_container = g_build_filename (runtime->overrides_in_container,
-                                                "lib", self->details->tuple, NULL);
+                                                self->libdir_relative_to_overrides, NULL);
 
-  self->aliases_in_current_namespace = g_build_filename (self->libdir_in_current_namespace,
-                                                         "aliases", NULL);
+  self->aliases_relative_to_overrides = g_strdup_printf ("lib/%s/aliases",
+                                                         self->details->tuple);
+  self->aliases_in_current_namespace = g_build_filename (runtime->overrides,
+                                                         self->aliases_relative_to_overrides,
+                                                         NULL);
 
   /* This has the side-effect of testing whether we can run binaries
    * for this architecture on the current environment. We
@@ -420,8 +428,10 @@ runtime_architecture_check_valid (RuntimeArchitecture *self)
   g_return_val_if_fail (self->details == &pv_multiarch_details[self->multiarch_index], FALSE);
   g_return_val_if_fail (self->capsule_capture_libs_basename != NULL, FALSE);
   g_return_val_if_fail (self->capsule_capture_libs != NULL, FALSE);
+  g_return_val_if_fail (self->libdir_relative_to_overrides != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_current_namespace != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_container != NULL, FALSE);
+  g_return_val_if_fail (self->aliases_relative_to_overrides != NULL, FALSE);
   g_return_val_if_fail (self->aliases_in_current_namespace != NULL, FALSE);
   g_return_val_if_fail (self->ld_so != NULL, FALSE);
   return TRUE;
@@ -434,8 +444,10 @@ runtime_architecture_clear (RuntimeArchitecture *self)
   self->details = NULL;
   g_clear_pointer (&self->capsule_capture_libs_basename, g_free);
   g_clear_pointer (&self->capsule_capture_libs, g_free);
+  g_clear_pointer (&self->libdir_relative_to_overrides, g_free);
   g_clear_pointer (&self->libdir_in_current_namespace, g_free);
   g_clear_pointer (&self->libdir_in_container, g_free);
+  g_clear_pointer (&self->aliases_relative_to_overrides, g_free);
   g_clear_pointer (&self->aliases_in_current_namespace, g_free);
   g_clear_pointer (&self->ld_so, g_free);
 }

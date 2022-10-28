@@ -5477,7 +5477,8 @@ pv_runtime_collect_lib_data (PvRuntime *self,
  * @self: The runtime
  * @arch: Architecture of @lib_symlink
  * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
- * @lib_symlink: The symlink created by capsule-capture-libs.
+ * @lib_symlink: The symlink created by capsule-capture-libs,
+ *  relative to /overrides.
  *  Its target is either `self->provider->path_in_container_ns`
  *  followed by the path to a library in the graphics stack provider
  *  namespace, or the path to a library in a non-standard directory such
@@ -5506,7 +5507,7 @@ pv_runtime_collect_lib_symlink_data (PvRuntime *self,
   g_return_val_if_fail (lib_symlink != NULL, FALSE);
   g_return_val_if_fail (data_in_provider != NULL, FALSE);
 
-  target = glnx_readlinkat_malloc (-1, lib_symlink, NULL, NULL);
+  target = glnx_readlinkat_malloc (self->overrides_fd, lib_symlink, NULL, NULL);
 
   if (target == NULL)
     return FALSE;
@@ -5572,7 +5573,7 @@ collect_one_mesa_drirc (PvRuntime *self,
          * path in the provider namespace, but with an optional prefix
          * that we already know how to remove (/run/host or /run/gfx). */
         g_return_if_fail (resolved != NULL);
-        symlink = g_build_filename (arch->libdir_in_current_namespace,
+        symlink = g_build_filename (arch->libdir_relative_to_overrides,
                                     glnx_basename (resolved), NULL);
         pv_runtime_collect_lib_symlink_data (self, arch, "drirc.d", symlink,
                                              flags, drirc_data_in_provider);
@@ -6936,9 +6937,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               self->all_libc_from_provider = FALSE;
             }
 
-          libdrm = g_build_filename (arch->libdir_in_current_namespace,
+          libdrm = g_build_filename (arch->libdir_relative_to_overrides,
                                      "libdrm.so.2", NULL);
-          libdrm_amdgpu = g_build_filename (arch->libdir_in_current_namespace,
+          libdrm_amdgpu = g_build_filename (arch->libdir_relative_to_overrides,
                                             "libdrm_amdgpu.so.1", NULL);
 
           /* If we have libdrm_amdgpu.so.1 in overrides we also want to mount
@@ -6957,7 +6958,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               all_libdrm_from_provider = FALSE;
             }
 
-          libglx_mesa = g_build_filename (arch->libdir_in_current_namespace, "libGLX_mesa.so.0", NULL);
+          libglx_mesa = g_build_filename (arch->libdir_relative_to_overrides,
+                                          "libGLX_mesa.so.0", NULL);
 
           /* If we have libGLX_mesa.so.0 in overrides we also want to mount
            * ${prefix}/share/drirc.d from the provider. ${prefix} is derived from
@@ -6975,7 +6977,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                               provider_stack->vulkan_icd_details, system_info,
                               drirc_data_in_provider);
 
-          libglx_nvidia = g_build_filename (arch->libdir_in_current_namespace, "libGLX_nvidia.so.0", NULL);
+          libglx_nvidia = g_build_filename (arch->libdir_relative_to_overrides,
+                                            "libGLX_nvidia.so.0", NULL);
 
           /* If we have libGLX_nvidia.so.0 in overrides we also want to mount
            * /usr/share/nvidia from the provider. In this case it's

@@ -4117,9 +4117,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           if (libdir_fd < 0)
             {
-              g_debug ("Cannot resolve \"%s\" in \"%s\", so no need to delete "
-                       "libraries from it: %s",
-                       libdir, self->mutable_sysroot, local_error->message);
+              g_debug ("Cannot resolve \"%s\" in mutable sysroot, so no "
+                       "need to delete libraries from it: %s",
+                       libdir, local_error->message);
               g_clear_error (&local_error);
               continue;
             }
@@ -4142,8 +4142,8 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             }
         }
 
-      g_debug ("Removing overridden %s libraries from \"%s\" in \"%s\"...",
-               arch->details->tuple, libdir, self->mutable_sysroot);
+      g_debug ("Removing overridden %s libraries from \"%s\" in mutable sysroot...",
+               arch->details->tuple, libdir);
 
       if (!_srt_dir_iter_init_take_fd (&iters[i], &libdir_fd,
                                        SRT_DIR_ITER_FLAGS_ENSURE_DTYPE,

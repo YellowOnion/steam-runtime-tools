@@ -1977,26 +1977,24 @@ pv_runtime_finalize (GObject *object)
 
   pv_runtime_cleanup (self);
   g_free (self->bubblewrap);
+  g_free (self->deployment);
   glnx_close_fd (&self->host_fd);
-  g_strfreev (self->original_environ);
+  g_free (self->id);
   g_free (self->libcapsule_knowledge);
-  g_free (self->runtime_abi_json);
-  glnx_close_fd (&self->variable_dir_fd);
-  g_free (self->variable_dir);
-  glnx_close_fd (&self->mutable_sysroot_fd);
   g_free (self->mutable_sysroot);
+  glnx_close_fd (&self->mutable_sysroot_fd);
+  g_strfreev (self->original_environ);
   glnx_close_fd (&self->root_fd);
-  g_free (self->runtime_files_on_host);
+  g_free (self->runtime_abi_json);
   g_free (self->runtime_app);
   glnx_close_fd (&self->runtime_files_fd);
+  g_free (self->runtime_files_on_host);
   g_free (self->runtime_usr);
+  g_clear_pointer (&self->runtime_lock, pv_bwrap_lock_free);
   g_free (self->source);
   g_free (self->source_files);
-  g_free (self->deployment);
-  g_free (self->id);
-
-  if (self->runtime_lock != NULL)
-    pv_bwrap_lock_free (self->runtime_lock);
+  g_free (self->variable_dir);
+  glnx_close_fd (&self->variable_dir_fd);
 
   G_OBJECT_CLASS (pv_runtime_parent_class)->finalize (object);
 }

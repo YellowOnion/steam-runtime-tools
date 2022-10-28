@@ -95,6 +95,8 @@ struct _PvRuntime
   EnumerationThread host_thread;
   EnumerationThread *arch_host_threads;
   EnumerationThread *arch_threads;
+  SrtDirentCompareFunc arbitrary_dirent_order;
+  GCompareFunc arbitrary_str_order;
 
   PvRuntimeFlags flags;
   int variable_dir_fd;
@@ -698,20 +700,21 @@ is_old_runtime_deployment (const char *name)
 gboolean
 pv_runtime_garbage_collect_legacy (const char *variable_dir,
                                    const char *runtime_base,
+                                   SrtDirentCompareFunc arbitrary_dirent_order,
                                    GError **error)
 {
   g_autoptr(GError) local_error = NULL;
   g_autoptr(PvBwrapLock) variable_lock = NULL;
   g_autoptr(PvBwrapLock) base_lock = NULL;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
-  g_auto(GLnxDirFdIterator) variable_dir_iter = { FALSE };
-  g_auto(GLnxDirFdIterator) runtime_base_iter = { FALSE };
+  g_auto(SrtDirIter) variable_dir_iter = SRT_DIR_ITER_CLEARED;
+  g_auto(SrtDirIter) runtime_base_iter = SRT_DIR_ITER_CLEARED;
   glnx_autofd int variable_dir_fd = -1;
   glnx_autofd int runtime_base_fd = -1;
   struct
   {
     const char *path;
-    GLnxDirFdIterator *iter;
+    SrtDirIter *iter;
   } iters[] = {
     { variable_dir, &variable_dir_iter },
     { runtime_base, &runtime_base_iter },
@@ -765,8 +768,11 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
       const char * const symlinks[] = { "scout", "soldier" };
       gsize j;
 
-      if (!glnx_dirfd_iterator_init_at (AT_FDCWD, iters[i].path,
-                                        TRUE, iters[i].iter, error))
+      if (!_srt_dir_iter_init_at (iters[i].iter, AT_FDCWD, iters[i].path,
+                                  (SRT_DIR_ITER_FLAGS_FOLLOW
+                                   | SRT_DIR_ITER_FLAGS_ENSURE_DTYPE),
+                                  arbitrary_dirent_order,
+                                  error))
         return FALSE;
 
       g_debug ("Cleaning up old subdirectories in %s...",
@@ -776,8 +782,7 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
         {
           struct dirent *dent;
 
-          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (iters[i].iter,
-                                                           &dent, NULL, error))
+          if (!_srt_dir_iter_next_dent (iters[i].iter, &dent, NULL, error))
             return FALSE;
 
           if (dent == NULL)
@@ -806,7 +811,7 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
 
           pv_runtime_maybe_garbage_collect_subdir ("legacy runtime",
                                                    iters[i].path,
-                                                   iters[i].iter->fd,
+                                                   iters[i].iter->real_iter.fd,
                                                    dent->d_name);
         }
 
@@ -814,7 +819,7 @@ pv_runtime_garbage_collect_legacy (const char *variable_dir,
                iters[i].path);
 
       for (j = 0; j < G_N_ELEMENTS (symlinks); j++)
-        pv_delete_dangling_symlink (iters[i].iter->fd, iters[i].path,
+        pv_delete_dangling_symlink (iters[i].iter->real_iter.fd, iters[i].path,
                                     symlinks[j]);
     }
 
@@ -826,7 +831,7 @@ pv_runtime_garbage_collect (PvRuntime *self,
                             PvBwrapLock *variable_dir_lock,
                             GError **error)
 {
-  g_auto(GLnxDirFdIterator) iter = { FALSE };
+  g_auto(SrtDirIter) iter = SRT_DIR_ITER_CLEARED;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
@@ -839,16 +844,18 @@ pv_runtime_garbage_collect (PvRuntime *self,
   timer = _srt_profiling_start ("Cleaning up temporary runtimes in %s",
                                 self->variable_dir);
 
-  if (!glnx_dirfd_iterator_init_at (AT_FDCWD, self->variable_dir,
-                                    TRUE, &iter, error))
+  if (!_srt_dir_iter_init_at (&iter, AT_FDCWD, self->variable_dir,
+                              (SRT_DIR_ITER_FLAGS_FOLLOW
+                               | SRT_DIR_ITER_FLAGS_ENSURE_DTYPE),
+                              self->arbitrary_dirent_order,
+                              error))
     return FALSE;
 
   while (TRUE)
     {
       struct dirent *dent;
 
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iter, &dent,
-                                                       NULL, error))
+      if (!_srt_dir_iter_next_dent (&iter, &dent, NULL, error))
         return FALSE;
 
       if (dent == NULL)
@@ -928,11 +935,11 @@ pv_runtime_create_copy (PvRuntime *self,
 {
   g_autofree gchar *dest_usr = NULL;
   g_autofree gchar *temp_dir = NULL;
-  g_autoptr(GDir) dir = NULL;
+  g_auto(SrtDirIter) dir = SRT_DIR_ITER_CLEARED;
   g_autoptr(PvBwrapLock) copy_lock = NULL;
   G_GNUC_UNUSED g_autoptr(PvBwrapLock) source_lock = NULL;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
-  const char *member;
+  struct dirent *dent;
   glnx_autofd int temp_dir_fd = -1;
   gboolean is_just_usr;
 
@@ -1064,15 +1071,16 @@ pv_runtime_create_copy (PvRuntime *self,
                                         temp_dir);
     }
 
-  dir = g_dir_open (dest_usr, 0, error);
-
-  if (dir == NULL)
+  if (!_srt_dir_iter_init_at (&dir, AT_FDCWD, dest_usr,
+                              SRT_DIR_ITER_FLAGS_FOLLOW,
+                              self->arbitrary_dirent_order,
+                              error))
     return FALSE;
 
-  for (member = g_dir_read_name (dir);
-       member != NULL;
-       member = g_dir_read_name (dir))
+  while (_srt_dir_iter_next_dent (&dir, &dent, NULL, NULL) && dent != NULL)
     {
+      const char *member = dent->d_name;
+
       /* Create symlinks ${temp_dir}/bin -> usr/bin, etc. if missing.
        *
        * Also make ${temp_dir}/etc, ${temp_dir}/var symlinks to etc
@@ -1769,6 +1777,12 @@ pv_runtime_initable_init (GInitable *initable,
    * we're using a mutable sysroot, which is a lot simpler. */
   if (self->flags & PV_RUNTIME_FLAGS_INTERPRETER_ROOT)
     self->flags |= PV_RUNTIME_FLAGS_COPY_RUNTIME;
+
+  if (self->flags & PV_RUNTIME_FLAGS_DETERMINISTIC)
+    {
+      self->arbitrary_dirent_order = _srt_dirent_strcmp;
+      self->arbitrary_str_order = _srt_generic_strcmp0;
+    }
 
   if (self->flags & PV_RUNTIME_FLAGS_COPY_RUNTIME)
     {
@@ -3085,7 +3099,6 @@ bind_runtime_base (PvRuntime *self,
   };
   g_autofree gchar *xrd = g_strdup_printf ("/run/user/%ld", (long) geteuid ());
   gsize i;
-  const gchar *member;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (exports != NULL, FALSE);
@@ -3203,17 +3216,18 @@ bind_runtime_base (PvRuntime *self,
       g_autofree gchar *path = g_build_filename (self->runtime_files,
                                                  bind_mutable[i],
                                                  NULL);
-      g_autoptr(GDir) dir = NULL;
+      g_auto(SrtDirIter) dir = SRT_DIR_ITER_CLEARED;
+      struct dirent *dent;
 
-      dir = g_dir_open (path, 0, NULL);
-
-      if (dir == NULL)
+      if (!_srt_dir_iter_init_at (&dir, AT_FDCWD, path,
+                                  SRT_DIR_ITER_FLAGS_FOLLOW,
+                                  self->arbitrary_dirent_order,
+                                  NULL))
         continue;
 
-      for (member = g_dir_read_name (dir);
-           member != NULL;
-           member = g_dir_read_name (dir))
+      while (_srt_dir_iter_next_dent (&dir, &dent, NULL, NULL) && dent != NULL)
         {
+          const char *member = dent->d_name;
           g_autofree gchar *dest = g_build_filename ("/", bind_mutable[i],
                                                      member, NULL);
           g_autofree gchar *full = NULL;
@@ -4057,7 +4071,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
   g_autoptr(GPtrArray) dirs = NULL;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
   GHashTable **delete = NULL;
-  GLnxDirFdIterator *iters = NULL;
+  SrtDirIter *iters = NULL;
   gboolean ret = FALSE;
   gsize i;
 
@@ -4075,7 +4089,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
   dirs = pv_multiarch_details_get_libdirs (arch->details,
                                            PV_MULTIARCH_LIBDIRS_FLAGS_REMOVE_OVERRIDDEN);
   delete = g_new0 (GHashTable *, dirs->len);
-  iters = g_new0 (GLnxDirFdIterator, dirs->len);
+  iters = g_new0 (SrtDirIter, dirs->len);
 
   /* We have to figure out what we want to delete before we delete anything,
    * because we can't tell whether a symlink points to a library of a
@@ -4110,9 +4124,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             {
               /* No need to inspect a directory if it's one we already
                * looked at (perhaps via symbolic links) */
-              if (iters[j].initialized
+              if (iters[j].real_iter.initialized
                   && _srt_fstatat_is_same_file (libdir_fd, "",
-                                                iters[j].fd, ""))
+                                                iters[j].real_iter.fd, ""))
                 break;
             }
 
@@ -4127,7 +4141,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
       g_debug ("Removing overridden %s libraries from \"%s\" in \"%s\"...",
                arch->details->tuple, libdir, self->mutable_sysroot);
 
-      if (!glnx_dirfd_iterator_init_take_fd (&libdir_fd, &iters[i], error))
+      if (!_srt_dir_iter_init_take_fd (&iters[i], &libdir_fd,
+                                       SRT_DIR_ITER_FLAGS_ENSURE_DTYPE,
+                                       self->arbitrary_dirent_order,
+                                       error))
         {
           glnx_prefix_error (error, "Unable to start iterating \"%s/%s\"",
                              self->mutable_sysroot,
@@ -4143,8 +4160,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
           g_autofree gchar *target = NULL;
           const char *target_base;
 
-          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
-                                                           NULL, error))
+          if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
               glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
                                  self->mutable_sysroot, libdir);
@@ -4177,7 +4193,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
               strstr (dent->d_name, ".so.") == NULL)
             continue;
 
-          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
+          target = glnx_readlinkat_malloc (iters[i].real_iter.fd, dent->d_name,
                                            NULL, NULL);
           if (target != NULL)
             target_base = glnx_basename (target);
@@ -4319,15 +4335,14 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
       /* Iterate over the directory again, to clean up dangling development
        * symlinks */
-      glnx_dirfd_iterator_rewind (&iters[i]);
+      _srt_dir_iter_rewind (&iters[i]);
 
       while (TRUE)
         {
           g_autofree gchar *target = NULL;
           gpointer reason;
 
-          if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&iters[i], &dent,
-                                                           NULL, error))
+          if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
               glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
                                  self->mutable_sysroot, libdir);
@@ -4344,7 +4359,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
           if (g_hash_table_lookup_extended (delete[i], dent->d_name, NULL, NULL))
             continue;
 
-          target = glnx_readlinkat_malloc (iters[i].fd, dent->d_name,
+          target = glnx_readlinkat_malloc (iters[i].real_iter.fd, dent->d_name,
                                            NULL, NULL);
 
           /* If we're going to delete the target, also delete the symlink
@@ -4357,24 +4372,28 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
   for (i = 0; i < dirs->len; i++)
     {
+      g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
       const char *libdir = g_ptr_array_index (dirs, i);
+      const char *name;
+      const char *reason;
 
       if (delete[i] == NULL)
         continue;
 
-      g_assert (iters[i].initialized);
-      g_assert (iters[i].fd >= 0);
+      g_assert (iters[i].real_iter.initialized);
+      g_assert (iters[i].real_iter.fd >= 0);
 
-      GLNX_HASH_TABLE_FOREACH_KV (delete[i],
-                                  const char *, name,
-                                  const char *, reason)
+      _srt_hash_table_iter_init_sorted (&iter, delete[i],
+                                        self->arbitrary_str_order);
+
+      while (_srt_hash_table_iter_next (&iter, &name, &reason))
         {
           g_autoptr(GError) local_error = NULL;
 
           g_debug ("Deleting %s/%s/%s because %s replaces it",
                    self->mutable_sysroot, libdir, name, reason);
 
-          if (!glnx_unlinkat (iters[i].fd, name, 0, &local_error))
+          if (!glnx_unlinkat (iters[i].real_iter.fd, name, 0, &local_error))
             {
               g_warning ("Unable to delete %s/%s/%s: %s",
                          self->mutable_sysroot, libdir,
@@ -4395,7 +4414,7 @@ out:
       for (i = 0; i < dirs->len; i++)
         {
           g_clear_pointer (&delete[i], g_hash_table_unref);
-          glnx_dirfd_iterator_clear (&iters[i]);
+          _srt_dir_iter_clear (&iters[i]);
         }
     }
 
@@ -5612,7 +5631,7 @@ pv_runtime_finish_lib_data (PvRuntime *self,
                             GError **error)
 {
   g_autofree gchar *canonical_path = NULL;
-  GHashTableIter iter;
+  g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
   const gchar *data_path = NULL;
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
@@ -5633,9 +5652,10 @@ pv_runtime_finish_lib_data (PvRuntime *self,
   /* We might have more than one data directory in the provider,
    * e.g. one for each supported multiarch tuple */
 
-  g_hash_table_iter_init (&iter, data_in_provider);
+  _srt_hash_table_iter_init_sorted (&iter, data_in_provider,
+                                    self->arbitrary_str_order);
 
-  while (g_hash_table_iter_next (&iter, (gpointer *)&data_path, NULL))
+  while (_srt_hash_table_iter_next (&iter, &data_path, NULL))
     {
       g_warn_if_fail (data_path != NULL && data_path[0] != '/');
 
@@ -5700,7 +5720,8 @@ pv_runtime_finish_lib_data (PvRuntime *self,
                  dir_basename);
     }
 
-  data_path = pv_hash_table_get_arbitrary_key (data_in_provider);
+  data_path = pv_hash_table_get_first_key (data_in_provider,
+                                           self->arbitrary_str_order);
 
   if (data_path != NULL)
     return pv_runtime_take_from_provider (self, bwrap,
@@ -5740,7 +5761,7 @@ pv_runtime_finish_libc_family (PvRuntime *self,
                                GHashTable *gconv_in_provider,
                                GError **error)
 {
-  GHashTableIter iter;
+  g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
   const gchar *gconv_path;
   gsize i;
   /* List of paths where we expect to find "locale", sorted by the most
@@ -5880,8 +5901,10 @@ pv_runtime_finish_libc_family (PvRuntime *self,
 
       g_debug ("Making provider gconv modules visible in container");
 
-      g_hash_table_iter_init (&iter, gconv_in_provider);
-      while (g_hash_table_iter_next (&iter, (gpointer *)&gconv_path, NULL))
+      _srt_hash_table_iter_init_sorted (&iter, gconv_in_provider,
+                                        self->arbitrary_str_order);
+
+      while (_srt_hash_table_iter_next (&iter, &gconv_path, NULL))
         {
           if (!pv_runtime_take_from_provider (self, bwrap,
                                               gconv_path,
@@ -6294,7 +6317,8 @@ collect_dri_drivers (PvRuntime *self,
  * @search_path: (inout):
  */
 static void
-pv_append_host_dri_library_paths (SrtSystemInfo *system_info,
+pv_append_host_dri_library_paths (PvRuntime *self,
+                                  SrtSystemInfo *system_info,
                                   const char *multiarch_tuple,
                                   GString *search_path)
 {
@@ -6302,7 +6326,7 @@ pv_append_host_dri_library_paths (SrtSystemInfo *system_info,
   g_autoptr(SrtObjectList) va_api_drivers = NULL;
   g_autoptr(GHashTable) drivers_set = NULL;
   const GList *icd_iter;
-  GHashTableIter iter;
+  g_auto(SrtHashTableIter) iter = SRT_HASH_TABLE_ITER_CLEARED;
   const gchar *drivers_path = NULL;
   gsize i;
 
@@ -6356,8 +6380,10 @@ pv_append_host_dri_library_paths (SrtSystemInfo *system_info,
         g_hash_table_add (drivers_set, g_steal_pointer (&driver_path));
     }
 
-  g_hash_table_iter_init (&iter, drivers_set);
-  while (g_hash_table_iter_next (&iter, (gpointer *)&drivers_path, NULL))
+  _srt_hash_table_iter_init_sorted (&iter, drivers_set,
+                                    self->arbitrary_str_order);
+
+  while (_srt_hash_table_iter_next (&iter, &drivers_path, NULL))
     pv_search_path_append (search_path, drivers_path);
 }
 
@@ -6955,7 +6981,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           else
             arch_system_info = enumeration_thread_join (&self->arch_host_threads[i]);
 
-          pv_append_host_dri_library_paths (arch_system_info,
+          pv_append_host_dri_library_paths (self,
+                                            arch_system_info,
                                             pv_multiarch_as_emulator_tuples[i],
                                             dri_path);
         }

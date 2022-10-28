@@ -38,7 +38,8 @@ gboolean pv_run_sync (const char * const * argv,
                       char **output_out,
                       GError **error);
 
-gpointer pv_hash_table_get_arbitrary_key (GHashTable *table);
+gpointer pv_hash_table_get_first_key (GHashTable *table,
+                                      GCompareFunc cmp);
 
 gboolean pv_wait_for_child_processes (pid_t main_process,
                                       int *wait_status_out,

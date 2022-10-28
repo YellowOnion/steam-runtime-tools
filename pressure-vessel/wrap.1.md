@@ -46,6 +46,11 @@ pressure-vessel-wrap - run programs in a bubblewrap container
 :   If *DIR* is an empty string, equivalent to `--no-copy-runtime`.
     Otherwise, equivalent to `--copy-runtime --variable-dir=DIR`.
 
+`--deterministic`
+:   Process directories in a deterministic order.
+    This debugging option will make **pressure-vessel-wrap** slightly slower,
+    but makes it easier to compare log files.
+
 `--env-if-host` *VAR=VAL*
 :   If *COMMAND* is run with `/usr` from the host system, set
     environment variable *VAR* to *VAL*. If not, leave *VAR* unchanged.
@@ -329,6 +334,10 @@ The following environment variables (among others) are read by
 :   If the string is empty, it is a deprecated equivalent of
     `--no-copy-runtime`. Otherwise, it is a deprecated equivalent of
     `--copy-runtime --variable-dir="$PRESSURE_VESSEL_COPY_RUNTIME_INTO"`.
+
+`PRESSURE_VESSEL_DETERMINISTIC` (boolean)
+:   If set to `1`, equivalent to `--deterministic`.
+    If set to `0`, no effect.
 
 `PRESSURE_VESSEL_FILESYSTEMS_RO` (`:`-separated list of paths)
 :   Make these paths available read-only inside the container if they

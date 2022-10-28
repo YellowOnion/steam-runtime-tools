@@ -24,6 +24,7 @@
 #include <glib-object.h>
 
 #include "steam-runtime-tools/glib-backports-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 #include "libglnx.h"
 
 #include "environ.h"
@@ -46,6 +47,8 @@
  *  Flatpak subsandbox
  * @PV_RUNTIME_FLAGS_INTERPRETER_ROOT: The runtime is being set up as a
  *  root filesystem overlay for an interpreter like FEX-Emu
+ * @PV_RUNTIME_FLAGS_DETERMINISTIC: Try harder to achieve deterministic
+ *  order, even where it shouldn't matter functionally
  * @PV_RUNTIME_FLAGS_NONE: None of the above
  *
  * Flags affecting how we set up the runtime.
@@ -61,6 +64,7 @@ typedef enum
   PV_RUNTIME_FLAGS_UNPACK_ARCHIVE = (1 << 6),
   PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX = (1 << 7),
   PV_RUNTIME_FLAGS_INTERPRETER_ROOT = (1 << 8),
+  PV_RUNTIME_FLAGS_DETERMINISTIC = (1 << 9),
   PV_RUNTIME_FLAGS_NONE = 0
 } PvRuntimeFlags;
 
@@ -80,6 +84,7 @@ typedef enum
    | PV_RUNTIME_FLAGS_UNPACK_ARCHIVE \
    | PV_RUNTIME_FLAGS_FLATPAK_SUBSANDBOX \
    | PV_RUNTIME_FLAGS_INTERPRETER_ROOT \
+   | PV_RUNTIME_FLAGS_DETERMINISTIC \
    )
 
 typedef struct _PvRuntime PvRuntime;
@@ -117,6 +122,7 @@ void pv_runtime_cleanup (PvRuntime *self);
 
 gboolean pv_runtime_garbage_collect_legacy (const char *variable_dir,
                                             const char *runtime_base,
+                                            SrtDirentCompareFunc arbitrary_dirent_order,
                                             GError **error);
 
 gboolean pv_runtime_use_shared_sockets (PvRuntime *self,

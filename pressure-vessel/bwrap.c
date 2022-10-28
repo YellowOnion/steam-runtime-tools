@@ -25,6 +25,7 @@
 #include "utils.h"
 
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
+#include "steam-runtime-tools/utils-internal.h"
 
 /**
  * pv_bwrap_run_sync:
@@ -155,7 +156,7 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
   glnx_autofd int usr_fd = -1;
   g_autofree gchar *dest = NULL;
   gboolean host_path_is_usr = FALSE;
-  g_auto(GLnxDirFdIterator) iter = { .initialized = FALSE };
+  g_auto(SrtDirIter) iter = SRT_DIR_ITER_CLEARED;
   const gchar *member = NULL;
 
   g_return_val_if_fail (bwrap != NULL, FALSE);
@@ -190,14 +191,17 @@ pv_bwrap_bind_usr (FlatpakBwrap *bwrap,
 
   g_clear_pointer (&dest, g_free);
 
-  if (!glnx_dirfd_iterator_init_at (provider_fd, ".", TRUE, &iter, error))
+  if (!_srt_dir_iter_init_at (&iter, provider_fd, ".",
+                              SRT_DIR_ITER_FLAGS_FOLLOW,
+                              _srt_dirent_strcmp,
+                              error))
     return FALSE;
 
   while (TRUE)
     {
       struct dirent *dent;
 
-      if (!glnx_dirfd_iterator_next_dent (&iter, &dent, NULL, error))
+      if (!_srt_dir_iter_next_dent (&iter, &dent, NULL, error))
         return FALSE;
 
       if (dent == NULL)

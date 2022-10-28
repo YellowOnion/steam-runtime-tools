@@ -5124,7 +5124,8 @@ collect_core_libraries_patterns (GPtrArray *patterns)
  * @self: The runtime
  * @arch: Architecture of @libc_symlink
  * @bwrap:
- * @libc_symlink: The symlink created by capsule-capture-libs.
+ * @libc_symlink: The symlink created by capsule-capture-libs,
+ *  relative to /overrides.
  *  Its target is either `self->provider->path_in_container_ns`
  *  followed by the path to glibc in the graphics stack provider
  *  namespace, or the path to glibc in a non-standard directory such
@@ -5167,7 +5168,8 @@ pv_runtime_collect_libc_family (PvRuntime *self,
                                      NULL, patterns, G_N_ELEMENTS (patterns), error))
     return FALSE;
 
-  libc_target = glnx_readlinkat_malloc (-1, libc_symlink, NULL, NULL);
+  libc_target = glnx_readlinkat_malloc (self->overrides_fd, libc_symlink,
+                                        NULL, NULL);
   if (libc_target != NULL)
     {
       g_autofree gchar *dir = NULL;
@@ -6812,6 +6814,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autofree gchar *platform_token = NULL;
           g_autoptr(GPtrArray) patterns = NULL;
           SrtSystemInfo *arch_system_info;
+          struct stat stat_buf;
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
             return FALSE;
@@ -6912,11 +6915,13 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                              patterns->len, error))
             return FALSE;
 
-          libc_symlink = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
+          libc_symlink = g_build_filename (arch->libdir_relative_to_overrides,
+                                           "libc.so.6", NULL);
 
           /* If we are going to use the provider's libc6 (likely)
            * then we have to use its ld.so too. */
-          if (g_file_test (libc_symlink, G_FILE_TEST_IS_SYMLINK))
+          if (fstatat (self->overrides_fd, libc_symlink, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+              && S_ISLNK (stat_buf.st_mode))
             {
               if (!pv_runtime_collect_libc_family (self, arch, bwrap,
                                                    libc_symlink, ld_so_in_runtime,

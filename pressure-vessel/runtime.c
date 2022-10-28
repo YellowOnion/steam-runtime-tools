@@ -4120,6 +4120,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 {
   g_autoptr(GPtrArray) dirs = NULL;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
+  /* Array of hash tables, same length as dirs
+   * Keys: basename of a file in dirs[i] to delete
+   * Values: path relative to /overrides indicating why we delete the key */
   GHashTable **delete = NULL;
   SrtDirIter *iters = NULL;
   gboolean ret = FALSE;
@@ -4212,6 +4215,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         {
           g_autofree gchar *target = NULL;
           const char *target_base;
+          struct stat stat_buf;
 
           if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
@@ -4268,10 +4272,11 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * symlink .../overrides/lib/MULTIARCH/libcurl.so.4 exists, then
                * we want to delete /usr/lib/MULTIARCH/libcurl.so.4 and
                * /usr/lib/MULTIARCH/libcurl.so.4.2.0. */
-              soname_link = g_build_filename (arch->libdir_in_current_namespace,
+              soname_link = g_build_filename (arch->libdir_relative_to_overrides,
                                               dent->d_name, NULL);
 
-              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+              if (fstatat (self->overrides_fd, soname_link, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+                  && S_ISLNK (stat_buf.st_mode))
                 {
                   if (target_base != NULL)
                     g_hash_table_replace (delete[i],
@@ -4303,9 +4308,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * e.g. /usr/lib/MULTIARCH/libcurl.so.4, then the container's
                * library was not overridden and we should not delete
                * anything. */
-              alias_link = g_build_filename (arch->aliases_in_current_namespace,
+              alias_link = g_build_filename (arch->aliases_relative_to_overrides,
                                              dent->d_name, NULL);
-              alias_target = glnx_readlinkat_malloc (AT_FDCWD, alias_link,
+              alias_target = glnx_readlinkat_malloc (self->overrides_fd,
+                                                     alias_link,
                                                      NULL, NULL);
 
               if (alias_target != NULL
@@ -4335,10 +4341,11 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * symlink .../overrides/lib/MULTIARCH/libcurl.so.4 exists,
                * then we want to delete /usr/lib/MULTIARCH/libcurl.so
                * and /usr/lib/MULTIARCH/libcurl.so.4. */
-              soname_link = g_build_filename (arch->libdir_in_current_namespace,
+              soname_link = g_build_filename (arch->libdir_relative_to_overrides,
                                               target_base, NULL);
 
-              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+              if (fstatat (self->overrides_fd, soname_link, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+                  && S_ISLNK (stat_buf.st_mode))
                 {
                   g_hash_table_replace (delete[i],
                                         g_strdup (target_base),
@@ -4366,9 +4373,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * However, if .../aliases/libcurl.so.3 points to
                * e.g. /usr/lib/MULTIARCH/libcurl.so.4, then the container's
                * library was not overridden and we should not delete it. */
-              alias_link = g_build_filename (arch->aliases_in_current_namespace,
+              alias_link = g_build_filename (arch->aliases_relative_to_overrides,
                                              target_base, NULL);
-              alias_target = glnx_readlinkat_malloc (AT_FDCWD, alias_link,
+              alias_target = glnx_readlinkat_malloc (self->overrides_fd,
+                                                     alias_link,
                                                      NULL, NULL);
 
               if (alias_target != NULL
@@ -4443,7 +4451,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         {
           g_autoptr(GError) local_error = NULL;
 
-          g_debug ("Deleting tmp-*%s/%s because %s replaces it",
+          g_debug ("Deleting tmp-*%s/%s because overrides/%s replaces it",
                    libdir, name, reason);
 
           if (!glnx_unlinkat (iters[i].real_iter.fd, name, 0, &local_error))

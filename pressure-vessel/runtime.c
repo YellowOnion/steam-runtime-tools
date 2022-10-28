@@ -2683,7 +2683,7 @@ bind_icds (PvRuntime *self,
    * then captured_instead[i] == j.
    * Otherwise captured_instead[i] = G_MAXSIZE. */
   g_autofree gsize *captured_instead = NULL;
-  g_autofree gchar *subdir_in_current_namespace = NULL;
+  g_autofree gchar *subdir_relative_to_overrides = NULL;
   glnx_autofd int subdir_fd = -1;
   gsize multiarch_index;
   gsize i;
@@ -2738,24 +2738,25 @@ bind_icds (PvRuntime *self,
       g_debug ("Classified as path-based");
       details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
 
-      /* We set subdir_in_current_namespace non-NULL if and only if at least
+      /* We set subdir_relative_to_overrides non-NULL if and only if at least
        * one driver is ICD_KIND_ABSOLUTE */
-      if (subdir_in_current_namespace == NULL)
-        subdir_in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
-                                                        subdir, NULL);
+      if (subdir_relative_to_overrides == NULL)
+        subdir_relative_to_overrides = g_build_filename (arch->libdir_relative_to_overrides,
+                                                         subdir, NULL);
     }
 
   /* If no driver was ICD_KIND_ABSOLUTE, then there is nothing more to do */
-  if (subdir_in_current_namespace == NULL)
+  if (subdir_relative_to_overrides == NULL)
     goto success;
 
-  if (g_mkdir_with_parents (subdir_in_current_namespace, 0700) != 0)
-    return glnx_throw_errno_prefix (error, "Unable to create %s",
-                                    subdir_in_current_namespace);
-
-  if (!glnx_opendirat (-1, subdir_in_current_namespace, TRUE,
-                       &subdir_fd, error))
-    return FALSE;
+  if (!glnx_shutil_mkdir_p_at_open (self->overrides_fd,
+                                    subdir_relative_to_overrides, 0700,
+                                    &subdir_fd, NULL, error))
+    {
+      g_prefix_error (error, "Unable to create and open \"%s/%s/\": ",
+                      self->overrides, subdir_relative_to_overrides);
+      return FALSE;
+    }
 
   /* Decide whether we need to use numbered subdirectories.
    * If there are file collisions, then the answer is yes we do:
@@ -2787,13 +2788,15 @@ bind_icds (PvRuntime *self,
         }
       else
         {
-          g_autofree gchar *path = g_build_filename (subdir_in_current_namespace,
+          g_autofree gchar *path = g_build_filename (subdir_relative_to_overrides,
                                                      base, NULL);
+          struct stat stat_buf;
 
           g_hash_table_add (basename_set, (char *) base);
 
           /* The ICD would collide with one that we already set up */
-          if (g_file_test (path, G_FILE_TEST_IS_SYMLINK))
+          if (fstatat (self->overrides_fd, path, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+              && S_ISLNK (stat_buf.st_mode))
             *use_numbered_subdirs = TRUE;
         }
     }
@@ -2870,8 +2873,9 @@ bind_icds (PvRuntime *self,
         }
 
       if (patterns->len > 0
-          && !pv_runtime_capture_libraries (self, arch, subdir_in_current_namespace,
-                                            subdir_in_current_namespace,
+          && !pv_runtime_capture_libraries (self, arch,
+                                            subdir_relative_to_overrides,
+                                            subdir_relative_to_overrides,
                                             (const char * const *) patterns->pdata,
                                             patterns->len, error))
         return FALSE;
@@ -2887,7 +2891,7 @@ bind_icds (PvRuntime *self,
       g_autofree gchar *dependency_pattern = NULL;
       g_autofree gchar *seq_str = NULL;
       glnx_autofd int numbered_subdir_fd = -1;
-      const char *dest_in_current_namespace = NULL;
+      const char *dest_relative_to_overrides = NULL;
       const char *base;
       int dest_fd;
       struct stat stat_buf;
@@ -2957,7 +2961,7 @@ bind_icds (PvRuntime *self,
           g_autofree gchar *pattern = NULL;
 
           seq_str = g_strdup_printf ("%.*" G_GSIZE_FORMAT, digits, i);
-          numbered_subdir = g_build_filename (subdir_in_current_namespace,
+          numbered_subdir = g_build_filename (subdir_relative_to_overrides,
                                               seq_str, NULL);
 
           if (!glnx_ensure_dir (subdir_fd, seq_str, 0700, error))
@@ -2971,26 +2975,28 @@ bind_icds (PvRuntime *self,
                                &numbered_subdir_fd, error))
             return FALSE;
 
-          dest_in_current_namespace = numbered_subdir;
+          dest_relative_to_overrides = numbered_subdir;
           dest_fd = numbered_subdir_fd;
           pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
                                      options,
                                      details->resolved_libraries[multiarch_index]);
 
-          if (!pv_runtime_capture_libraries (self, arch, dest_in_current_namespace, pattern,
+          if (!pv_runtime_capture_libraries (self, arch,
+                                             dest_relative_to_overrides,
+                                             pattern,
                                              (const char * const *) &pattern, 1, error))
             return FALSE;
         }
       else
         {
-          dest_in_current_namespace = subdir_in_current_namespace;
+          dest_relative_to_overrides = subdir_relative_to_overrides;
           dest_fd = subdir_fd;
         }
 
       if (fstatat (dest_fd, base, &stat_buf, AT_SYMLINK_NOFOLLOW) < 0)
         {
-          g_debug ("\"%s/%s\" was not created: %s",
-                   dest_in_current_namespace, base, g_strerror (errno));
+          g_debug ("\"overrides/%s/%s\" was not created: %s",
+                   dest_relative_to_overrides, base, g_strerror (errno));
 
           /* capsule-capture-libs didn't actually create the symlink,
            * which means the ICD is nonexistent or the wrong architecture.
@@ -3007,8 +3013,9 @@ bind_icds (PvRuntime *self,
         {
           /* This is unexpected! capsule-capture-libs creates symlinks,
            * not any other sort of file */
-          g_warning ("\"%s/%s\" was created but not as a symlink (%o)",
-                     dest_in_current_namespace, base, stat_buf.st_mode);
+          g_warning ("\"%s/%s/%s\" was created but not as a symlink (%o)",
+                     self->overrides, dest_relative_to_overrides, base,
+                     stat_buf.st_mode);
         }
 
       /* Only add the numbered subdirectories to the search path. Their

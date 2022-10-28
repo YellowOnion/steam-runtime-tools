@@ -2564,7 +2564,8 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
  * pv_runtime_capture_libraries:
  * @self: (not nullable): The runtime
  * @arch: (not nullable): An architecture
- * @destination: (not nullable): Where to capture the libraries
+ * @destination: (not nullable): Where to capture the libraries,
+ *  either as an absolute path or relative to `/overrides`
  * @profiling_message: (nullable): Description of this operation, for
  *  profiling. If %NULL, the profiling timer is not used.
  * @patterns: (not nullable) (array length=n_patterns): Patterns for capsule-capture-libs
@@ -2602,7 +2603,26 @@ pv_runtime_capture_libraries (PvRuntime *self,
     return FALSE;
 
   temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-  flatpak_bwrap_add_args (temp_bwrap, "--dest", destination, NULL);
+  flatpak_bwrap_add_arg (temp_bwrap, "--dest");
+
+  if (g_path_is_absolute (destination))
+    {
+      flatpak_bwrap_add_arg (temp_bwrap, destination);
+    }
+  else
+    {
+      int fd = dup (self->overrides_fd);
+
+      if (fd < 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to duplicate file descriptor "
+                                        "%d for overrides \"%s\"",
+                                        fd, self->overrides);
+
+      flatpak_bwrap_add_arg_printf (temp_bwrap, "/proc/self/fd/%d/%s",
+                                    fd, destination);
+      flatpak_bwrap_add_fd (temp_bwrap, glnx_steal_fd (&fd));
+    }
 
   for (i = 0; i < n_patterns; i++)
     flatpak_bwrap_add_arg (temp_bwrap, patterns[i]);

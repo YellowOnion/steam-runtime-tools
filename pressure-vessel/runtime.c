@@ -6827,8 +6827,25 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           pv_search_path_append (dri_path, this_dri_path_in_container);
           pv_search_path_append (va_api_path, this_dri_path_in_container);
 
-          g_mkdir_with_parents (arch->libdir_in_current_namespace, 0755);
-          g_mkdir_with_parents (arch->aliases_in_current_namespace, 0755);
+          if (!glnx_shutil_mkdir_p_at (self->overrides_fd,
+                                       arch->libdir_relative_to_overrides,
+                                       0755, NULL, error))
+            {
+              g_prefix_error (error, "Unable to create \"%s/%s/\": ",
+                              self->overrides,
+                              arch->libdir_relative_to_overrides);
+              return FALSE;
+            }
+
+          if (!glnx_shutil_mkdir_p_at (self->overrides_fd,
+                                       arch->aliases_relative_to_overrides,
+                                       0755, NULL, error))
+            {
+              g_prefix_error (error, "Unable to create and open \"%s/%s/\": ",
+                              self->overrides,
+                              arch->aliases_relative_to_overrides);
+              return FALSE;
+            }
 
           g_debug ("Collecting graphics drivers from provider system...");
 

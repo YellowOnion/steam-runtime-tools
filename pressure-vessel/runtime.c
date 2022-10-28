@@ -101,6 +101,7 @@ struct _PvRuntime
   PvRuntimeFlags flags;
   int host_fd;
   int mutable_sysroot_fd;
+  int overrides_fd;
   int root_fd;
   int runtime_files_fd;
   int variable_dir_fd;
@@ -456,6 +457,7 @@ pv_runtime_init (PvRuntime *self)
   self->all_libc_from_provider = FALSE;
   self->host_fd = -1;
   self->mutable_sysroot_fd = -1;
+  self->overrides_fd = -1;
   self->root_fd = -1;
   self->runtime_files_fd = -1;
   self->variable_dir_fd = -1;
@@ -1840,7 +1842,13 @@ pv_runtime_initable_init (GInitable *initable,
 
   self->runtime_files_on_host = pv_current_namespace_path_to_host_path (self->runtime_files);
 
-  g_mkdir (self->overrides, 0700);
+  if (!glnx_shutil_mkdir_p_at_open (AT_FDCWD, self->overrides, 0700,
+                                    &self->overrides_fd, NULL, error))
+    {
+      g_prefix_error (error, "Unable to create and open \"%s\": ",
+                      self->overrides);
+      return FALSE;
+    }
 
   self->runtime_app = g_build_filename (self->runtime_files, "app", NULL);
   self->runtime_usr = g_build_filename (self->runtime_files, "usr", NULL);
@@ -1984,6 +1992,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->mutable_sysroot);
   glnx_close_fd (&self->mutable_sysroot_fd);
   g_strfreev (self->original_environ);
+  glnx_close_fd (&self->overrides_fd);
   glnx_close_fd (&self->root_fd);
   g_free (self->runtime_abi_json);
   g_free (self->runtime_app);

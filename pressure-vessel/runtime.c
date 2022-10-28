@@ -99,11 +99,11 @@ struct _PvRuntime
   GCompareFunc arbitrary_str_order;
 
   PvRuntimeFlags flags;
-  int variable_dir_fd;
-  int mutable_sysroot_fd;
   int host_fd;
+  int mutable_sysroot_fd;
   int root_fd;
   int runtime_files_fd;
+  int variable_dir_fd;
   gboolean any_libc_from_provider;
   gboolean all_libc_from_provider;
   gboolean runtime_is_just_usr;
@@ -454,11 +454,11 @@ pv_runtime_init (PvRuntime *self)
 {
   self->any_libc_from_provider = FALSE;
   self->all_libc_from_provider = FALSE;
+  self->host_fd = -1;
+  self->mutable_sysroot_fd = -1;
   self->root_fd = -1;
   self->runtime_files_fd = -1;
   self->variable_dir_fd = -1;
-  self->mutable_sysroot_fd = -1;
-  self->host_fd = -1;
   self->is_flatpak_env = g_file_test ("/.flatpak-info",
                                       G_FILE_TEST_IS_REGULAR);
 }

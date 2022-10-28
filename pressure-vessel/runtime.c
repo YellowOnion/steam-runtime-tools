@@ -960,6 +960,7 @@ pv_runtime_create_copy (PvRuntime *self,
                                     "Cannot create temporary directory \"%s\"",
                                     temp_dir);
 
+  g_debug ("Using temporary mutable sysroot: \"%s\"", temp_dir);
   dest_usr = g_build_filename (temp_dir, "usr", NULL);
 
   if (usr_mtree != NULL)

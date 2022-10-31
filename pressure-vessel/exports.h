@@ -25,4 +25,5 @@
 #include "steam-runtime-tools/glib-backports-internal.h"
 
 void pv_export_symlink_targets (FlatpakExports *exports,
-                                const char *source);
+                                const char *source,
+                                const char *log_as);

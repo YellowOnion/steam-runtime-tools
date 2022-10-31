@@ -960,6 +960,7 @@ pv_runtime_create_copy (PvRuntime *self,
                                     "Cannot create temporary directory \"%s\"",
                                     temp_dir);
 
+  g_debug ("Using temporary mutable sysroot: \"%s\"", temp_dir);
   dest_usr = g_build_filename (temp_dir, "usr", NULL);
 
   if (usr_mtree != NULL)
@@ -3664,7 +3665,7 @@ bind_runtime_finish (PvRuntime *self,
   g_return_if_fail (exports != NULL);
   g_return_if_fail (!pv_bwrap_was_finished (bwrap));
 
-  pv_export_symlink_targets (exports, self->overrides);
+  pv_export_symlink_targets (exports, self->overrides, "overrides");
 
   if (self->mutable_sysroot == NULL)
     {
@@ -4091,6 +4092,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
   delete = g_new0 (GHashTable *, dirs->len);
   iters = g_new0 (SrtDirIter, dirs->len);
 
+  for (i = 0; i < dirs->len; i++)
+    g_assert (g_path_is_absolute (g_ptr_array_index (dirs, i)));
+
   /* We have to figure out what we want to delete before we delete anything,
    * because we can't tell whether a symlink points to a library of a
    * particular SONAME if we already deleted the library. */
@@ -4113,9 +4117,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           if (libdir_fd < 0)
             {
-              g_debug ("Cannot resolve \"%s\" in \"%s\", so no need to delete "
-                       "libraries from it: %s",
-                       libdir, self->mutable_sysroot, local_error->message);
+              g_debug ("Cannot resolve \"%s\" in mutable sysroot, so no "
+                       "need to delete libraries from it: %s",
+                       libdir, local_error->message);
               g_clear_error (&local_error);
               continue;
             }
@@ -4138,15 +4142,15 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
             }
         }
 
-      g_debug ("Removing overridden %s libraries from \"%s\" in \"%s\"...",
-               arch->details->tuple, libdir, self->mutable_sysroot);
+      g_debug ("Removing overridden %s libraries from \"%s\" in mutable sysroot...",
+               arch->details->tuple, libdir);
 
       if (!_srt_dir_iter_init_take_fd (&iters[i], &libdir_fd,
                                        SRT_DIR_ITER_FLAGS_ENSURE_DTYPE,
                                        self->arbitrary_dirent_order,
                                        error))
         {
-          glnx_prefix_error (error, "Unable to start iterating \"%s/%s\"",
+          glnx_prefix_error (error, "Unable to start iterating \"%s%s\"",
                              self->mutable_sysroot,
                              libdir);
           goto out;
@@ -4162,7 +4166,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
-              glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+              glnx_prefix_error (error, "Unable to iterate over \"%s%s\"",
                                  self->mutable_sysroot, libdir);
               goto out;
             }
@@ -4271,7 +4275,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                 }
             }
 
-          if (target != NULL)
+          g_assert ((target != NULL) == (target_base != NULL));
+
+          if (target_base != NULL)
             {
               g_autofree gchar *soname_link = NULL;
 
@@ -4281,8 +4287,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * then we want to delete /usr/lib/MULTIARCH/libcurl.so
                * and /usr/lib/MULTIARCH/libcurl.so.4. */
               soname_link = g_build_filename (arch->libdir_in_current_namespace,
-                                              glnx_basename (target),
-                                              NULL);
+                                              target_base, NULL);
 
               if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
                 {
@@ -4296,7 +4301,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                 }
             }
 
-          if (target != NULL)
+          if (target_base != NULL)
             {
               g_autofree gchar *alias_link = NULL;
               g_autofree gchar *alias_target = NULL;
@@ -4313,8 +4318,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * e.g. /usr/lib/MULTIARCH/libcurl.so.4, then the container's
                * library was not overridden and we should not delete it. */
               alias_link = g_build_filename (arch->aliases_in_current_namespace,
-                                             glnx_basename (target),
-                                             NULL);
+                                             target_base, NULL);
               alias_target = glnx_readlinkat_malloc (AT_FDCWD, alias_link,
                                                      NULL, NULL);
 
@@ -4344,7 +4348,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 
           if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
-              glnx_prefix_error (error, "Unable to iterate over \"%s/%s\"",
+              glnx_prefix_error (error, "Unable to iterate over \"%s%s\"",
                                  self->mutable_sysroot, libdir);
               goto out;
             }
@@ -4390,12 +4394,12 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         {
           g_autoptr(GError) local_error = NULL;
 
-          g_debug ("Deleting %s/%s/%s because %s replaces it",
-                   self->mutable_sysroot, libdir, name, reason);
+          g_debug ("Deleting tmp-*%s/%s because %s replaces it",
+                   libdir, name, reason);
 
           if (!glnx_unlinkat (iters[i].real_iter.fd, name, 0, &local_error))
             {
-              g_warning ("Unable to delete %s/%s/%s: %s",
+              g_warning ("Unable to delete %s%s/%s: %s",
                          self->mutable_sysroot, libdir,
                          name, local_error->message);
               g_clear_error (&local_error);

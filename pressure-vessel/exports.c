@@ -21,11 +21,15 @@
 
 #include <ftw.h>
 
+#include <steam-runtime-tools/utils-internal.h>
+
 /* nftw() doesn't have a user_data argument so we need to use a global
  * variable :-( */
 static struct
 {
   FlatpakExports *exports;
+  const char *log_replace_prefix;
+  const char *log_replace_with;
 } export_targets_data;
 
 static int
@@ -35,6 +39,7 @@ export_targets_helper (const char *fpath,
                        struct FTW *ftwbuf)
 {
   g_autofree gchar *target = NULL;
+  const char *after = NULL;
 
   switch (typeflag)
     {
@@ -50,8 +55,14 @@ export_targets_helper (const char *fpath,
         if (g_str_has_prefix (target, "/run/host/"))
           break;
 
-        g_debug ("Exporting %s because %s points to it",
-                 target, fpath);
+        after = _srt_get_path_after (fpath, export_targets_data.log_replace_prefix);
+
+        if (after == NULL)
+          g_debug ("Exporting %s because %s points to it", target, fpath);
+        else
+          g_debug ("Exporting %s because %s/%s points to it",
+                   target, export_targets_data.log_replace_with, after);
+
         flatpak_exports_add_path_expose (export_targets_data.exports,
                                          FLATPAK_FILESYSTEM_MODE_READ_ONLY,
                                          target);
@@ -68,18 +79,25 @@ export_targets_helper (const char *fpath,
  * pv_export_symlink_targets:
  * @exports: The #FlatpakExports
  * @source: A copy of the overrides directory, for example
- *  `/tmp/tmp12345678/overrides/lib`.
+ *  `/tmp/tmp12345678/overrides`.
+ * @log_as: Replace the @source with @log_as in debug messages,
+ *  for example `${overrides}`.
  *
  * For every symbolic link in @source, if the target is absolute, mark
  * it to be exported in @exports.
  */
 void
 pv_export_symlink_targets (FlatpakExports *exports,
-                           const char *source)
+                           const char *source,
+                           const char *log_as)
 {
   g_return_if_fail (export_targets_data.exports == NULL);
 
   export_targets_data.exports = exports;
+  export_targets_data.log_replace_prefix = source;
+  export_targets_data.log_replace_with = log_as;
   nftw (source, export_targets_helper, 100, FTW_PHYS);
   export_targets_data.exports = NULL;
+  export_targets_data.log_replace_prefix = NULL;
+  export_targets_data.log_replace_with = NULL;
 }

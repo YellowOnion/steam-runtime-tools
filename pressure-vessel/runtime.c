@@ -2355,15 +2355,17 @@ pv_runtime_provide_container_access (PvRuntime *self,
 
 static FlatpakBwrap *
 pv_runtime_get_capsule_capture_libs (PvRuntime *self,
-                                     RuntimeArchitecture *arch)
+                                     RuntimeArchitecture *arch,
+                                     GError **error)
 {
   const gchar *ld_library_path;
   g_autofree gchar *remap_app = NULL;
   g_autofree gchar *remap_usr = NULL;
   g_autofree gchar *remap_lib = NULL;
-  FlatpakBwrap *ret;
+  g_autoptr(FlatpakBwrap) ret = NULL;
 
   g_return_val_if_fail (self->provider != NULL, NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
   ret = pv_bwrap_copy (self->container_access_adverb);
 
@@ -2403,7 +2405,7 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                             "--library-knowledge", self->libcapsule_knowledge,
                             NULL);
 
-  return ret;
+  return g_steal_pointer (&ret);
 }
 
 static gboolean pv_runtime_capture_libraries (PvRuntime *self,
@@ -2591,7 +2593,11 @@ pv_runtime_capture_libraries (PvRuntime *self,
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
 
-  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch, error);
+
+  if (temp_bwrap == NULL)
+    return FALSE;
+
   flatpak_bwrap_add_arg (temp_bwrap, "--dest");
 
   if (g_path_is_absolute (destination))

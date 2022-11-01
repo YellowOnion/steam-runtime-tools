@@ -2366,6 +2366,7 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
   g_autofree gchar *remap_usr = NULL;
   g_autofree gchar *remap_lib = NULL;
   g_autoptr(FlatpakBwrap) ret = NULL;
+  glnx_autofd int runtime_files_fd = -1;
 
   g_return_val_if_fail (self->provider != NULL, NULL);
   g_return_val_if_fail (error == NULL || *error == NULL, NULL);
@@ -2393,35 +2394,41 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                          self->provider->path_in_container_ns,
                          "/lib", NULL);
 
+  runtime_files_fd = dup (self->runtime_files_fd);
+
+  if (runtime_files_fd < 0)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to duplicate file "
+                                         "descriptor %d for runtime "
+                                         "files \"%s\"",
+                                         self->runtime_files_fd,
+                                         self->runtime_files);
+
   flatpak_bwrap_add_args (ret,
                           arch->capsule_capture_libs,
-                          "--container", self->container_access,
                           "--remap-link-prefix", remap_app,
                           "--remap-link-prefix", remap_usr,
                           "--remap-link-prefix", remap_lib,
                           "--provider",
                             self->provider->path_in_current_ns,
+                          "--container",
                           NULL);
+
+  if (g_str_equal (self->runtime_files, self->container_access))
+    flatpak_bwrap_add_arg_printf (ret, "/proc/self/fd/%d",
+                                  runtime_files_fd);
+  else
+    flatpak_bwrap_add_arg (ret, self->container_access);
 
   if (self->libcapsule_knowledge)
     {
-      glnx_autofd int runtime_files_fd = dup (self->runtime_files_fd);
-
-      if (runtime_files_fd < 0)
-        return glnx_null_throw_errno_prefix (error,
-                                             "Unable to duplicate file "
-                                             "descriptor %d for runtime "
-                                             "files \"%s\"",
-                                             self->runtime_files_fd,
-                                             self->runtime_files);
-
       flatpak_bwrap_add_arg (ret, "--library-knowledge");
       flatpak_bwrap_add_arg_printf (ret, "/proc/self/fd/%d/%s",
                                     runtime_files_fd,
                                     self->libcapsule_knowledge);
-      flatpak_bwrap_add_fd (ret, glnx_steal_fd (&runtime_files_fd));
     }
 
+  flatpak_bwrap_add_fd (ret, glnx_steal_fd (&runtime_files_fd));
   return g_steal_pointer (&ret);
 }
 

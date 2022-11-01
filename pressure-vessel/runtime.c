@@ -74,7 +74,7 @@ struct _PvRuntime
   PvBwrapLock *runtime_lock;
   GStrv original_environ;
 
-  gchar *libcapsule_knowledge;
+  gchar *libcapsule_knowledge;  /* relative to runtime_files */
   gchar *runtime_abi_json;
   gchar *variable_dir;
   gchar *mutable_sysroot;
@@ -1599,6 +1599,7 @@ pv_runtime_initable_init (GInitable *initable,
   g_autofree gchar *usr_mtree = NULL;
   gsize len;
   PvMtreeApplyFlags mtree_flags = PV_MTREE_APPLY_FLAGS_NONE;
+  struct stat ignore;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
@@ -1840,6 +1841,10 @@ pv_runtime_initable_init (GInitable *initable,
       self->runtime_files = self->source_files;
     }
 
+  if (!glnx_opendirat (-1, self->runtime_files, TRUE,
+                       &self->runtime_files_fd, error))
+    return FALSE;
+
   self->runtime_files_on_host = pv_current_namespace_path_to_host_path (self->runtime_files);
 
   if (!glnx_shutil_mkdir_p_at_open (AT_FDCWD, self->overrides, 0700,
@@ -1856,6 +1861,9 @@ pv_runtime_initable_init (GInitable *initable,
   if (g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
     {
       self->runtime_is_just_usr = FALSE;
+      self->libcapsule_knowledge = g_build_filename ("usr", "lib", "steamrt",
+                                                     "libcapsule-knowledge.keyfile",
+                                                     NULL);
     }
   else
     {
@@ -1863,14 +1871,13 @@ pv_runtime_initable_init (GInitable *initable,
       self->runtime_is_just_usr = TRUE;
       g_free (self->runtime_usr);
       self->runtime_usr = g_strdup (self->runtime_files);
+      self->libcapsule_knowledge = g_build_filename ("lib", "steamrt",
+                                                     "libcapsule-knowledge.keyfile",
+                                                     NULL);
     }
 
-  self->libcapsule_knowledge = g_build_filename (self->runtime_usr,
-                                                 "lib", "steamrt",
-                                                 "libcapsule-knowledge.keyfile",
-                                                 NULL);
-
-  if (!g_file_test (self->libcapsule_knowledge, G_FILE_TEST_EXISTS))
+  if (fstatat (self->runtime_files_fd, self->libcapsule_knowledge,
+               &ignore, AT_SYMLINK_NOFOLLOW) != 0)
     g_clear_pointer (&self->libcapsule_knowledge, g_free);
 
   self->runtime_abi_json = g_build_filename (self->runtime_usr, "lib", "steamrt",
@@ -1932,10 +1939,6 @@ pv_runtime_initable_init (GInitable *initable,
 
   if (!glnx_opendirat (-1, self->host_in_current_namespace, TRUE,
                        &self->host_fd, error))
-    return FALSE;
-
-  if (!glnx_opendirat (-1, self->runtime_files, TRUE,
-                       &self->runtime_files_fd, error))
     return FALSE;
 
   return TRUE;
@@ -2401,9 +2404,23 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                           NULL);
 
   if (self->libcapsule_knowledge)
-    flatpak_bwrap_add_args (ret,
-                            "--library-knowledge", self->libcapsule_knowledge,
-                            NULL);
+    {
+      glnx_autofd int runtime_files_fd = dup (self->runtime_files_fd);
+
+      if (runtime_files_fd < 0)
+        return glnx_null_throw_errno_prefix (error,
+                                             "Unable to duplicate file "
+                                             "descriptor %d for runtime "
+                                             "files \"%s\"",
+                                             self->runtime_files_fd,
+                                             self->runtime_files);
+
+      flatpak_bwrap_add_arg (ret, "--library-knowledge");
+      flatpak_bwrap_add_arg_printf (ret, "/proc/self/fd/%d/%s",
+                                    runtime_files_fd,
+                                    self->libcapsule_knowledge);
+      flatpak_bwrap_add_fd (ret, glnx_steal_fd (&runtime_files_fd));
+    }
 
   return g_steal_pointer (&ret);
 }

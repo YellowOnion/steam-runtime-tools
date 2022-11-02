@@ -1577,11 +1577,31 @@ main (int argc,
 
       pv_bwrap_add_api_filesystems (bwrap_filesystem_arguments, sysfs_mode);
 
-      /* The FlatpakExports will populate /run/host for us */
-      flatpak_exports_add_host_etc_expose (exports,
-                                           FLATPAK_FILESYSTEM_MODE_READ_ONLY);
-      flatpak_exports_add_host_os_expose (exports,
-                                          FLATPAK_FILESYSTEM_MODE_READ_ONLY);
+      flatpak_bwrap_add_args (bwrap_filesystem_arguments,
+                              "--ro-bind", "/etc", "/run/host/etc", NULL);
+      if (!pv_bwrap_bind_usr (bwrap, "/", root_fd, "/run/host", error))
+        goto out;
+
+      if (interpreter_root != NULL)
+        {
+          /* If we are in an emulator, we also need to populate /run/host
+           * in the interpreter mount point */
+          glnx_autofd int interpreter_fd = -1;
+          g_autofree gchar *inter_run_host = g_build_filename (PV_RUNTIME_PATH_INTERPRETER_ROOT,
+                                                               "/run/host", NULL);
+          g_autofree gchar *etc_src = g_build_filename (interpreter_root,
+                                                        "etc", NULL);
+          g_autofree gchar *etc_dest = g_build_filename (inter_run_host, "etc", NULL);
+
+          if (!glnx_opendirat (-1, interpreter_root, TRUE, &interpreter_fd, error))
+            goto out;
+
+          flatpak_bwrap_add_args (bwrap_filesystem_arguments,
+                                  "--ro-bind", etc_src, etc_dest, NULL);
+
+          if (!pv_bwrap_bind_usr (bwrap, interpreter_root, interpreter_fd, inter_run_host, error))
+            goto out;
+        }
 
       /* steam-runtime-system-info uses this to detect pressure-vessel, so we
        * need to create it even if it will be empty */

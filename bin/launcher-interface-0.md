@@ -91,6 +91,10 @@ version of the Steam Runtime, the tool should be renamed to
     Even if its D-Bus well-known name is taken over by another process,
     it can still be contacted via its D-Bus unique name.
 
+`SRT_LOG`
+:   A sequence of tokens separated by colons, spaces or commas
+    affecting how output is recorded. See source code for details.
+
 # OUTPUT
 
 Unstructured diagnostic messages are printed on standard error.

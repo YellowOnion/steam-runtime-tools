@@ -326,6 +326,13 @@ log_handler (const gchar *log_domain,
  * Flags affecting logging.
  */
 
+static const GDebugKey log_enable[] =
+{
+  { "debug", SRT_LOG_FLAGS_DEBUG },
+  { "info", SRT_LOG_FLAGS_INFO },
+  { "timestamp", SRT_LOG_FLAGS_TIMESTAMP },
+};
+
 /*
  * _srt_util_set_glib_log_handler:
  * @extra_log_domain: (nullable): A log domain, usually %G_LOG_DOMAIN
@@ -341,6 +348,11 @@ log_handler (const gchar *log_domain,
  * The chosen message format is used for @extra_log_domain, and also
  * for the `steam-runtime-tools` log domain used by the
  * steam-runtime-tools library.
+ *
+ * Logging can be configured by the `SRT_LOG` environment variable,
+ * which is a sequence of tokens separated by colons, spaces or commas
+ * matching the nicknames of #SrtLogFlags members. See
+ * g_parse_debug_string().
  */
 void
 _srt_util_set_glib_log_handler (const char *extra_log_domain,
@@ -351,6 +363,9 @@ _srt_util_set_glib_log_handler (const char *extra_log_domain,
                                | SRT_LOG_LEVEL_FAILURE
                                | G_LOG_LEVEL_WARNING
                                | G_LOG_LEVEL_MESSAGE);
+  const char *log_env = g_getenv ("SRT_LOG");
+
+  flags |= g_parse_debug_string (log_env, log_enable, G_N_ELEMENTS (log_enable));
 
   if (_srt_boolean_environment ("PRESSURE_VESSEL_LOG_WITH_TIMESTAMP", FALSE))
     flags |= SRT_LOG_FLAGS_TIMESTAMP;

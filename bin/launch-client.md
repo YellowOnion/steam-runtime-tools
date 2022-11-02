@@ -262,16 +262,18 @@ Some variables will be set programmatically by
 Some variables affect the behaviour of **steam-runtime-launch-client**:
 
 `PRESSURE_VESSEL_LOG_INFO` (boolean)
-:   If set to `1`, increase the log verbosity up to the info level.
-    If set to `0`, no effect.
+:   If set to 1, same as `SRT_LOG=info`
 
 `PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
-:   If set to `1`, prepend the log entries with a timestamp.
-    If set to `0`, no effect.
+:   If set to 1, same as `SRT_LOG=timestamp`
 
 `SHELL`
 :   If set to a non-empty value, it is used as the default shell when
     no *COMMAND* is provided.
+
+`SRT_LOG`
+:   A sequence of tokens separated by colons, spaces or commas
+    affecting how output is recorded. See source code for details.
 
 `TERM`
 :   If standard input, standard output or standard error is a terminal,

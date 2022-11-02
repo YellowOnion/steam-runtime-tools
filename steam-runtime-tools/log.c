@@ -321,6 +321,14 @@ log_handler (const gchar *log_domain,
  * @SRT_LOG_FLAGS_DEBUG: Enable g_debug() messages
  * @SRT_LOG_FLAGS_INFO: Enable g_info() messages
  * @SRT_LOG_FLAGS_TIMESTAMP: Prefix log output with timestamps
+ * @SRT_LOG_FLAGS_DIFFABLE: Try not to add information that reduces the
+ *  ability to compare logs with `diff(1)`
+ * @SRT_LOG_FLAGS_PID: Include process ID in logging, even
+ *  if @SRT_LOG_FLAGS_DIFFABLE is set
+ *  (enabled by default if @SRT_LOG_FLAGS_DIFFABLE is not set)
+ * @SRT_LOG_FLAGS_TIMING: Emit timings for performance profiling
+ *  (enabled by default if @SRT_LOG_FLAGS_DEBUG is set and
+ *  @SRT_LOG_FLAGS_DIFFABLE is not)
  * @SRT_LOG_FLAGS_NONE: None of the above
  *
  * Flags affecting logging.
@@ -331,6 +339,9 @@ static const GDebugKey log_enable[] =
   { "debug", SRT_LOG_FLAGS_DEBUG },
   { "info", SRT_LOG_FLAGS_INFO },
   { "timestamp", SRT_LOG_FLAGS_TIMESTAMP },
+  { "diffable", SRT_LOG_FLAGS_DIFFABLE },
+  { "pid", SRT_LOG_FLAGS_PID },
+  { "timing", SRT_LOG_FLAGS_TIMING },
 };
 
 /*
@@ -374,18 +385,25 @@ _srt_util_set_glib_log_handler (const char *extra_log_domain,
     flags |= SRT_LOG_FLAGS_INFO;
 
   log_settings.flags = flags;
-  log_settings.pid = getpid ();
   log_settings.prgname = g_get_prgname ();
+
+  if ((flags & SRT_LOG_FLAGS_PID)
+      || !(flags & SRT_LOG_FLAGS_DIFFABLE))
+    log_settings.pid = getpid ();
+  else
+    log_settings.pid = 0;
 
   if (flags & SRT_LOG_FLAGS_INFO)
     log_levels |= G_LOG_LEVEL_INFO;
 
   if (flags & SRT_LOG_FLAGS_DEBUG)
-    {
-      log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
-      _srt_profiling_enable ();
-    }
+    log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
 
   g_log_set_handler (extra_log_domain, log_levels, log_handler, NULL);
   g_log_set_handler (G_LOG_DOMAIN, log_levels, log_handler, NULL);
+
+  if ((flags & SRT_LOG_FLAGS_TIMING)
+      || ((flags & SRT_LOG_FLAGS_DEBUG)
+          && !(flags & SRT_LOG_FLAGS_DIFFABLE)))
+    _srt_profiling_enable ();
 }

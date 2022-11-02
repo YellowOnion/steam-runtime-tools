@@ -35,6 +35,9 @@ typedef enum
   SRT_LOG_FLAGS_DEBUG = (1 << 0),
   SRT_LOG_FLAGS_INFO = (1 << 1),
   SRT_LOG_FLAGS_TIMESTAMP = (1 << 2),
+  SRT_LOG_FLAGS_DIFFABLE = (1 << 3),
+  SRT_LOG_FLAGS_PID = (1 << 4),
+  SRT_LOG_FLAGS_TIMING = (1 << 5),
   SRT_LOG_FLAGS_NONE = 0
 } SrtLogFlags;
 

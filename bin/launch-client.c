@@ -987,7 +987,7 @@ main (int argc,
   g_set_prgname ("steam-runtime-launch-client");
 
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, FALSE);
+  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 
@@ -1032,7 +1032,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, opt_verbose);
+    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
 
   if (opt_list)
     {

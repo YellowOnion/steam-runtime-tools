@@ -30,11 +30,19 @@
 
 #include <steam-runtime-tools/macros.h>
 
+typedef enum
+{
+  SRT_LOG_FLAGS_DEBUG = (1 << 0),
+  SRT_LOG_FLAGS_INFO = (1 << 1),
+  SRT_LOG_FLAGS_TIMESTAMP = (1 << 2),
+  SRT_LOG_FLAGS_NONE = 0
+} SrtLogFlags;
+
 #define SRT_LOG_LEVEL_FAILURE (1 << G_LOG_LEVEL_USER_SHIFT)
 
 #define _srt_log_failure(...) \
   g_log (G_LOG_DOMAIN, SRT_LOG_LEVEL_FAILURE, __VA_ARGS__)
 
 void _srt_util_set_glib_log_handler (const char *extra_log_domain,
-                                     gboolean opt_verbose);
+                                     SrtLogFlags flags);
 void _srt_util_set_up_logging (const char *identifier);

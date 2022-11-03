@@ -568,7 +568,8 @@ path_to_handle (GUnixFDList *fd_list,
 }
 
 static int
-list_servers (GError **error)
+list_servers (FILE *original_stdout,
+              GError **error)
 {
   static const char * const flatpak_names[] =
   {
@@ -626,14 +627,14 @@ list_servers (GError **error)
   for (i = 0; running[i] != NULL; i++)
     {
       if (g_str_has_prefix (running[i], "com.steampowered.App"))
-        g_print ("--bus-name=%s\n", running[i]);
+        fprintf (original_stdout, "--bus-name=%s\n", running[i]);
     }
 
   for (i = 0; i < G_N_ELEMENTS (flatpak_names); i++)
     {
       if (g_strv_contains ((const char * const *) running, flatpak_names[i])
           || g_strv_contains ((const char * const *) activatable, flatpak_names[i]))
-        g_print ("--bus-name=%s\n", flatpak_names[i]);
+        fprintf (original_stdout, "--bus-name=%s\n", flatpak_names[i]);
     }
 
   return 0;
@@ -1023,7 +1024,8 @@ main (int argc,
 
   if (opt_version)
     {
-      g_print ("%s:\n"
+      fprintf (original_stdout,
+               "%s:\n"
                " Package: pressure-vessel\n"
                " Version: %s\n",
                g_get_prgname (), VERSION);
@@ -1036,7 +1038,7 @@ main (int argc,
 
   if (opt_list)
     {
-      launch_exit_status = list_servers (error);
+      launch_exit_status = list_servers (original_stdout, error);
       goto out;
     }
 

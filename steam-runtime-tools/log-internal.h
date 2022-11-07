@@ -46,6 +46,7 @@ typedef enum
 #define _srt_log_failure(...) \
   g_log (G_LOG_DOMAIN, SRT_LOG_LEVEL_FAILURE, __VA_ARGS__)
 
-void _srt_util_set_glib_log_handler (const char *extra_log_domain,
+void _srt_util_set_glib_log_handler (const char *prgname,
+                                     const char *extra_log_domain,
                                      SrtLogFlags flags);
 void _srt_util_set_up_logging (const char *identifier);

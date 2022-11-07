@@ -985,10 +985,9 @@ main (int argc,
   original_environ = g_get_environ ();
   global_original_environ = (const char * const *) original_environ;
 
-  g_set_prgname ("steam-runtime-launch-client");
-
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
+  _srt_util_set_glib_log_handler ("steam-runtime-launch-client",
+                                  G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 
@@ -1034,7 +1033,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
+    _srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
 
   if (opt_list)
     {

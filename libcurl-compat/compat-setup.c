@@ -459,8 +459,8 @@ main (int argc,
   int status = EXIT_SUCCESS;
 
   setlocale (LC_ALL, "");
-  g_set_prgname ("steam-runtime-libcurl-compat-setup");
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
+  _srt_util_set_glib_log_handler ("steam-runtime-libcurl-compat-setup",
+                                  G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
 
   option_context = g_option_context_new ("$STEAM_RUNTIME");
   g_option_context_add_main_entries (option_context, option_entries, NULL);
@@ -481,7 +481,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
+    _srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
 
   if (!run (opt_runtime_optional, argc, argv, &error))
     {

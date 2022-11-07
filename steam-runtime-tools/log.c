@@ -346,6 +346,7 @@ static const GDebugKey log_enable[] =
 
 /*
  * _srt_util_set_glib_log_handler:
+ * @prgname: (nullable): Passed to g_set_prgname() if not %NULL
  * @extra_log_domain: (nullable): A log domain, usually %G_LOG_DOMAIN
  * @flags: Flags affecting logging
  *
@@ -366,7 +367,8 @@ static const GDebugKey log_enable[] =
  * g_parse_debug_string().
  */
 void
-_srt_util_set_glib_log_handler (const char *extra_log_domain,
+_srt_util_set_glib_log_handler (const char *prgname,
+                                const char *extra_log_domain,
                                 SrtLogFlags flags)
 {
   GLogLevelFlags log_levels = (G_LOG_LEVEL_ERROR
@@ -375,6 +377,9 @@ _srt_util_set_glib_log_handler (const char *extra_log_domain,
                                | G_LOG_LEVEL_WARNING
                                | G_LOG_LEVEL_MESSAGE);
   const char *log_env = g_getenv ("SRT_LOG");
+
+  if (prgname != NULL)
+    g_set_prgname (prgname);
 
   flags |= g_parse_debug_string (log_env, log_enable, G_N_ELEMENTS (log_enable));
 

@@ -989,10 +989,9 @@ main (int argc,
   locks = g_ptr_array_new_with_free_func ((GDestroyNotify) pv_bwrap_lock_free);
   global_locks = locks;
 
-  g_set_prgname ("pressure-vessel-adverb");
-
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
+  _srt_util_set_glib_log_handler ("pressure-vessel-adverb",
+                                  G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
 
   context = g_option_context_new (
       "COMMAND [ARG...]\n"
@@ -1026,7 +1025,7 @@ main (int argc,
     }
 
   if (opt_verbose)
-    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
+    _srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
 
   original_stdout = _srt_divert_stdout_to_stderr (error);
 

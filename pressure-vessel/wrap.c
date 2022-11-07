@@ -1074,10 +1074,9 @@ main (int argc,
 
   setlocale (LC_ALL, "");
 
-  g_set_prgname ("pressure-vessel-wrap");
-
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
+  _srt_util_set_glib_log_handler ("pressure-vessel-wrap",
+                                  G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
 
   g_info ("pressure-vessel version %s", VERSION);
 
@@ -1172,7 +1171,7 @@ main (int argc,
   if (opt_verbose)
     log_flags |= SRT_LOG_FLAGS_DEBUG;
 
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, log_flags);
+  _srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN, log_flags);
 
   pv_wrap_detect_virtualization (&interpreter_root, &host_machine);
 

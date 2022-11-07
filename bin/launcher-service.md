@@ -179,12 +179,10 @@ manipulate environment variables on a per-command basis.
 ## Variables read by steam-runtime-launcher-service
 
 `PRESSURE_VESSEL_LOG_INFO` (boolean)
-:   If set to `1`, increase the log verbosity up to the info level.
-    If set to `0`, no effect.
+:   If set to 1, same as `SRT_LOG=info`
 
 `PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
-:   If set to `1`, prepend the log entries with a timestamp.
-    If set to `0`, no effect.
+:   If set to 1, same as `SRT_LOG=timestamp`
 
 `SRT_LAUNCHER_SERVICE_STOP_ON_EXIT` (boolean)
 :   If set to `0`, the default behaviour changes to be equivalent to
@@ -195,6 +193,10 @@ manipulate environment variables on a per-command basis.
 :   If set to `0`, the default behaviour changes to be equivalent to
     **--no-stop-on-name-loss**, unless overridden by **--stop-on-name-loss**.
     If set to `1`, no effect.
+
+`SRT_LOG`
+:   A sequence of tokens separated by colons, spaces or commas
+    affecting how output is recorded. See source code for details.
 
 `STEAM_COMPAT_APP_ID` (integer)
 :   Used by **--session** to identify the Steam app ID (game ID).

@@ -380,12 +380,10 @@ The following environment variables (among others) are read by
     If set to `0`, equivalent to `--no-import-vulkan-layers`.
 
 `PRESSURE_VESSEL_LOG_INFO` (boolean)
-:   If set to `1`, increase the log verbosity up to the info level.
-    If set to `0`, no effect.
+:   If set to 1, same as `SRT_LOG=info`
 
 `PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
-:   If set to `1`, prepend the log entries with a timestamp.
-    If set to `0`, no effect.
+:   If set to 1, same as `SRT_LOG=timestamp`
 
 `PRESSURE_VESSEL_REMOVE_GAME_OVERLAY` (boolean)
 :   If set to `1`, equivalent to `--remove-game-overlay`.
@@ -436,6 +434,10 @@ The following environment variables (among others) are read by
 `PWD`
 :   Used to choose between logically equivalent names for the current
     working directory (see **get_current_dir_name**(3)).
+
+`SRT_LOG`
+:   A sequence of tokens separated by colons, spaces or commas
+    affecting how output is recorded. See source code for details.
 
 `STEAM_COMPAT_APP_ID` (integer)
 :   Equivalent to `--steam-app-id="$STEAM_COMPAT_APP_ID"`.

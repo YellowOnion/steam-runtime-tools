@@ -233,8 +233,15 @@ _srt_util_set_up_logging (const char *identifier)
     }
 }
 
-static int my_pid = -1;
-static const gchar *my_prgname = NULL;
+static struct
+{
+  int pid;
+  const gchar *prgname;
+  SrtLogFlags flags;
+} log_settings =
+{
+  .pid = -1,
+};
 
 /*
  * get_level_prefix:
@@ -271,27 +278,37 @@ get_level_prefix (GLogLevelFlags log_level)
 }
 
 /*
- * log_to_stderr_with_timestamp:
+ * log_handler:
  * @log_domain: the log domain of the message
  * @log_level: the log level of the message
  * @message: the message to process
  * @user_data: not used
+ *
+ * A #GLogFunc which uses our global @log_settings.
  */
 static void
-log_to_stderr_with_timestamp (const gchar *log_domain,
-                              GLogLevelFlags log_level,
-                              const gchar *message,
-                              gpointer user_data)
+log_handler (const gchar *log_domain,
+             GLogLevelFlags log_level,
+             const gchar *message,
+             gpointer user_data)
 {
-  g_autoptr(GDateTime) date_time = g_date_time_new_now_local ();
+  g_autofree gchar *timestamp_prefix = NULL;
 
-  /* We can't use the format specifier "%f" for microseconds because it
-   * was introduced in GLib 2.66 and we are targeting an older version */
-  g_autofree gchar *timestamp = g_date_time_format (date_time, "%T");
+  if (log_settings.flags & SRT_LOG_FLAGS_TIMESTAMP)
+    {
+      g_autoptr(GDateTime) date_time = g_date_time_new_now_local ();
+      /* We can't use the format specifier "%f" for microseconds because it
+       * was introduced in GLib 2.66 and we are targeting an older version */
+      g_autofree gchar *timestamp = g_date_time_format (date_time, "%T");
 
-  g_printerr ("%s.%06i: %s[%d]: %s: %s\n", timestamp,
-              g_date_time_get_microsecond (date_time),
-              my_prgname, my_pid, get_level_prefix (log_level), message);
+      timestamp_prefix = g_strdup_printf ("%s.%06i: ", timestamp,
+                                          g_date_time_get_microsecond (date_time));
+    }
+
+  g_printerr ("%s%s[%d]: %s: %s\n",
+              (timestamp_prefix ?: ""),
+              log_settings.prgname, log_settings.pid,
+              get_level_prefix (log_level), message);
 
   if (log_level & (G_LOG_FLAG_RECURSION
                    | G_LOG_FLAG_FATAL
@@ -300,31 +317,37 @@ log_to_stderr_with_timestamp (const gchar *log_domain,
 }
 
 /*
- * log_to_stderr:
- * @log_domain: the log domain of the message
- * @log_level: the log level of the message
- * @message: the message to process
- * @user_data: not used
+ * SrtLogFlags:
+ * @SRT_LOG_FLAGS_DEBUG: Enable g_debug() messages
+ * @SRT_LOG_FLAGS_INFO: Enable g_info() messages
+ * @SRT_LOG_FLAGS_TIMESTAMP: Prefix log output with timestamps
+ * @SRT_LOG_FLAGS_DIFFABLE: Try not to add information that reduces the
+ *  ability to compare logs with `diff(1)`
+ * @SRT_LOG_FLAGS_PID: Include process ID in logging, even
+ *  if @SRT_LOG_FLAGS_DIFFABLE is set
+ *  (enabled by default if @SRT_LOG_FLAGS_DIFFABLE is not set)
+ * @SRT_LOG_FLAGS_TIMING: Emit timings for performance profiling
+ *  (enabled by default if @SRT_LOG_FLAGS_DEBUG is set and
+ *  @SRT_LOG_FLAGS_DIFFABLE is not)
+ * @SRT_LOG_FLAGS_NONE: None of the above
+ *
+ * Flags affecting logging.
  */
-static void
-log_to_stderr (const gchar *log_domain,
-               GLogLevelFlags log_level,
-               const gchar *message,
-               gpointer user_data)
-{
-  g_printerr ("%s[%d]: %s: %s\n",
-              my_prgname, my_pid, get_level_prefix (log_level), message);
 
-  if (log_level & (G_LOG_FLAG_RECURSION
-                   | G_LOG_FLAG_FATAL
-                   | G_LOG_LEVEL_ERROR))
-    G_BREAKPOINT ();
-}
+static const GDebugKey log_enable[] =
+{
+  { "debug", SRT_LOG_FLAGS_DEBUG },
+  { "info", SRT_LOG_FLAGS_INFO },
+  { "timestamp", SRT_LOG_FLAGS_TIMESTAMP },
+  { "diffable", SRT_LOG_FLAGS_DIFFABLE },
+  { "pid", SRT_LOG_FLAGS_PID },
+  { "timing", SRT_LOG_FLAGS_TIMING },
+};
 
 /*
  * _srt_util_set_glib_log_handler:
  * @extra_log_domain: (nullable): A log domain, usually %G_LOG_DOMAIN
- * @opt_verbose: If %TRUE, enable g_debug() messages and profiling
+ * @flags: Flags affecting logging
  *
  * Configure GLib to log to stderr with a message format suitable for
  * command-line programs, for example
@@ -336,36 +359,51 @@ log_to_stderr (const gchar *log_domain,
  * The chosen message format is used for @extra_log_domain, and also
  * for the `steam-runtime-tools` log domain used by the
  * steam-runtime-tools library.
+ *
+ * Logging can be configured by the `SRT_LOG` environment variable,
+ * which is a sequence of tokens separated by colons, spaces or commas
+ * matching the nicknames of #SrtLogFlags members. See
+ * g_parse_debug_string().
  */
 void
 _srt_util_set_glib_log_handler (const char *extra_log_domain,
-                                gboolean opt_verbose)
+                                SrtLogFlags flags)
 {
   GLogLevelFlags log_levels = (G_LOG_LEVEL_ERROR
                                | G_LOG_LEVEL_CRITICAL
                                | SRT_LOG_LEVEL_FAILURE
                                | G_LOG_LEVEL_WARNING
                                | G_LOG_LEVEL_MESSAGE);
-  gboolean opt_timestamp = _srt_boolean_environment ("PRESSURE_VESSEL_LOG_WITH_TIMESTAMP",
-                                                     FALSE);
-  gboolean opt_info = _srt_boolean_environment ("PRESSURE_VESSEL_LOG_INFO", FALSE);
+  const char *log_env = g_getenv ("SRT_LOG");
 
-  my_pid = getpid ();
-  my_prgname = g_get_prgname ();
+  flags |= g_parse_debug_string (log_env, log_enable, G_N_ELEMENTS (log_enable));
 
-  if (opt_info)
+  if (_srt_boolean_environment ("PRESSURE_VESSEL_LOG_WITH_TIMESTAMP", FALSE))
+    flags |= SRT_LOG_FLAGS_TIMESTAMP;
+
+  if (_srt_boolean_environment ("PRESSURE_VESSEL_LOG_INFO", FALSE))
+    flags |= SRT_LOG_FLAGS_INFO;
+
+  log_settings.flags = flags;
+  log_settings.prgname = g_get_prgname ();
+
+  if ((flags & SRT_LOG_FLAGS_PID)
+      || !(flags & SRT_LOG_FLAGS_DIFFABLE))
+    log_settings.pid = getpid ();
+  else
+    log_settings.pid = 0;
+
+  if (flags & SRT_LOG_FLAGS_INFO)
     log_levels |= G_LOG_LEVEL_INFO;
 
-  if (opt_verbose)
-    {
-      log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
-      _srt_profiling_enable ();
-    }
+  if (flags & SRT_LOG_FLAGS_DEBUG)
+    log_levels |= G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO;
 
-  g_log_set_handler (extra_log_domain, log_levels,
-                     opt_timestamp ? log_to_stderr_with_timestamp : log_to_stderr,
-                     NULL);
-  g_log_set_handler (G_LOG_DOMAIN, log_levels,
-                     opt_timestamp ? log_to_stderr_with_timestamp : log_to_stderr,
-                     NULL);
+  g_log_set_handler (extra_log_domain, log_levels, log_handler, NULL);
+  g_log_set_handler (G_LOG_DOMAIN, log_levels, log_handler, NULL);
+
+  if ((flags & SRT_LOG_FLAGS_TIMING)
+      || ((flags & SRT_LOG_FLAGS_DEBUG)
+          && !(flags & SRT_LOG_FLAGS_DIFFABLE)))
+    _srt_profiling_enable ();
 }

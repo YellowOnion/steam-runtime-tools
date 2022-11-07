@@ -222,12 +222,14 @@ exit status.
 # ENVIRONMENT
 
 `PRESSURE_VESSEL_LOG_INFO` (boolean)
-:   If set to `1`, increase the log verbosity up to the info level.
-    If set to `0`, no effect.
+:   If set to 1, same as `SRT_LOG=info`
 
 `PRESSURE_VESSEL_LOG_WITH_TIMESTAMP` (boolean)
-:   If set to `1`, prepend the log entries with a timestamp.
-    If set to `0`, no effect.
+:   If set to 1, same as `SRT_LOG=timestamp`
+
+`SRT_LOG`
+:   A sequence of tokens separated by colons, spaces or commas
+    affecting how output is recorded. See source code for details.
 
 # OUTPUT
 

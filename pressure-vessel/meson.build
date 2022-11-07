@@ -270,6 +270,7 @@ subproject(
     'bwrapdir=' + pv_bindir,
     'install_rpath=' + pv_rpath,
     'program_prefix=pv-',
+    'tests=false',
   ],
 )
 

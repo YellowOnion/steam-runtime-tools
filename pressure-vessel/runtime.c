@@ -74,7 +74,7 @@ struct _PvRuntime
   PvBwrapLock *runtime_lock;
   GStrv original_environ;
 
-  gchar *libcapsule_knowledge;
+  gchar *libcapsule_knowledge;  /* relative to runtime_files */
   gchar *runtime_abi_json;
   gchar *variable_dir;
   gchar *mutable_sysroot;
@@ -101,6 +101,7 @@ struct _PvRuntime
   PvRuntimeFlags flags;
   int host_fd;
   int mutable_sysroot_fd;
+  int overrides_fd;
   int root_fd;
   int runtime_files_fd;
   int variable_dir_fd;
@@ -359,10 +360,10 @@ typedef struct
 {
   gsize multiarch_index;
   const PvMultiarchDetails *details;
-  gchar *aliases_in_current_namespace;
+  gchar *aliases_relative_to_overrides;
   gchar *capsule_capture_libs_basename;
   gchar *capsule_capture_libs;
-  gchar *libdir_in_current_namespace;
+  gchar *libdir_relative_to_overrides;
   gchar *libdir_in_container;
   gchar *ld_so;
 } RuntimeArchitecture;
@@ -388,13 +389,13 @@ runtime_architecture_init (RuntimeArchitecture *self,
   self->capsule_capture_libs = g_build_filename (runtime->helpers_path,
                                                  self->capsule_capture_libs_basename,
                                                  NULL);
-  self->libdir_in_current_namespace = g_build_filename (runtime->overrides, "lib",
-                                                        self->details->tuple, NULL);
+  self->libdir_relative_to_overrides = g_strdup_printf ("lib/%s",
+                                                        self->details->tuple);
   self->libdir_in_container = g_build_filename (runtime->overrides_in_container,
-                                                "lib", self->details->tuple, NULL);
+                                                self->libdir_relative_to_overrides, NULL);
 
-  self->aliases_in_current_namespace = g_build_filename (self->libdir_in_current_namespace,
-                                                         "aliases", NULL);
+  self->aliases_relative_to_overrides = g_strdup_printf ("lib/%s/aliases",
+                                                         self->details->tuple);
 
   /* This has the side-effect of testing whether we can run binaries
    * for this architecture on the current environment. We
@@ -419,9 +420,9 @@ runtime_architecture_check_valid (RuntimeArchitecture *self)
   g_return_val_if_fail (self->details == &pv_multiarch_details[self->multiarch_index], FALSE);
   g_return_val_if_fail (self->capsule_capture_libs_basename != NULL, FALSE);
   g_return_val_if_fail (self->capsule_capture_libs != NULL, FALSE);
-  g_return_val_if_fail (self->libdir_in_current_namespace != NULL, FALSE);
+  g_return_val_if_fail (self->libdir_relative_to_overrides != NULL, FALSE);
   g_return_val_if_fail (self->libdir_in_container != NULL, FALSE);
-  g_return_val_if_fail (self->aliases_in_current_namespace != NULL, FALSE);
+  g_return_val_if_fail (self->aliases_relative_to_overrides != NULL, FALSE);
   g_return_val_if_fail (self->ld_so != NULL, FALSE);
   return TRUE;
 }
@@ -433,9 +434,9 @@ runtime_architecture_clear (RuntimeArchitecture *self)
   self->details = NULL;
   g_clear_pointer (&self->capsule_capture_libs_basename, g_free);
   g_clear_pointer (&self->capsule_capture_libs, g_free);
-  g_clear_pointer (&self->libdir_in_current_namespace, g_free);
+  g_clear_pointer (&self->libdir_relative_to_overrides, g_free);
   g_clear_pointer (&self->libdir_in_container, g_free);
-  g_clear_pointer (&self->aliases_in_current_namespace, g_free);
+  g_clear_pointer (&self->aliases_relative_to_overrides, g_free);
   g_clear_pointer (&self->ld_so, g_free);
 }
 
@@ -456,6 +457,7 @@ pv_runtime_init (PvRuntime *self)
   self->all_libc_from_provider = FALSE;
   self->host_fd = -1;
   self->mutable_sysroot_fd = -1;
+  self->overrides_fd = -1;
   self->root_fd = -1;
   self->runtime_files_fd = -1;
   self->variable_dir_fd = -1;
@@ -1597,6 +1599,7 @@ pv_runtime_initable_init (GInitable *initable,
   g_autofree gchar *usr_mtree = NULL;
   gsize len;
   PvMtreeApplyFlags mtree_flags = PV_MTREE_APPLY_FLAGS_NONE;
+  struct stat ignore;
 
   g_return_val_if_fail (PV_IS_RUNTIME (self), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
@@ -1838,9 +1841,19 @@ pv_runtime_initable_init (GInitable *initable,
       self->runtime_files = self->source_files;
     }
 
+  if (!glnx_opendirat (-1, self->runtime_files, TRUE,
+                       &self->runtime_files_fd, error))
+    return FALSE;
+
   self->runtime_files_on_host = pv_current_namespace_path_to_host_path (self->runtime_files);
 
-  g_mkdir (self->overrides, 0700);
+  if (!glnx_shutil_mkdir_p_at_open (AT_FDCWD, self->overrides, 0700,
+                                    &self->overrides_fd, NULL, error))
+    {
+      g_prefix_error (error, "Unable to create and open \"%s\": ",
+                      self->overrides);
+      return FALSE;
+    }
 
   self->runtime_app = g_build_filename (self->runtime_files, "app", NULL);
   self->runtime_usr = g_build_filename (self->runtime_files, "usr", NULL);
@@ -1848,6 +1861,9 @@ pv_runtime_initable_init (GInitable *initable,
   if (g_file_test (self->runtime_usr, G_FILE_TEST_IS_DIR))
     {
       self->runtime_is_just_usr = FALSE;
+      self->libcapsule_knowledge = g_build_filename ("usr", "lib", "steamrt",
+                                                     "libcapsule-knowledge.keyfile",
+                                                     NULL);
     }
   else
     {
@@ -1855,14 +1871,13 @@ pv_runtime_initable_init (GInitable *initable,
       self->runtime_is_just_usr = TRUE;
       g_free (self->runtime_usr);
       self->runtime_usr = g_strdup (self->runtime_files);
+      self->libcapsule_knowledge = g_build_filename ("lib", "steamrt",
+                                                     "libcapsule-knowledge.keyfile",
+                                                     NULL);
     }
 
-  self->libcapsule_knowledge = g_build_filename (self->runtime_usr,
-                                                 "lib", "steamrt",
-                                                 "libcapsule-knowledge.keyfile",
-                                                 NULL);
-
-  if (!g_file_test (self->libcapsule_knowledge, G_FILE_TEST_EXISTS))
+  if (fstatat (self->runtime_files_fd, self->libcapsule_knowledge,
+               &ignore, AT_SYMLINK_NOFOLLOW) != 0)
     g_clear_pointer (&self->libcapsule_knowledge, g_free);
 
   self->runtime_abi_json = g_build_filename (self->runtime_usr, "lib", "steamrt",
@@ -1926,10 +1941,6 @@ pv_runtime_initable_init (GInitable *initable,
                        &self->host_fd, error))
     return FALSE;
 
-  if (!glnx_opendirat (-1, self->runtime_files, TRUE,
-                       &self->runtime_files_fd, error))
-    return FALSE;
-
   return TRUE;
 }
 
@@ -1984,6 +1995,7 @@ pv_runtime_finalize (GObject *object)
   g_free (self->mutable_sysroot);
   glnx_close_fd (&self->mutable_sysroot_fd);
   g_strfreev (self->original_environ);
+  glnx_close_fd (&self->overrides_fd);
   glnx_close_fd (&self->root_fd);
   g_free (self->runtime_abi_json);
   g_free (self->runtime_app);
@@ -2346,15 +2358,18 @@ pv_runtime_provide_container_access (PvRuntime *self,
 
 static FlatpakBwrap *
 pv_runtime_get_capsule_capture_libs (PvRuntime *self,
-                                     RuntimeArchitecture *arch)
+                                     RuntimeArchitecture *arch,
+                                     GError **error)
 {
   const gchar *ld_library_path;
   g_autofree gchar *remap_app = NULL;
   g_autofree gchar *remap_usr = NULL;
   g_autofree gchar *remap_lib = NULL;
-  FlatpakBwrap *ret;
+  g_autoptr(FlatpakBwrap) ret = NULL;
+  glnx_autofd int runtime_files_fd = -1;
 
   g_return_val_if_fail (self->provider != NULL, NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
 
   ret = pv_bwrap_copy (self->container_access_adverb);
 
@@ -2379,22 +2394,42 @@ pv_runtime_get_capsule_capture_libs (PvRuntime *self,
                          self->provider->path_in_container_ns,
                          "/lib", NULL);
 
+  runtime_files_fd = dup (self->runtime_files_fd);
+
+  if (runtime_files_fd < 0)
+    return glnx_null_throw_errno_prefix (error,
+                                         "Unable to duplicate file "
+                                         "descriptor %d for runtime "
+                                         "files \"%s\"",
+                                         self->runtime_files_fd,
+                                         self->runtime_files);
+
   flatpak_bwrap_add_args (ret,
                           arch->capsule_capture_libs,
-                          "--container", self->container_access,
                           "--remap-link-prefix", remap_app,
                           "--remap-link-prefix", remap_usr,
                           "--remap-link-prefix", remap_lib,
                           "--provider",
                             self->provider->path_in_current_ns,
+                          "--container",
                           NULL);
 
-  if (self->libcapsule_knowledge)
-    flatpak_bwrap_add_args (ret,
-                            "--library-knowledge", self->libcapsule_knowledge,
-                            NULL);
+  if (g_str_equal (self->runtime_files, self->container_access))
+    flatpak_bwrap_add_arg_printf (ret, "/proc/self/fd/%d",
+                                  runtime_files_fd);
+  else
+    flatpak_bwrap_add_arg (ret, self->container_access);
 
-  return ret;
+  if (self->libcapsule_knowledge)
+    {
+      flatpak_bwrap_add_arg (ret, "--library-knowledge");
+      flatpak_bwrap_add_arg_printf (ret, "/proc/self/fd/%d/%s",
+                                    runtime_files_fd,
+                                    self->libcapsule_knowledge);
+    }
+
+  flatpak_bwrap_add_fd (ret, glnx_steal_fd (&runtime_files_fd));
+  return g_steal_pointer (&ret);
 }
 
 static gboolean pv_runtime_capture_libraries (PvRuntime *self,
@@ -2427,7 +2462,8 @@ collect_s2tc (PvRuntime *self,
       expr = g_strdup_printf ("path-match:%s", s2tc);
 
       if (!pv_runtime_capture_libraries (self, arch,
-                                         arch->libdir_in_current_namespace, expr,
+                                         arch->libdir_relative_to_overrides,
+                                         expr,
                                          (const char * const *) &expr, 1, error))
         return FALSE;
     }
@@ -2543,7 +2579,8 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdDetails, icd_details_free)
  * pv_runtime_capture_libraries:
  * @self: (not nullable): The runtime
  * @arch: (not nullable): An architecture
- * @destination: (not nullable): Where to capture the libraries
+ * @destination: (not nullable): Where to capture the libraries,
+ *  either as an absolute path or relative to `/overrides`
  * @profiling_message: (nullable): Description of this operation, for
  *  profiling. If %NULL, the profiling timer is not used.
  * @patterns: (not nullable) (array length=n_patterns): Patterns for capsule-capture-libs
@@ -2580,8 +2617,31 @@ pv_runtime_capture_libraries (PvRuntime *self,
   if (!pv_runtime_provide_container_access (self, error))
     return FALSE;
 
-  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch);
-  flatpak_bwrap_add_args (temp_bwrap, "--dest", destination, NULL);
+  temp_bwrap = pv_runtime_get_capsule_capture_libs (self, arch, error);
+
+  if (temp_bwrap == NULL)
+    return FALSE;
+
+  flatpak_bwrap_add_arg (temp_bwrap, "--dest");
+
+  if (g_path_is_absolute (destination))
+    {
+      flatpak_bwrap_add_arg (temp_bwrap, destination);
+    }
+  else
+    {
+      int fd = dup (self->overrides_fd);
+
+      if (fd < 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to duplicate file descriptor "
+                                        "%d for overrides \"%s\"",
+                                        fd, self->overrides);
+
+      flatpak_bwrap_add_arg_printf (temp_bwrap, "/proc/self/fd/%d/%s",
+                                    fd, destination);
+      flatpak_bwrap_add_fd (temp_bwrap, glnx_steal_fd (&fd));
+    }
 
   for (i = 0; i < n_patterns; i++)
     flatpak_bwrap_add_arg (temp_bwrap, patterns[i]);
@@ -2641,7 +2701,7 @@ bind_icds (PvRuntime *self,
    * then captured_instead[i] == j.
    * Otherwise captured_instead[i] = G_MAXSIZE. */
   g_autofree gsize *captured_instead = NULL;
-  g_autofree gchar *subdir_in_current_namespace = NULL;
+  g_autofree gchar *subdir_relative_to_overrides = NULL;
   glnx_autofd int subdir_fd = -1;
   gsize multiarch_index;
   gsize i;
@@ -2696,24 +2756,25 @@ bind_icds (PvRuntime *self,
       g_debug ("Classified as path-based");
       details->kinds[multiarch_index] = ICD_KIND_ABSOLUTE;
 
-      /* We set subdir_in_current_namespace non-NULL if and only if at least
+      /* We set subdir_relative_to_overrides non-NULL if and only if at least
        * one driver is ICD_KIND_ABSOLUTE */
-      if (subdir_in_current_namespace == NULL)
-        subdir_in_current_namespace = g_build_filename (arch->libdir_in_current_namespace,
-                                                        subdir, NULL);
+      if (subdir_relative_to_overrides == NULL)
+        subdir_relative_to_overrides = g_build_filename (arch->libdir_relative_to_overrides,
+                                                         subdir, NULL);
     }
 
   /* If no driver was ICD_KIND_ABSOLUTE, then there is nothing more to do */
-  if (subdir_in_current_namespace == NULL)
+  if (subdir_relative_to_overrides == NULL)
     goto success;
 
-  if (g_mkdir_with_parents (subdir_in_current_namespace, 0700) != 0)
-    return glnx_throw_errno_prefix (error, "Unable to create %s",
-                                    subdir_in_current_namespace);
-
-  if (!glnx_opendirat (-1, subdir_in_current_namespace, TRUE,
-                       &subdir_fd, error))
-    return FALSE;
+  if (!glnx_shutil_mkdir_p_at_open (self->overrides_fd,
+                                    subdir_relative_to_overrides, 0700,
+                                    &subdir_fd, NULL, error))
+    {
+      g_prefix_error (error, "Unable to create and open \"%s/%s/\": ",
+                      self->overrides, subdir_relative_to_overrides);
+      return FALSE;
+    }
 
   /* Decide whether we need to use numbered subdirectories.
    * If there are file collisions, then the answer is yes we do:
@@ -2745,13 +2806,15 @@ bind_icds (PvRuntime *self,
         }
       else
         {
-          g_autofree gchar *path = g_build_filename (subdir_in_current_namespace,
+          g_autofree gchar *path = g_build_filename (subdir_relative_to_overrides,
                                                      base, NULL);
+          struct stat stat_buf;
 
           g_hash_table_add (basename_set, (char *) base);
 
           /* The ICD would collide with one that we already set up */
-          if (g_file_test (path, G_FILE_TEST_IS_SYMLINK))
+          if (fstatat (self->overrides_fd, path, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+              && S_ISLNK (stat_buf.st_mode))
             *use_numbered_subdirs = TRUE;
         }
     }
@@ -2828,8 +2891,9 @@ bind_icds (PvRuntime *self,
         }
 
       if (patterns->len > 0
-          && !pv_runtime_capture_libraries (self, arch, subdir_in_current_namespace,
-                                            subdir_in_current_namespace,
+          && !pv_runtime_capture_libraries (self, arch,
+                                            subdir_relative_to_overrides,
+                                            subdir_relative_to_overrides,
                                             (const char * const *) patterns->pdata,
                                             patterns->len, error))
         return FALSE;
@@ -2845,7 +2909,7 @@ bind_icds (PvRuntime *self,
       g_autofree gchar *dependency_pattern = NULL;
       g_autofree gchar *seq_str = NULL;
       glnx_autofd int numbered_subdir_fd = -1;
-      const char *dest_in_current_namespace = NULL;
+      const char *dest_relative_to_overrides = NULL;
       const char *base;
       int dest_fd;
       struct stat stat_buf;
@@ -2915,7 +2979,7 @@ bind_icds (PvRuntime *self,
           g_autofree gchar *pattern = NULL;
 
           seq_str = g_strdup_printf ("%.*" G_GSIZE_FORMAT, digits, i);
-          numbered_subdir = g_build_filename (subdir_in_current_namespace,
+          numbered_subdir = g_build_filename (subdir_relative_to_overrides,
                                               seq_str, NULL);
 
           if (!glnx_ensure_dir (subdir_fd, seq_str, 0700, error))
@@ -2929,26 +2993,28 @@ bind_icds (PvRuntime *self,
                                &numbered_subdir_fd, error))
             return FALSE;
 
-          dest_in_current_namespace = numbered_subdir;
+          dest_relative_to_overrides = numbered_subdir;
           dest_fd = numbered_subdir_fd;
           pattern = g_strdup_printf ("no-dependencies:even-if-older:%s:path:%s",
                                      options,
                                      details->resolved_libraries[multiarch_index]);
 
-          if (!pv_runtime_capture_libraries (self, arch, dest_in_current_namespace, pattern,
+          if (!pv_runtime_capture_libraries (self, arch,
+                                             dest_relative_to_overrides,
+                                             pattern,
                                              (const char * const *) &pattern, 1, error))
             return FALSE;
         }
       else
         {
-          dest_in_current_namespace = subdir_in_current_namespace;
+          dest_relative_to_overrides = subdir_relative_to_overrides;
           dest_fd = subdir_fd;
         }
 
       if (fstatat (dest_fd, base, &stat_buf, AT_SYMLINK_NOFOLLOW) < 0)
         {
-          g_debug ("\"%s/%s\" was not created: %s",
-                   dest_in_current_namespace, base, g_strerror (errno));
+          g_debug ("\"overrides/%s/%s\" was not created: %s",
+                   dest_relative_to_overrides, base, g_strerror (errno));
 
           /* capsule-capture-libs didn't actually create the symlink,
            * which means the ICD is nonexistent or the wrong architecture.
@@ -2965,8 +3031,9 @@ bind_icds (PvRuntime *self,
         {
           /* This is unexpected! capsule-capture-libs creates symlinks,
            * not any other sort of file */
-          g_warning ("\"%s/%s\" was created but not as a symlink (%o)",
-                     dest_in_current_namespace, base, stat_buf.st_mode);
+          g_warning ("\"%s/%s/%s\" was created but not as a symlink (%o)",
+                     self->overrides, dest_relative_to_overrides, base,
+                     stat_buf.st_mode);
         }
 
       /* Only add the numbered subdirectories to the search path. Their
@@ -4071,6 +4138,9 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
 {
   g_autoptr(GPtrArray) dirs = NULL;
   G_GNUC_UNUSED g_autoptr(SrtProfilingTimer) timer = NULL;
+  /* Array of hash tables, same length as dirs
+   * Keys: basename of a file in dirs[i] to delete
+   * Values: path relative to /overrides indicating why we delete the key */
   GHashTable **delete = NULL;
   SrtDirIter *iters = NULL;
   gboolean ret = FALSE;
@@ -4163,6 +4233,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         {
           g_autofree gchar *target = NULL;
           const char *target_base;
+          struct stat stat_buf;
 
           if (!_srt_dir_iter_next_dent (&iters[i], &dent, NULL, error))
             {
@@ -4219,10 +4290,11 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * symlink .../overrides/lib/MULTIARCH/libcurl.so.4 exists, then
                * we want to delete /usr/lib/MULTIARCH/libcurl.so.4 and
                * /usr/lib/MULTIARCH/libcurl.so.4.2.0. */
-              soname_link = g_build_filename (arch->libdir_in_current_namespace,
+              soname_link = g_build_filename (arch->libdir_relative_to_overrides,
                                               dent->d_name, NULL);
 
-              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+              if (fstatat (self->overrides_fd, soname_link, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+                  && S_ISLNK (stat_buf.st_mode))
                 {
                   if (target_base != NULL)
                     g_hash_table_replace (delete[i],
@@ -4254,9 +4326,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * e.g. /usr/lib/MULTIARCH/libcurl.so.4, then the container's
                * library was not overridden and we should not delete
                * anything. */
-              alias_link = g_build_filename (arch->aliases_in_current_namespace,
+              alias_link = g_build_filename (arch->aliases_relative_to_overrides,
                                              dent->d_name, NULL);
-              alias_target = glnx_readlinkat_malloc (AT_FDCWD, alias_link,
+              alias_target = glnx_readlinkat_malloc (self->overrides_fd,
+                                                     alias_link,
                                                      NULL, NULL);
 
               if (alias_target != NULL
@@ -4286,10 +4359,11 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * symlink .../overrides/lib/MULTIARCH/libcurl.so.4 exists,
                * then we want to delete /usr/lib/MULTIARCH/libcurl.so
                * and /usr/lib/MULTIARCH/libcurl.so.4. */
-              soname_link = g_build_filename (arch->libdir_in_current_namespace,
+              soname_link = g_build_filename (arch->libdir_relative_to_overrides,
                                               target_base, NULL);
 
-              if (g_file_test (soname_link, G_FILE_TEST_IS_SYMLINK))
+              if (fstatat (self->overrides_fd, soname_link, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+                  && S_ISLNK (stat_buf.st_mode))
                 {
                   g_hash_table_replace (delete[i],
                                         g_strdup (target_base),
@@ -4317,9 +4391,10 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
                * However, if .../aliases/libcurl.so.3 points to
                * e.g. /usr/lib/MULTIARCH/libcurl.so.4, then the container's
                * library was not overridden and we should not delete it. */
-              alias_link = g_build_filename (arch->aliases_in_current_namespace,
+              alias_link = g_build_filename (arch->aliases_relative_to_overrides,
                                              target_base, NULL);
-              alias_target = glnx_readlinkat_malloc (AT_FDCWD, alias_link,
+              alias_target = glnx_readlinkat_malloc (self->overrides_fd,
+                                                     alias_link,
                                                      NULL, NULL);
 
               if (alias_target != NULL
@@ -4394,7 +4469,7 @@ pv_runtime_remove_overridden_libraries (PvRuntime *self,
         {
           g_autoptr(GError) local_error = NULL;
 
-          g_debug ("Deleting tmp-*%s/%s because %s replaces it",
+          g_debug ("Deleting tmp-*%s/%s because overrides/%s replaces it",
                    libdir, name, reason);
 
           if (!glnx_unlinkat (iters[i].real_iter.fd, name, 0, &local_error))
@@ -4494,8 +4569,6 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
  * @bwrap: Append arguments to this bubblewrap invocation to make files
  *  available in the container
  * @sub_dir: `vulkan/icd.d`, `glvnd/egl_vendor.d` or similar
- * @write_to_dir: Path to `/overrides/share/${sub_dir}` in the
- *  current execution environment
  * @details: An #IcdDetails holding a #SrtVulkanLayer or #SrtVulkanIcd,
  *  whichever is appropriate for @sub_dir
  * @digits: Number of digits to pad length of numeric prefix
@@ -4509,7 +4582,6 @@ static gboolean
 setup_json_manifest (PvRuntime *self,
                      FlatpakBwrap *bwrap,
                      const gchar *sub_dir,
-                     const gchar *write_to_dir,
                      IcdDetails *details,
                      int digits,
                      gsize seq,
@@ -4564,6 +4636,7 @@ setup_json_manifest (PvRuntime *self,
 
       if (details->kinds[i] == ICD_KIND_ABSOLUTE)
         {
+          g_autofree gchar *relative_to_overrides = NULL;
           g_autofree gchar *write_to_file = NULL;
           g_autofree gchar *json_in_container = NULL;
           g_autofree gchar *json_base = NULL;
@@ -4572,14 +4645,15 @@ setup_json_manifest (PvRuntime *self,
 
           json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT "-%s.json",
                                        digits, seq, pv_multiarch_tuples[i]);
-          write_to_file = g_build_filename (write_to_dir, json_base, NULL);
+          relative_to_overrides = g_build_filename ("share", sub_dir,
+                                                    json_base, NULL);
+          write_to_file = g_build_filename (self->overrides,
+                                            relative_to_overrides, NULL);
           json_in_container = g_build_filename (self->overrides_in_container,
-                                                "share", sub_dir,
-                                                json_base, NULL);
+                                                relative_to_overrides, NULL);
 
-          g_debug ("Generating \"%s\" with path \"%s\", implementing \"%s\" in container",
-                   write_to_file, details->paths_in_container[i],
-                   json_in_container);
+          g_debug ("Generating \"overrides/%s\" with path \"%s\"",
+                   relative_to_overrides, details->paths_in_container[i]);
 
           if (layer != NULL)
             {
@@ -4709,7 +4783,7 @@ setup_each_json_manifest (PvRuntime *self,
 
   for (j = 0; j < details->len; j++)
     {
-      if (!setup_json_manifest (self, bwrap, sub_dir, write_to_dir,
+      if (!setup_json_manifest (self, bwrap, sub_dir,
                                 g_ptr_array_index (details, j),
                                 digits, j, search_path, error))
         return FALSE;
@@ -5067,7 +5141,8 @@ collect_core_libraries_patterns (GPtrArray *patterns)
  * @self: The runtime
  * @arch: Architecture of @libc_symlink
  * @bwrap:
- * @libc_symlink: The symlink created by capsule-capture-libs.
+ * @libc_symlink: The symlink created by capsule-capture-libs,
+ *  relative to /overrides.
  *  Its target is either `self->provider->path_in_container_ns`
  *  followed by the path to glibc in the graphics stack provider
  *  namespace, or the path to glibc in a non-standard directory such
@@ -5105,11 +5180,13 @@ pv_runtime_collect_libc_family (PvRuntime *self,
                                             bwrap, error))
     return FALSE;
 
-  if (!pv_runtime_capture_libraries (self, arch, arch->libdir_in_current_namespace,
+  if (!pv_runtime_capture_libraries (self, arch,
+                                     arch->libdir_relative_to_overrides,
                                      NULL, patterns, G_N_ELEMENTS (patterns), error))
     return FALSE;
 
-  libc_target = glnx_readlinkat_malloc (-1, libc_symlink, NULL, NULL);
+  libc_target = glnx_readlinkat_malloc (self->overrides_fd, libc_symlink,
+                                        NULL, NULL);
   if (libc_target != NULL)
     {
       g_autofree gchar *dir = NULL;
@@ -5417,7 +5494,8 @@ pv_runtime_collect_lib_data (PvRuntime *self,
  * @self: The runtime
  * @arch: Architecture of @lib_symlink
  * @dir_basename: Directory in ${datadir}, e.g. `drirc.d`
- * @lib_symlink: The symlink created by capsule-capture-libs.
+ * @lib_symlink: The symlink created by capsule-capture-libs,
+ *  relative to /overrides.
  *  Its target is either `self->provider->path_in_container_ns`
  *  followed by the path to a library in the graphics stack provider
  *  namespace, or the path to a library in a non-standard directory such
@@ -5446,7 +5524,7 @@ pv_runtime_collect_lib_symlink_data (PvRuntime *self,
   g_return_val_if_fail (lib_symlink != NULL, FALSE);
   g_return_val_if_fail (data_in_provider != NULL, FALSE);
 
-  target = glnx_readlinkat_malloc (-1, lib_symlink, NULL, NULL);
+  target = glnx_readlinkat_malloc (self->overrides_fd, lib_symlink, NULL, NULL);
 
   if (target == NULL)
     return FALSE;
@@ -5512,7 +5590,7 @@ collect_one_mesa_drirc (PvRuntime *self,
          * path in the provider namespace, but with an optional prefix
          * that we already know how to remove (/run/host or /run/gfx). */
         g_return_if_fail (resolved != NULL);
-        symlink = g_build_filename (arch->libdir_in_current_namespace,
+        symlink = g_build_filename (arch->libdir_relative_to_overrides,
                                     glnx_basename (resolved), NULL);
         pv_runtime_collect_lib_symlink_data (self, arch, "drirc.d", symlink,
                                              flags, drirc_data_in_provider);
@@ -5970,6 +6048,7 @@ pv_runtime_create_aliases (PvRuntime *self,
       g_autofree gchar *soname_in_overrides = NULL;
       g_autofree gchar *target = NULL;
       g_autoptr(GList) members = NULL;
+      struct stat stat_buf;
 
       node = json_array_get_element (libraries_array, i);
       if (!JSON_NODE_HOLDS_OBJECT (node))
@@ -5991,7 +6070,7 @@ pv_runtime_create_aliases (PvRuntime *self,
       if (aliases_array == NULL || json_array_get_length (aliases_array) == 0)
         continue;
 
-      soname_in_overrides = g_build_filename (arch->libdir_in_current_namespace,
+      soname_in_overrides = g_build_filename (arch->libdir_relative_to_overrides,
                                               soname, NULL);
       soname_in_runtime_usr = g_build_filename (self->runtime_usr, "lib",
                                                 arch->details->tuple, soname, NULL);
@@ -6000,8 +6079,8 @@ pv_runtime_create_aliases (PvRuntime *self,
       soname_in_runtime = g_build_filename (self->runtime_files, "lib",
                                             arch->details->tuple, soname, NULL);
 
-      if (g_file_test (soname_in_overrides,
-                       (G_FILE_TEST_IS_REGULAR | G_FILE_TEST_IS_SYMLINK)))
+      if (fstatat (self->overrides_fd, soname_in_overrides, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+          && (S_ISLNK (stat_buf.st_mode) || S_ISREG (stat_buf.st_mode)))
         target = g_build_filename (arch->libdir_in_container, soname, NULL);
       else if (g_file_test (soname_in_runtime_usr,
                             (G_FILE_TEST_IS_REGULAR | G_FILE_TEST_IS_SYMLINK)))
@@ -6015,10 +6094,10 @@ pv_runtime_create_aliases (PvRuntime *self,
 
       for (guint j = 0; j < json_array_get_length (aliases_array); j++)
         {
-          g_autofree gchar *dest = g_build_filename (arch->aliases_in_current_namespace,
+          g_autofree gchar *dest = g_build_filename (arch->aliases_relative_to_overrides,
                                                      json_array_get_string_element (aliases_array, j),
                                                      NULL);
-          if (symlink (target, dest) != 0)
+          if (symlinkat (target, self->overrides_fd, dest) != 0)
             return glnx_throw_errno_prefix (error,
                                             "Unable to create symlink %s -> %s",
                                             dest, target);
@@ -6754,6 +6833,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_autofree gchar *platform_token = NULL;
           g_autoptr(GPtrArray) patterns = NULL;
           SrtSystemInfo *arch_system_info;
+          struct stat stat_buf;
 
           if (!pv_runtime_get_ld_so (self, arch, &ld_so_in_runtime, error))
             return FALSE;
@@ -6777,8 +6857,25 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           pv_search_path_append (dri_path, this_dri_path_in_container);
           pv_search_path_append (va_api_path, this_dri_path_in_container);
 
-          g_mkdir_with_parents (arch->libdir_in_current_namespace, 0755);
-          g_mkdir_with_parents (arch->aliases_in_current_namespace, 0755);
+          if (!glnx_shutil_mkdir_p_at (self->overrides_fd,
+                                       arch->libdir_relative_to_overrides,
+                                       0755, NULL, error))
+            {
+              g_prefix_error (error, "Unable to create \"%s/%s/\": ",
+                              self->overrides,
+                              arch->libdir_relative_to_overrides);
+              return FALSE;
+            }
+
+          if (!glnx_shutil_mkdir_p_at (self->overrides_fd,
+                                       arch->aliases_relative_to_overrides,
+                                       0755, NULL, error))
+            {
+              g_prefix_error (error, "Unable to create and open \"%s/%s/\": ",
+                              self->overrides,
+                              arch->aliases_relative_to_overrides);
+              return FALSE;
+            }
 
           g_debug ("Collecting graphics drivers from provider system...");
 
@@ -6831,17 +6928,19 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
           g_assert (patterns->pdata != NULL);
 
           if (!pv_runtime_capture_libraries (self, arch,
-                                             arch->libdir_in_current_namespace,
+                                             arch->libdir_relative_to_overrides,
                                              "Main capsule-capture-libs call",
                                              (const char * const *) patterns->pdata,
                                              patterns->len, error))
             return FALSE;
 
-          libc_symlink = g_build_filename (arch->libdir_in_current_namespace, "libc.so.6", NULL);
+          libc_symlink = g_build_filename (arch->libdir_relative_to_overrides,
+                                           "libc.so.6", NULL);
 
           /* If we are going to use the provider's libc6 (likely)
            * then we have to use its ld.so too. */
-          if (g_file_test (libc_symlink, G_FILE_TEST_IS_SYMLINK))
+          if (fstatat (self->overrides_fd, libc_symlink, &stat_buf, AT_SYMLINK_NOFOLLOW) == 0
+              && S_ISLNK (stat_buf.st_mode))
             {
               if (!pv_runtime_collect_libc_family (self, arch, bwrap,
                                                    libc_symlink, ld_so_in_runtime,
@@ -6856,9 +6955,9 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               self->all_libc_from_provider = FALSE;
             }
 
-          libdrm = g_build_filename (arch->libdir_in_current_namespace,
+          libdrm = g_build_filename (arch->libdir_relative_to_overrides,
                                      "libdrm.so.2", NULL);
-          libdrm_amdgpu = g_build_filename (arch->libdir_in_current_namespace,
+          libdrm_amdgpu = g_build_filename (arch->libdir_relative_to_overrides,
                                             "libdrm_amdgpu.so.1", NULL);
 
           /* If we have libdrm_amdgpu.so.1 in overrides we also want to mount
@@ -6877,7 +6976,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
               all_libdrm_from_provider = FALSE;
             }
 
-          libglx_mesa = g_build_filename (arch->libdir_in_current_namespace, "libGLX_mesa.so.0", NULL);
+          libglx_mesa = g_build_filename (arch->libdir_relative_to_overrides,
+                                          "libGLX_mesa.so.0", NULL);
 
           /* If we have libGLX_mesa.so.0 in overrides we also want to mount
            * ${prefix}/share/drirc.d from the provider. ${prefix} is derived from
@@ -6895,7 +6995,8 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                               provider_stack->vulkan_icd_details, system_info,
                               drirc_data_in_provider);
 
-          libglx_nvidia = g_build_filename (arch->libdir_in_current_namespace, "libGLX_nvidia.so.0", NULL);
+          libglx_nvidia = g_build_filename (arch->libdir_relative_to_overrides,
+                                            "libGLX_nvidia.so.0", NULL);
 
           /* If we have libGLX_nvidia.so.0 in overrides we also want to mount
            * /usr/share/nvidia from the provider. In this case it's

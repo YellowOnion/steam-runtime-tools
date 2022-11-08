@@ -42,9 +42,12 @@ typedef enum
 } SrtLogFlags;
 
 #define SRT_LOG_LEVEL_FAILURE (1 << G_LOG_LEVEL_USER_SHIFT)
+#define SRT_LOG_LEVEL_WARNING (1 << (G_LOG_LEVEL_USER_SHIFT + 1))
 
 #define _srt_log_failure(...) \
   g_log (G_LOG_DOMAIN, SRT_LOG_LEVEL_FAILURE, __VA_ARGS__)
+#define _srt_log_warning(...) \
+  g_log (G_LOG_DOMAIN, SRT_LOG_LEVEL_WARNING, __VA_ARGS__)
 
 void _srt_util_set_glib_log_handler (const char *prgname,
                                      const char *extra_log_domain,

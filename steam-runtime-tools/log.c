@@ -56,6 +56,21 @@
  */
 
 /*
+ * SRT_LOG_LEVEL_WARNING:
+ *
+ * A log level for logging warnings that do not indicate a programming
+ * error.
+ *
+ * Only use this in programs that have called
+ * _srt_util_set_glib_log_handler().
+ *
+ * This is functionally equivalent to %G_LOG_LEVEL_MESSAGE, but
+ * the handler set up by _srt_util_set_glib_log_handler() prints it
+ * as though it was a warning. Use to log a warning that should not
+ * cause program termination, even during unit testing.
+ */
+
+/*
  * _srt_log_failure:
  * @...: format string and arguments, as for g_message()
  *
@@ -262,7 +277,7 @@ get_level_prefix (GLogLevelFlags log_level)
   if (log_level & SRT_LOG_LEVEL_FAILURE)
     return "E";
 
-  if (log_level & G_LOG_LEVEL_WARNING)
+  if (log_level & (SRT_LOG_LEVEL_WARNING | G_LOG_LEVEL_WARNING))
     return "W";
 
   if (log_level & G_LOG_LEVEL_MESSAGE)
@@ -374,6 +389,7 @@ _srt_util_set_glib_log_handler (const char *prgname,
   GLogLevelFlags log_levels = (G_LOG_LEVEL_ERROR
                                | G_LOG_LEVEL_CRITICAL
                                | SRT_LOG_LEVEL_FAILURE
+                               | SRT_LOG_LEVEL_WARNING
                                | G_LOG_LEVEL_WARNING
                                | G_LOG_LEVEL_MESSAGE);
   const char *log_env = g_getenv ("SRT_LOG");

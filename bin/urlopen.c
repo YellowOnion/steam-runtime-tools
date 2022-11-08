@@ -153,7 +153,10 @@ main (int argc,
   g_autoptr(GError) error = NULL;
   gboolean prefer_steam;
 
-  _srt_util_set_up_logging ("steam-runtime-urlopen");
+  _srt_util_set_glib_log_handler ("steam-runtime-urlopen",
+                                  G_LOG_DOMAIN,
+                                  SRT_LOG_FLAGS_OPTIONALLY_JOURNAL,
+                                  NULL, NULL, NULL);
 
   option_context = g_option_context_new ("{ file | URL }");
   g_option_context_add_main_entries (option_context, option_entries, NULL);

@@ -39,6 +39,8 @@ typedef enum
   SRT_LOG_FLAGS_PID = (1 << 4),
   SRT_LOG_FLAGS_TIMING = (1 << 5),
   SRT_LOG_FLAGS_DIVERT_STDOUT = (1 << 6),
+  SRT_LOG_FLAGS_OPTIONALLY_JOURNAL = (1 << 7),
+  SRT_LOG_FLAGS_JOURNAL = (1 << 8),
   SRT_LOG_FLAGS_NONE = 0
 } SrtLogFlags;
 

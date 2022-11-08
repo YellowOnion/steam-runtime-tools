@@ -43,7 +43,10 @@ main (int argc,
   static const char *default_argv[] = {"steam", "-foreground", NULL};
   g_autoptr(GError) error = NULL;
 
-  _srt_util_set_up_logging ("steam-runtime-steam-remote");
+  _srt_util_set_glib_log_handler ("steam-runtime-steam-remote",
+                                  G_LOG_DOMAIN,
+                                  SRT_LOG_FLAGS_OPTIONALLY_JOURNAL,
+                                  NULL, NULL, NULL);
 
   if (argc <= 1)
     {

@@ -25,6 +25,7 @@
 #include "utils.h"
 
 #include "steam-runtime-tools/resolve-in-sysroot-internal.h"
+#include "steam-runtime-tools/log-internal.h"
 #include "steam-runtime-tools/utils-internal.h"
 
 /**
@@ -86,11 +87,9 @@ pv_bwrap_execve (FlatpakBwrap *bwrap,
   fflush (stdout);
   fflush (stderr);
 
-  if (original_stdout > 0 &&
-      dup2 (original_stdout, STDOUT_FILENO) != STDOUT_FILENO)
-    return glnx_throw_errno_prefix (error,
-                                    "Unable to make fd %d a copy of fd %d",
-                                    STDOUT_FILENO, original_stdout);
+  if (original_stdout >= 0
+      && !_srt_util_restore_saved_fd (original_stdout, STDOUT_FILENO, error))
+    return FALSE;
 
   execve (bwrap->argv->pdata[0],
           (char * const *) bwrap->argv->pdata,

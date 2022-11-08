@@ -943,6 +943,7 @@ main (int argc,
   GError **error = &local_error;
   char **command_and_args;
   g_autoptr(FILE) original_stdout = NULL;
+  glnx_autofd int original_stdout_fd = -1;
   g_autoptr(GDBusConnection) session_bus = NULL;
   g_autoptr(GDBusConnection) peer_connection = NULL;
   g_auto(GVariantBuilder) fd_builder = {};
@@ -986,15 +987,28 @@ main (int argc,
   global_original_environ = (const char * const *) original_environ;
 
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler ("steam-runtime-launch-client",
-                                  G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
-
-  original_stdout = _srt_divert_stdout_to_stderr (error);
-
-  if (original_stdout == NULL)
+  if (!_srt_util_set_glib_log_handler ("steam-runtime-launch-client",
+                                       G_LOG_DOMAIN,
+                                       SRT_LOG_FLAGS_DIVERT_STDOUT,
+                                       &original_stdout_fd, NULL, error))
     {
       launch_exit_status = LAUNCH_EX_FAILED;
       goto out;
+    }
+
+  original_stdout = fdopen (original_stdout_fd, "w");
+
+  if (original_stdout == NULL)
+    {
+      glnx_throw_errno_prefix (error,
+                               "Unable to create a stdio wrapper for fd %d",
+                               original_stdout_fd);
+      launch_exit_status = LAUNCH_EX_FAILED;
+      goto out;
+    }
+  else
+    {
+      original_stdout_fd = -1;    /* ownership taken, do not close */
     }
 
   context = g_option_context_new ("COMMAND [ARG...]");
@@ -1032,8 +1046,13 @@ main (int argc,
       goto out;
     }
 
-  if (opt_verbose)
-    _srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
+  if (!_srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN,
+                                       (opt_verbose ? SRT_LOG_FLAGS_DEBUG : 0),
+                                       NULL, NULL, error))
+    {
+      launch_exit_status = LAUNCH_EX_FAILED;
+      goto out;
+    }
 
   if (opt_list)
     {

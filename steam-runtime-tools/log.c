@@ -344,6 +344,11 @@ log_handler (const gchar *log_domain,
  * @SRT_LOG_FLAGS_TIMING: Emit timings for performance profiling
  *  (enabled by default if @SRT_LOG_FLAGS_DEBUG is set and
  *  @SRT_LOG_FLAGS_DIFFABLE is not)
+ * @SRT_LOG_FLAGS_DIVERT_STDOUT: Make standard output a duplicate of
+ *  standard error, to avoid unstructured diagnostics like g_debug()
+ *  being written to the original standard output
+ *  (use this in conjunction with the @original_stdout_out parameter of
+ *  _srt_util_set_glib_log_handler())
  * @SRT_LOG_FLAGS_NONE: None of the above
  *
  * Flags affecting logging.
@@ -357,7 +362,132 @@ static const GDebugKey log_enable[] =
   { "diffable", SRT_LOG_FLAGS_DIFFABLE },
   { "pid", SRT_LOG_FLAGS_PID },
   { "timing", SRT_LOG_FLAGS_TIMING },
+  /* Intentionally no way to set SRT_LOG_FLAGS_DIVERT_STDOUT in $SRT_LOG:
+   * implementing that flag correctly requires the application to be aware
+   * that the original stdout might get altered */
 };
+
+/*
+ * ensure_fd_not_cloexec:
+ *
+ * Ensure that @fd is open and not marked for close-on-execute, to avoid
+ * weird side-effects if opening an unrelated file descriptor ends up as
+ * one of the three standard fds, either in this process or a subprocess.
+ */
+static gboolean
+ensure_fd_not_cloexec (int fd,
+                       GError **error)
+{
+  int flags;
+  int errsv;
+
+  flags = fcntl (fd, F_GETFD, 0);
+
+  if (G_UNLIKELY (flags < 0 && errno == EBADF))
+    {
+      int new_fd;
+
+      /* Unusually, intentionally no O_CLOEXEC here */
+      if (fd == STDIN_FILENO)
+        new_fd = open ("/dev/null", O_RDONLY | O_NOCTTY);
+      else
+        new_fd = open ("/dev/null", O_WRONLY | O_NOCTTY);
+
+      if (new_fd < 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to open /dev/null to replace fd %d",
+                                        fd);
+
+      if (new_fd != fd)
+        {
+          if (dup2 (new_fd, fd) != fd)
+            {
+              errsv = errno;
+              close (new_fd);
+              errno = errsv;
+              return glnx_throw_errno_prefix (error,
+                                              "Unable to make fd %d a copy of fd %d",
+                                              fd, new_fd);
+            }
+
+          close (new_fd);
+        }
+
+      return TRUE;
+    }
+
+  if (G_UNLIKELY (flags < 0))
+    return glnx_throw_errno_prefix (error,
+                                    "Unable to get flags of fd %d", fd);
+
+  if (flags & FD_CLOEXEC)
+    {
+      if (fcntl (fd, F_SETFD, flags & ~FD_CLOEXEC) < 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to make fd %d stay open on exec",
+                                        fd);
+    }
+
+  return TRUE;
+}
+
+/*
+ * set_up_output:
+ * @fd: `STDOUT_FILENO` or `STDERR_FILENO`
+ * @save_original: (out): If not %NULL, duplicate the original stdout/stderr
+ *  here
+ */
+static gboolean
+set_up_output (int fd,
+               int *save_original,
+               GError **error)
+{
+  if (save_original != NULL)
+    {
+      *save_original = TEMP_FAILURE_RETRY (fcntl (fd, F_DUPFD_CLOEXEC, 3));
+
+      /* Ignore EBADF because there's no guarantee that the standard fds
+       * are open yet */
+      if (*save_original < 0 && errno != EBADF)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to duplicate fd %d", fd);
+    }
+
+  if (!ensure_fd_not_cloexec (fd, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+gboolean
+_srt_util_restore_saved_fd (int saved_fd,
+                            int target_fd,
+                            GError **error)
+{
+  g_return_val_if_fail (saved_fd >= 0, FALSE);
+
+  if (saved_fd == target_fd)
+    return TRUE;
+
+  if (dup2 (saved_fd, target_fd) != target_fd)
+    return glnx_throw_errno_prefix (error,
+                                    "Unable to make fd %d a copy of fd %d",
+                                    target_fd, saved_fd);
+
+  if (target_fd > STDERR_FILENO)
+    {
+      int flags = fcntl (target_fd, F_GETFD, 0);
+
+      if (flags < 0)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to get flags of fd %d",
+                                        target_fd);
+
+      fcntl (target_fd, F_SETFD, flags|FD_CLOEXEC);
+    }
+
+  return TRUE;
+}
 
 /*
  * _srt_util_set_glib_log_handler:
@@ -381,10 +511,13 @@ static const GDebugKey log_enable[] =
  * matching the nicknames of #SrtLogFlags members. See
  * g_parse_debug_string().
  */
-void
+gboolean
 _srt_util_set_glib_log_handler (const char *prgname,
                                 const char *extra_log_domain,
-                                SrtLogFlags flags)
+                                SrtLogFlags flags,
+                                int *original_stdout_out,
+                                int *original_stderr_out,
+                                GError **error)
 {
   GLogLevelFlags log_levels = (G_LOG_LEVEL_ERROR
                                | G_LOG_LEVEL_CRITICAL
@@ -427,4 +560,22 @@ _srt_util_set_glib_log_handler (const char *prgname,
       || ((flags & SRT_LOG_FLAGS_DEBUG)
           && !(flags & SRT_LOG_FLAGS_DIFFABLE)))
     _srt_profiling_enable ();
+
+  /* We ensure stdin is open first, because otherwise any fd we open is
+   * likely to become unintentionally the new stdin. */
+  if (!ensure_fd_not_cloexec (STDIN_FILENO, error)
+      || !set_up_output (STDOUT_FILENO, original_stdout_out, error)
+      || !set_up_output (STDERR_FILENO, original_stderr_out, error))
+    return FALSE;
+
+  if (flags & SRT_LOG_FLAGS_DIVERT_STDOUT)
+    {
+      /* Unusually, intentionally not setting FD_CLOEXEC here */
+      if (dup2 (STDERR_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
+        return glnx_throw_errno_prefix (error,
+                                        "Unable to make fd %d a copy of fd %d",
+                                        STDOUT_FILENO, STDERR_FILENO);
+    }
+
+  return TRUE;
 }

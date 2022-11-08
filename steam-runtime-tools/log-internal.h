@@ -38,6 +38,7 @@ typedef enum
   SRT_LOG_FLAGS_DIFFABLE = (1 << 3),
   SRT_LOG_FLAGS_PID = (1 << 4),
   SRT_LOG_FLAGS_TIMING = (1 << 5),
+  SRT_LOG_FLAGS_DIVERT_STDOUT = (1 << 6),
   SRT_LOG_FLAGS_NONE = 0
 } SrtLogFlags;
 
@@ -49,7 +50,13 @@ typedef enum
 #define _srt_log_warning(...) \
   g_log (G_LOG_DOMAIN, SRT_LOG_LEVEL_WARNING, __VA_ARGS__)
 
-void _srt_util_set_glib_log_handler (const char *prgname,
-                                     const char *extra_log_domain,
-                                     SrtLogFlags flags);
+gboolean _srt_util_set_glib_log_handler (const char *prgname,
+                                         const char *extra_log_domain,
+                                         SrtLogFlags flags,
+                                         int *original_stdout_out,
+                                         int *original_stderr_out,
+                                         GError **error);
 void _srt_util_set_up_logging (const char *identifier);
+gboolean _srt_util_restore_saved_fd (int saved_fd,
+                                     int target_fd,
+                                     GError **error);

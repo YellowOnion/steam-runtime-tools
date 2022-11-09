@@ -1,3 +1,36 @@
+steam-runtime-tools (0.20221109.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * pv-wrap: Improve path mapping under FEX-Emu or similar emulators
+    by distinguishing between paths visible to native code (aarch64)
+    and paths visible to emulated code (x86)
+
+  [ Simon McVittie ]
+  * pv-exports: Treat /run/gfx the same as /run/host
+  * pv-wrap: Add --deterministic option to make consecutive logs easier
+    to compare with generic diff tools
+  * pv-wrap: Make the debug log shorter and easier to compare by omitting
+    redundant path segments
+  * pv-runtime: Detect some errors that were previously ignored
+  * pv-runtime: Improve robustness against crashing if initialization fails
+  * s-r-input-monitor: Sort hidraw and evdev devices "naturally"
+  * library code: Add SRT_LOG=TOKEN[,TOKEN...] option to alter how we log.
+    Possible values are subject to change, but currently:
+    - debug: enables debug and info messages, implied by --verbose or
+      PRESSURE_VESSEL_VERBOSE=1
+    - diffable: reduces differences between logs (show fewer process IDs,
+      etc.), implied by pv-wrap --deterministic
+    - info: enables info messages, implied by PRESSURE_VESSEL_LOG_INFO=1
+    - pid: force process IDs to be logged, even if diffable was used
+    - timestamp: prefix log lines with a timestamp, implied by
+      PRESSURE_VESSEL_LOG_WITH_TIMESTAMP=1
+    - timing: show the time taken for various operations (performance
+      profiling), even if not debugging
+  * Update libglnx subproject
+    - Use its g_memdup2() backport instead of our own
+
+ -- Simon McVittie <smcv@collabora.com>  Wed, 09 Nov 2022 16:28:19 +0000
+
 steam-runtime-tools (0.20221014.0) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]

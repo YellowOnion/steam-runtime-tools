@@ -297,6 +297,7 @@ for var in \
     fi
 
     if ! pressure-vessel-try-setlocale "$locale"; then
+        verbose "Missing locale $locale (found in \$$var)"
         one_missing=yes
         break
     fi

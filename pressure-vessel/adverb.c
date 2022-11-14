@@ -746,8 +746,10 @@ generate_locales (gchar **locpath_out,
   if (WIFEXITED (wait_status) && WEXITSTATUS (wait_status) == EX_OSFILE)
     {
       /* locale-gen exits 72 (EX_OSFILE) if it had to correct for
-       * missing locales at OS level. This is not an error. */
-      g_info ("pressure-vessel-locale-gen created missing locales");
+       * missing locales at OS level. This is not an error, but deserves
+       * a warning, since it costs around 10 seconds even on a fast SSD. */
+      g_printerr ("%s", child_stderr);
+      g_warning ("Container startup will be faster if missing locales are created at OS level");
     }
   else if (!g_spawn_check_wait_status (wait_status, error))
     {

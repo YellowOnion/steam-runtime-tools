@@ -302,17 +302,19 @@ for var in \
     fi
 done
 
-for locale in en_US.UTF-8 "$@"; do
-    if ! can_generate "$locale" ; then
-        continue
-    fi
+if [ -z "$one_missing" ]; then
+    for locale in en_US.UTF-8 "$@"; do
+        if ! can_generate "$locale" ; then
+            continue
+        fi
 
-    if ! pressure-vessel-try-setlocale "$locale"; then
-        verbose "Missing locale $locale"
-        one_missing=yes
-        break
-    fi
-done
+        if ! pressure-vessel-try-setlocale "$locale"; then
+            verbose "Missing locale $locale"
+            one_missing=yes
+            break
+        fi
+    done
+fi
 
 if [ -z "$one_missing" ]; then
     verbose "No locales need to be generated"

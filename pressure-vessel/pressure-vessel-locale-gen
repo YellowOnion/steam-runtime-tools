@@ -350,7 +350,7 @@ for var in \
         continue
     fi
 
-    if ! [ -d "$locale" ]; then
+    if ! [ -d "$opt_output_dir/$locale" ]; then
         verbose "Generating locale $locale..."
         generate_locale "$locale" || return_ex_cantcreat=yes
     fi
@@ -361,7 +361,7 @@ for locale in en_US.UTF-8 "$@"; do
         continue
     fi
 
-    if ! [ -d "$locale" ]; then
+    if ! [ -d "$opt_output_dir/$locale" ]; then
         verbose "Generating locale $locale..."
         generate_locale "$locale" || return_ex_cantcreat=yes
     fi

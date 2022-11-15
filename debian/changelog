@@ -1,3 +1,10 @@
+steam-runtime-tools (0.20221115.1) steamrt; urgency=medium
+
+  * tests: Don't assume /dev/shm is a real directory.
+    In older chroot environments it's sometimes a symbolic link to /run/shm.
+
+ -- Simon McVittie <smcv@collabora.com>  Tue, 15 Nov 2022 18:49:16 +0000
+
 steam-runtime-tools (0.20221115.0) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]

@@ -629,16 +629,17 @@ test_recursive_list (Fixture *f,
 
       g_assert_true (g_strv_contains (const_listing, "/dev/null"));
 
-      if (G_LIKELY (g_file_test ("/dev/shm", G_FILE_TEST_IS_DIR)))
+      if (G_LIKELY (g_file_test ("/dev/pts", G_FILE_TEST_IS_DIR)
+                    && !g_file_test ("/dev/pts", G_FILE_TEST_IS_SYMLINK)))
         {
-          g_assert_true (g_strv_contains (const_listing, "/dev/shm/"));
+          g_assert_true (g_strv_contains (const_listing, "/dev/pts/"));
         }
       else
         {
           /* This could conceivably be false in some containers.
            * Mark the test as skipped but intentionally don't early-return
            * here: we can still check for /dev/stderr. */
-          g_test_skip ("/dev/shm doesn't exist");
+          g_test_skip ("/dev/pts doesn't exist or isn't a directory");
         }
 
       target = glnx_readlinkat_malloc (AT_FDCWD, "/dev/stderr", NULL, NULL);

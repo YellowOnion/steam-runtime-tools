@@ -297,22 +297,25 @@ for var in \
     fi
 
     if ! pressure-vessel-try-setlocale "$locale"; then
+        verbose "Missing locale $locale (found in \$$var)"
         one_missing=yes
         break
     fi
 done
 
-for locale in en_US.UTF-8 "$@"; do
-    if ! can_generate "$locale" ; then
-        continue
-    fi
+if [ -z "$one_missing" ]; then
+    for locale in en_US.UTF-8 "$@"; do
+        if ! can_generate "$locale" ; then
+            continue
+        fi
 
-    if ! pressure-vessel-try-setlocale "$locale"; then
-        verbose "Missing locale $locale"
-        one_missing=yes
-        break
-    fi
-done
+        if ! pressure-vessel-try-setlocale "$locale"; then
+            verbose "Missing locale $locale"
+            one_missing=yes
+            break
+        fi
+    done
+fi
 
 if [ -z "$one_missing" ]; then
     verbose "No locales need to be generated"
@@ -350,7 +353,7 @@ for var in \
         continue
     fi
 
-    if ! [ -d "$locale" ]; then
+    if ! [ -d "$opt_output_dir/$locale" ]; then
         verbose "Generating locale $locale..."
         generate_locale "$locale" || return_ex_cantcreat=yes
     fi
@@ -361,7 +364,7 @@ for locale in en_US.UTF-8 "$@"; do
         continue
     fi
 
-    if ! [ -d "$locale" ]; then
+    if ! [ -d "$opt_output_dir/$locale" ]; then
         verbose "Generating locale $locale..."
         generate_locale "$locale" || return_ex_cantcreat=yes
     fi

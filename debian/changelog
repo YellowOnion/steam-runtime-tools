@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20221109.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20221115.0) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]
   * pv-wrap: Improve path mapping under FEX-Emu or similar emulators
@@ -13,6 +13,13 @@ steam-runtime-tools (0.20221109.0) UNRELEASED; urgency=medium
     redundant path segments
   * pv-runtime: Detect some errors that were previously ignored
   * pv-runtime: Improve robustness against crashing if initialization fails
+  * pv-locale-gen:
+    - Produce less repetitive output
+    - Launch a bit faster
+    - Give a better hint about why we want a locale
+  * pv-adverb: Let missing locales show on stderr.
+    This will give users a hint about how they can speed up container setup.
+    (Helps: steam-runtime#541)
   * s-r-input-monitor: Sort hidraw and evdev devices "naturally"
   * library code: Add SRT_LOG=TOKEN[,TOKEN...] option to alter how we log.
     Possible values are subject to change, but currently:
@@ -29,7 +36,7 @@ steam-runtime-tools (0.20221109.0) UNRELEASED; urgency=medium
   * Update libglnx subproject
     - Use its g_memdup2() backport instead of our own
 
- -- Simon McVittie <smcv@collabora.com>  Wed, 09 Nov 2022 16:28:19 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 15 Nov 2022 17:24:54 +0000
 
 steam-runtime-tools (0.20221014.0) steamrt; urgency=medium
 

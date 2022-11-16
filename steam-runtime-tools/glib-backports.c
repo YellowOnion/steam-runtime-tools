@@ -3,10 +3,12 @@
  *
  *  Copyright 1995-1997 Peter Mattis, Spencer Kimball and Josh MacDonald
  *  Copyright 1997-2000 GLib team
- *  Copyright 2000 Red Hat, Inc.
- *  Copyright 2013-2019 Collabora Ltd.
+ *  Copyright 2000-2016 Red Hat, Inc.
+ *  Copyright 2013-2022 Collabora Ltd.
+ *  Copyright 2017-2022 Endless OS Foundation, LLC
  *  Copyright 2018 Georges Basile Stavracas Neto
  *  Copyright 2018 Philip Withnall
+ *  Copyright 2018 Will Thompson
  *  Copyright 2021 Joshua Lee
  *  g_execvpe implementation based on GNU libc execvp:
  *   Copyright 1991, 92, 95, 96, 97, 98, 99 Free Software Foundation, Inc.
@@ -30,6 +32,8 @@
 
 #include <errno.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -510,6 +514,54 @@ my_g_hash_table_get_keys_as_array (GHashTable *hash,
   g_ptr_array_add (arr, NULL);
 
   return g_ptr_array_free (arr, FALSE);
+}
+#endif
+
+#if !GLIB_CHECK_VERSION(2, 50, 0)
+/*
+ * g_log_writer_is_journald:
+ * @output_fd: output file descriptor to check
+ *
+ * Check whether the given @output_fd file descriptor is a connection to the
+ * systemd journal, or something else (like a log file or `stdout` or
+ * `stderr`).
+ *
+ * Invalid file descriptors are accepted and return %FALSE, which allows for
+ * the following construct without needing any additional error handling:
+ * |[<!-- language="C" -->
+ *   is_journald = g_log_writer_is_journald (fileno (stderr));
+ * ]|
+ *
+ * Returns: %TRUE if @output_fd points to the journal, %FALSE otherwise
+ * Since: 2.50
+ */
+gboolean
+my_g_log_writer_is_journald (gint output_fd)
+{
+  /* This is actually a backport of the internal _g_fd_is_journal() which
+   * is used to implement the public g_log_writer_is_journald(). */
+  union {
+    struct sockaddr_storage storage;
+    struct sockaddr sa;
+    struct sockaddr_un un;
+  } addr;
+  socklen_t addr_len;
+  int err;
+
+  if (output_fd < 0)
+    return FALSE;
+
+  /* Namespaced journals start with `/run/systemd/journal.${name}/` (see
+   * `RuntimeDirectory=systemd/journal.%i` in `systemd-journald@.service`. The
+   * default journal starts with `/run/systemd/journal/`. */
+  memset (&addr, 0, sizeof (addr));
+  addr_len = sizeof(addr);
+  err = getpeername (output_fd, &addr.sa, &addr_len);
+  if (err == 0 && addr.storage.ss_family == AF_UNIX)
+    return (g_str_has_prefix (addr.un.sun_path, "/run/systemd/journal/") ||
+            g_str_has_prefix (addr.un.sun_path, "/run/systemd/journal."));
+
+  return FALSE;
 }
 #endif
 

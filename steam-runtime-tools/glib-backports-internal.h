@@ -107,6 +107,11 @@ gpointer *my_g_hash_table_get_keys_as_array (GHashTable *hash,
                                              guint *len);
 #endif
 
+#if !GLIB_CHECK_VERSION(2, 50, 0)
+#define g_log_writer_is_journald(fd) my_g_log_writer_is_journald (fd)
+gboolean my_g_log_writer_is_journald (gint output_fd);
+#endif
+
 #if !GLIB_CHECK_VERSION(2, 52, 0)
 #define g_utf8_make_valid(s,l) my_g_utf8_make_valid (s, l)
 gchar *my_g_utf8_make_valid (const gchar *str,

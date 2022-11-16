@@ -1063,6 +1063,7 @@ main (int argc,
   g_autofree gchar *tools_dir = NULL;
   g_autoptr(PvRuntime) runtime = NULL;
   glnx_autofd int original_stdout = -1;
+  glnx_autofd int original_stderr = -1;
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
   const char *steam_app_id;
   g_autoptr(GPtrArray) adverb_preload_argv = NULL;
@@ -1077,7 +1078,7 @@ main (int argc,
   /* Set up the initial base logging */
   if (!_srt_util_set_glib_log_handler ("pressure-vessel-wrap",
                                        G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE,
-                                       &original_stdout, NULL, error))
+                                       &original_stdout, &original_stderr, error))
     goto out;
 
   g_info ("pressure-vessel version %s", VERSION);
@@ -1165,7 +1166,7 @@ main (int argc,
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
-  log_flags = SRT_LOG_FLAGS_DIVERT_STDOUT;
+  log_flags = SRT_LOG_FLAGS_DIVERT_STDOUT | SRT_LOG_FLAGS_OPTIONALLY_JOURNAL;
 
   if (opt_deterministic)
     log_flags |= SRT_LOG_FLAGS_DIFFABLE;
@@ -2518,7 +2519,7 @@ main (int argc,
   if (opt_systemd_scope)
     pv_wrap_move_into_scope (steam_app_id);
 
-  pv_bwrap_execve (final_argv, original_stdout, error);
+  pv_bwrap_execve (final_argv, original_stdout, original_stderr, error);
 
 out:
   if (local_error != NULL)

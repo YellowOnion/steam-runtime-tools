@@ -1039,6 +1039,7 @@ main (int argc,
 
   if (!_srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN,
                                        (SRT_LOG_FLAGS_DIVERT_STDOUT |
+                                        SRT_LOG_FLAGS_OPTIONALLY_JOURNAL |
                                         (opt_verbose ? SRT_LOG_FLAGS_DEBUG : 0)),
                                        NULL, NULL, error))
     {

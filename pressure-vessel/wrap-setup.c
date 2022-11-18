@@ -68,27 +68,37 @@ find_system_bwrap (void)
 
 static gboolean
 test_bwrap_executable (const char *bwrap_executable,
+                       PvBwrapFlags test_features,
                        GLogLevelFlags log_level)
 {
-  const char *bwrap_test_argv[] =
-  {
-    NULL,
-    "--bind", "/", "/",
-    "true",
-    NULL
-  };
+  g_autoptr(GPtrArray) argv = g_ptr_array_sized_new (10);
   int wait_status;
   g_autofree gchar *child_stdout = NULL;
   g_autofree gchar *child_stderr = NULL;
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
 
-  bwrap_test_argv[0] = bwrap_executable;
+  g_ptr_array_add (argv, (char *) bwrap_executable);
+
+  if (test_features & PV_BWRAP_FLAGS_HAS_PERMS)
+    {
+      g_ptr_array_add (argv, (char *) "--perms");
+      g_ptr_array_add (argv, (char *) "0700");
+      g_ptr_array_add (argv, (char *) "--dir");
+      g_ptr_array_add (argv, (char *) "/");
+    }
+
+  g_ptr_array_add (argv, (char *) "--bind");
+  g_ptr_array_add (argv, (char *) "/");
+  g_ptr_array_add (argv, (char *) "/");
+
+  g_ptr_array_add (argv, (char *) "true");
+  g_ptr_array_add (argv, NULL);
 
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
    * see flatpak_close_fds_workaround */
   if (!g_spawn_sync (NULL,  /* cwd */
-                     (gchar **) bwrap_test_argv,
+                     (gchar **) argv->pdata,
                      NULL,  /* environ */
                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
                      flatpak_bwrap_child_setup_cb, NULL,
@@ -124,7 +134,8 @@ test_bwrap_executable (const char *bwrap_executable,
 
 static gchar *
 check_bwrap (const char *tools_dir,
-             gboolean only_prepare)
+             gboolean only_prepare,
+             PvBwrapFlags *flags_out)
 {
   g_autofree gchar *local_bwrap = NULL;
   g_autofree gchar *system_bwrap = NULL;
@@ -143,7 +154,9 @@ check_bwrap (const char *tools_dir,
        * try anything else. */
       g_info ("Using bubblewrap from environment: %s", tmp);
 
-      if (!only_prepare && !test_bwrap_executable (tmp, SRT_LOG_LEVEL_FAILURE))
+      if (!only_prepare
+          && !test_bwrap_executable (tmp, PV_BWRAP_FLAGS_NONE,
+                                     SRT_LOG_LEVEL_FAILURE))
         return NULL;
 
       return g_strdup (tmp);
@@ -154,7 +167,9 @@ check_bwrap (const char *tools_dir,
   /* If our local copy works, use it. If not, keep relatively quiet
    * about it for now - we might need to use a setuid system copy, for
    * example on Debian 10, RHEL 7, Arch linux-hardened kernel. */
-  if (only_prepare || test_bwrap_executable (local_bwrap, G_LOG_LEVEL_DEBUG))
+  if (only_prepare
+      || test_bwrap_executable (local_bwrap, PV_BWRAP_FLAGS_NONE,
+                                G_LOG_LEVEL_DEBUG))
     return g_steal_pointer (&local_bwrap);
 
   g_assert (!only_prepare);
@@ -163,14 +178,21 @@ check_bwrap (const char *tools_dir,
   /* Try the system copy: if it exists, then it should work, so print failure
    * messages if it doesn't work. */
   if (system_bwrap != NULL
-      && test_bwrap_executable (system_bwrap, SRT_LOG_LEVEL_FAILURE))
-    return g_steal_pointer (&system_bwrap);
+      && test_bwrap_executable (system_bwrap, PV_BWRAP_FLAGS_NONE,
+                                SRT_LOG_LEVEL_FAILURE))
+    {
+      if (flags_out != NULL)
+        *flags_out |= PV_BWRAP_FLAGS_SYSTEM;
+
+      return g_steal_pointer (&system_bwrap);
+    }
 
   /* If there was no system copy, try the local copy again. We expect
    * this to fail, and are really just doing this to print error messages
    * at the appropriate severity - but if it somehow works, great,
    * I suppose? */
-  if (test_bwrap_executable (local_bwrap, SRT_LOG_LEVEL_FAILURE))
+  if (test_bwrap_executable (local_bwrap, PV_BWRAP_FLAGS_NONE,
+                             SRT_LOG_LEVEL_FAILURE))
     {
       g_warning ("Local bwrap executable didn't work first time but "
                  "worked second time?");
@@ -182,9 +204,11 @@ check_bwrap (const char *tools_dir,
 
 gchar *
 pv_wrap_check_bwrap (const char *tools_dir,
-                     gboolean only_prepare)
+                     gboolean only_prepare,
+                     PvBwrapFlags *flags_out)
 {
-  g_autofree gchar *bwrap = check_bwrap (tools_dir, only_prepare);
+  PvBwrapFlags flags = PV_BWRAP_FLAGS_NONE;
+  g_autofree gchar *bwrap = check_bwrap (tools_dir, only_prepare, &flags);
   const char *argv[] = { NULL, "--version", NULL };
   struct stat statbuf;
 
@@ -204,7 +228,15 @@ pv_wrap_check_bwrap (const char *tools_dir,
     {
       g_info ("Using setuid bubblewrap executable %s (permissions: %o)",
               bwrap, statbuf.st_mode & 07777);
+      flags |= PV_BWRAP_FLAGS_SETUID;
     }
+
+  if (test_bwrap_executable (bwrap, PV_BWRAP_FLAGS_HAS_PERMS,
+                             G_LOG_LEVEL_DEBUG))
+    flags |= PV_BWRAP_FLAGS_HAS_PERMS;
+
+  if (flags_out != NULL)
+    *flags_out = flags;
 
   return g_steal_pointer (&bwrap);
 }

@@ -947,6 +947,7 @@ class Gui:
         self,
         argv                            # type: typing.List[str]
     ):
+        # type: (...) -> None
         parser = argparse.ArgumentParser()
         parser.add_argument(
             '--compatible-with',
@@ -1331,6 +1332,7 @@ class Gui:
 
     @contextlib.contextmanager
     def _pause_changes(self):
+        # type: (...) -> typing.Generator[Gui, None, None]
         try:
             self._changing += 1
             yield self
@@ -1419,6 +1421,7 @@ class Gui:
         self.build_argv()
 
     def refresh_runtimes(self):
+        # type: (...) -> None
         with self._pause_changes():
             selected_container = self.container_runtime_combo.get_active_id()
             self.container_runtime_combo.remove_all()
@@ -1652,6 +1655,7 @@ class Gui:
             self._container_runtime_changed(self.container_runtime_combo)
 
     def _container_runtime_changed(self, combo):
+        # type: (typing.Any) -> None
         with self._pause_changes():
             logger.debug(
                 'Selected container runtime: %s', combo.get_active_id(),
@@ -1659,12 +1663,14 @@ class Gui:
             self._changing_container_runtime = True
 
     def _pressure_vessel_changed(self, combo):
+        # type: (typing.Any) -> None
         with self._pause_changes():
             logger.debug(
                 'Selected pressure-vessel: %s', combo.get_active_id(),
             )
 
     def _layered_runtime_changed(self, combo):
+        # type: (typing.Any) -> None
         with self._pause_changes():
             container = self.container_runtime_combo.get_active_id()
 
@@ -1689,6 +1695,7 @@ class Gui:
                     self.ldlp_runtime_combo.set_sensitive(False)
 
     def _ldlp_runtime_changed(self, combo):
+        # type: (typing.Any) -> None
         with self._pause_changes():
             if combo.get_active_id() == '/':
                 logger.debug('Selected absence of LD_LIBRARY_PATH runtime')
@@ -1705,12 +1712,14 @@ class Gui:
                 )
 
     def _proton_changed(self, combo):
+        # type: (typing.Any) -> None
         with self._pause_changes():
             logger.debug(
                 'Selected Proton: %s', combo.get_active_id(),
             )
 
     def _something_changed_cb(self, sender='Something', *args, **kwargs):
+        # type: (...) -> None
         with self._pause_changes():
             logger.debug('%s changed', sender)
 

@@ -140,6 +140,15 @@ executable(
   install_dir : tests_dir,
 )
 
+executable(
+  'logging-helper',
+  'logging-helper.c',
+  dependencies : [glib, libglnx_dep, libsteamrt_static_dep],
+  include_directories : project_include_dirs,
+  install : get_option('installed_tests'),
+  install_dir : tests_dir,
+)
+
 # A list of strings each of this form:
 # test-name:any one-line shell command, which will include ${G_TEST_BUILDDIR}
 # A typical example:

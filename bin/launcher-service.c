@@ -1431,10 +1431,14 @@ main (int argc,
 
   setlocale (LC_ALL, "");
 
-  g_set_prgname ("steam-runtime-launcher-service");
-
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
+  if (!_srt_util_set_glib_log_handler ("steam-runtime-launcher-service",
+                                       G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE,
+                                       NULL, NULL, error))
+    {
+      server->exit_status = EX_UNAVAILABLE;
+      goto out;
+    }
 
   context = g_option_context_new ("");
   g_option_context_set_summary (context,
@@ -1476,7 +1480,12 @@ main (int argc,
     }
 
   if (opt_verbose)
-    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
+    {
+      if (!_srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN,
+                                           SRT_LOG_FLAGS_DEBUG,
+                                           NULL, NULL, error))
+        goto out;
+    }
 
   if (opt_verbose || opt_hint)
     server->flags |= PV_LAUNCHER_SERVER_FLAGS_HINT;

@@ -25,8 +25,10 @@
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
+#include <dlfcn.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+#include <syslog.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -37,9 +39,17 @@
 #include "steam-runtime-tools/utils-internal.h"
 #include "test-utils.h"
 
+typedef void *AutoLibraryHandle;
+G_DEFINE_AUTO_CLEANUP_FREE_FUNC (AutoLibraryHandle, dlclose, NULL);
+typedef int (*type_of_sd_journal_stream_fd) (const char *, int, int);
+
+static const char *argv0 = NULL;
+
 typedef struct
 {
-  int unused;
+  gchar *srcdir;
+  gchar *builddir;
+  gchar *logging_helper;
 } Fixture;
 
 typedef struct
@@ -52,6 +62,17 @@ setup (Fixture *f,
        gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+
+  f->srcdir = g_strdup (g_getenv ("G_TEST_SRCDIR"));
+  f->builddir = g_strdup (g_getenv ("G_TEST_BUILDDIR"));
+
+  if (f->srcdir == NULL)
+    f->srcdir = g_path_get_dirname (argv0);
+
+  if (f->builddir == NULL)
+    f->builddir = g_path_get_dirname (argv0);
+
+  f->logging_helper = g_build_filename (f->builddir, "logging-helper", NULL);
 }
 
 static void
@@ -59,6 +80,10 @@ teardown (Fixture *f,
           gconstpointer context)
 {
   G_GNUC_UNUSED const Config *config = context;
+
+  g_free (f->srcdir);
+  g_free (f->builddir);
+  g_free (f->logging_helper);
 }
 
 static void
@@ -592,6 +617,263 @@ test_hash_iter (Fixture *f,
     g_test_message ("(key) -> %s", v);
 }
 
+typedef enum
+{
+  LOGGING_TEST_BASIC = 0,
+  LOGGING_TEST_FLAGS,
+  LOGGING_TEST_FLAGS_OLD,
+  LOGGING_TEST_TO_JOURNAL,
+  LOGGING_TEST_TO_JOURNAL_OLD,
+  LOGGING_TEST_NOT_TO_JOURNAL,
+  LOGGING_TEST_DIFFABLE,
+  LOGGING_TEST_DIFFABLE_PID,
+  LOGGING_TEST_NO_AUTO_JOURNAL,
+  LOGGING_TEST_AUTO_JOURNAL,
+  N_LOGGING_TESTS
+} LoggingTest;
+
+typedef struct
+{
+  gboolean close_stdin;
+  gboolean close_stdout;
+  gboolean close_stderr;
+} ChildSetupData;
+
+static void
+child_setup (gpointer user_data)
+{
+  ChildSetupData *data = user_data;
+
+  if (data == NULL)
+    _exit (1);
+
+  if (data->close_stdin)
+    close (STDIN_FILENO);
+
+  if (data->close_stdout)
+    close (STDOUT_FILENO);
+
+  if (data->close_stderr)
+    close (STDERR_FILENO);
+}
+
+static void
+test_logging (Fixture *f,
+              gconstpointer context)
+{
+  int i;
+  g_auto(AutoLibraryHandle) handle = NULL;
+  type_of_sd_journal_stream_fd sym = NULL;
+  glnx_autofd int journal_fd = -1;
+
+  handle = dlopen ("libsystemd.so.0", RTLD_NOW | RTLD_LOCAL | RTLD_NODELETE);
+
+  if (handle != NULL)
+    {
+      sym = (type_of_sd_journal_stream_fd) dlsym (handle, "sd_journal_stream_fd");
+
+      if (sym != NULL)
+        journal_fd = sym ("srt-utils-test", LOG_DEBUG, FALSE);
+    }
+
+  for (i = LOGGING_TEST_BASIC; i < N_LOGGING_TESTS; i++)
+    {
+      g_autoptr(GError) error = NULL;
+      g_auto(GStrv) envp = g_get_environ ();
+      GSpawnFlags spawn_flags = G_SPAWN_DEFAULT;
+      ChildSetupData child_setup_data = {};
+      g_autofree gchar *out = NULL;
+      g_autofree gchar *err = NULL;
+      int wait_status = -1;
+      const char *argv[10] = { NULL };
+      const char *title;
+      int argc = 0;
+
+      envp = g_environ_unsetenv (envp, "SRT_LOG");
+      envp = g_environ_unsetenv (envp, "G_MESSAGES_DEBUG");
+      envp = g_environ_unsetenv (envp, "SRT_LOG_TO_JOURNAL");
+      envp = g_environ_unsetenv (envp, "PRESSURE_VESSEL_LOG_INFO");
+      envp = g_environ_unsetenv (envp, "PRESSURE_VESSEL_LOG_WITH_TIMESTAMP");
+      argv[argc++] = f->logging_helper;
+
+      switch (i)
+        {
+          case LOGGING_TEST_BASIC:
+          default:
+            title = "Basic logging test";
+            break;
+
+          case LOGGING_TEST_FLAGS:
+            envp = g_environ_setenv (envp, "SRT_LOG",
+                                     "debug,info,timestamp,timing,journal",
+                                     TRUE);
+            argv[argc++] = "--divert-stdout";
+            argv[argc++] = "--keep-prgname";
+            child_setup_data.close_stdin = TRUE;
+            title = "Various flags set";
+            break;
+
+          case LOGGING_TEST_FLAGS_OLD:
+            envp = g_environ_setenv (envp, "PRESSURE_VESSEL_LOG_INFO", "1", TRUE);
+            envp = g_environ_setenv (envp, "PRESSURE_VESSEL_LOG_WITH_TIMESTAMP", "1", TRUE);
+            argv[argc++] = "--allow-journal";
+            title = "Old environment variables set";
+            break;
+
+          case LOGGING_TEST_TO_JOURNAL:
+            envp = g_environ_setenv (envp, "SRT_LOG", "journal", TRUE);
+            argv[argc++] = "--allow-journal";
+            argv[argc++] = "--divert-stdout";
+            title = "Diverting to Journal";
+            break;
+
+          case LOGGING_TEST_TO_JOURNAL_OLD:
+            envp = g_environ_setenv (envp, "SRT_LOG_TO_JOURNAL", "1", TRUE);
+            argv[argc++] = "--allow-journal";
+            title = "Diverting to Journal (old environment variable)";
+            break;
+
+          case LOGGING_TEST_NOT_TO_JOURNAL:
+            envp = g_environ_setenv (envp, "SRT_LOG", "journal", TRUE);
+            envp = g_environ_setenv (envp, "SRT_LOG_TO_JOURNAL", "0", TRUE);
+            argv[argc++] = "--allow-journal";
+            title = "Not diverting to Journal because SRT_LOG_TO_JOURNAL=0";
+            break;
+
+          case LOGGING_TEST_DIFFABLE:
+            envp = g_environ_setenv (envp, "SRT_LOG", "diffable", TRUE);
+            title = "Diffable";
+            break;
+
+          case LOGGING_TEST_DIFFABLE_PID:
+            envp = g_environ_setenv (envp, "SRT_LOG", "diffable,pid", TRUE);
+            title = "Diffable overridden by pid";
+            break;
+
+          case LOGGING_TEST_NO_AUTO_JOURNAL:
+            title = "Don't automatically redirect to Journal";
+            child_setup_data.close_stdout = TRUE;
+            spawn_flags |= G_SPAWN_STDERR_TO_DEV_NULL;
+            break;
+
+          case LOGGING_TEST_AUTO_JOURNAL:
+            argv[argc++] = "--allow-journal";
+            title = "Automatically redirect to Journal";
+            child_setup_data.close_stderr = TRUE;
+            spawn_flags |= G_SPAWN_STDOUT_TO_DEV_NULL;
+            break;
+        }
+
+      g_test_message ("Starting test: %s", title);
+      argv[argc++] = title;
+      argv[argc++] = NULL;
+      g_assert_cmpint (argc, <=, G_N_ELEMENTS (argv));
+
+      g_spawn_sync (NULL, (gchar **) argv, envp, spawn_flags,
+                    child_setup, &child_setup_data,
+                    (spawn_flags & G_SPAWN_STDOUT_TO_DEV_NULL) ? NULL : &out,
+                    (spawn_flags & G_SPAWN_STDERR_TO_DEV_NULL) ? NULL : &err,
+                    &wait_status, &error);
+      g_assert_no_error (error);
+
+      if (out != NULL)
+        g_test_message ("stdout: '''%s%s'''", out[0] == '\0' ? "" : "\\\n", out);
+
+      if (err != NULL)
+        g_test_message ("stderr: '''%s%s'''", err[0] == '\0' ? "" : "\\\n", err);
+
+      switch (i)
+        {
+          case LOGGING_TEST_BASIC:
+            g_assert_nonnull (strstr (err, "srt-tests-logging-helper["));
+            g_assert_nonnull (strstr (err, "]: N: Basic logging test"));
+            g_assert_nonnull (strstr (err, "stderr while running"));
+            g_assert_nonnull (strstr (err, "]: N: notice message"));
+            g_assert_nonnull (strstr (err, "original stderr"));
+
+            /* We didn't divert stderr */
+            g_assert_cmpstr (out, ==, "stdout while running\noriginal stdout\n");
+            break;
+
+          case LOGGING_TEST_FLAGS:
+            /* We're using timestamps and didn't reset the g_set_prgname() */
+            g_assert_nonnull (strstr (err, ": logging-helper["));
+            /* We enabled profiling */
+            g_assert_nonnull (strstr (err, "]: N: Enabled profiling"));
+            g_assert_nonnull (strstr (err, "]: N: Various flags set"));
+            /* We enabled debug and info messages */
+            g_assert_nonnull (strstr (err, "]: D: debug message"));
+            g_assert_nonnull (strstr (err, "]: I: info message"));
+            g_assert_nonnull (strstr (err, "]: N: notice message"));
+            /* SRT_LOG=journal didn't take effect because we didn't pass in
+             * the OPTIONALLY_JOURNAL flag */
+
+            /* We diverted stdout away and back */
+            g_assert_nonnull (strstr (err, "stdout while running"));
+            g_assert_cmpstr (out, ==, "original stdout\n");
+            break;
+
+          case LOGGING_TEST_FLAGS_OLD:
+            /* We're using timestamps */
+            g_assert_nonnull (strstr (err, ": srt-tests-logging-helper["));
+            g_assert_nonnull (strstr (err, "]: N: Old environment variables set"));
+            /* We enabled info messages */
+            g_assert_nonnull (strstr (err, "]: I: info message"));
+            g_assert_nonnull (strstr (err, "]: N: notice message"));
+            break;
+
+          case LOGGING_TEST_TO_JOURNAL:
+            /* SRT_LOG=journal sends logging to the Journal if possible.
+             * If the Journal isn't available, it'll fall back to stderr. */
+            if (journal_fd >= 0)
+              g_assert_null (strstr (err, "notice message"));
+
+            /* DIVERT_STDOUT|JOURNAL redirects stdout to the Journal. */
+            if (journal_fd >= 0)
+              g_assert_null (strstr (err, "stdout while running"));
+
+            g_assert_cmpstr (out, ==, "original stdout\n");
+            break;
+
+          case LOGGING_TEST_TO_JOURNAL_OLD:
+            /* SRT_LOG_TO_JOURNAL=1 sends logging to the Journal if possible.
+             * If the Journal isn't available, it'll fall back to stderr. */
+            if (journal_fd >= 0)
+              g_assert_null (strstr (err, "notice message"));
+
+            /* JOURNAL without DIVERT_STDOUT doesn't redirect stdout. */
+            g_assert_cmpstr (out, ==, "stdout while running\noriginal stdout\n");
+            break;
+
+          case LOGGING_TEST_NOT_TO_JOURNAL:
+            /* SRT_LOG_TO_JOURNAL=0 "wins" vs. SRT_LOG=journal */
+            g_assert_nonnull (strstr (err, "notice message"));
+            g_assert_cmpstr (out, ==, "stdout while running\noriginal stdout\n");
+            break;
+
+          case LOGGING_TEST_DIFFABLE:
+            /* SRT_LOG=diffable suppresses process IDs... */
+            g_assert_nonnull (strstr (err, "srt-tests-logging-helper[0]: N: Diffable"));
+            break;
+
+          case LOGGING_TEST_DIFFABLE_PID:
+            /* ... unless you specifically ask for them */
+            g_assert_null (strstr (err, "[0]"));
+            break;
+
+          case LOGGING_TEST_AUTO_JOURNAL:
+          case LOGGING_TEST_NO_AUTO_JOURNAL:
+          default:
+            /* We can't make any useful assertions here because we're not
+             * capturing the output, so these have to be a manual test.
+             * You should see "N: Automatically redirect to Journal"
+             * in the Journal. You should not see
+             * "N: Don't automatically redirect to Journal". */
+            break;
+        }
+    }
+}
+
 static void
 test_recursive_list (Fixture *f,
                      gconstpointer context)
@@ -832,6 +1114,7 @@ int
 main (int argc,
       char **argv)
 {
+  argv0 = argv[0];
   _srt_setenv_disable_gio_modules ();
 
   _srt_tests_init (&argc, &argv, NULL);
@@ -852,6 +1135,8 @@ main (int argc,
               setup, test_gstring_replace, teardown);
   g_test_add ("/utils/hash-iter", Fixture, NULL,
               setup, test_hash_iter, teardown);
+  g_test_add ("/utils/logging", Fixture, NULL,
+              setup, test_logging, teardown);
   g_test_add ("/utils/recursive_list", Fixture, NULL,
               setup, test_recursive_list, teardown);
   g_test_add ("/utils/rlimit", Fixture, NULL,

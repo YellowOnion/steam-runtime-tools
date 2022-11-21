@@ -73,6 +73,7 @@ static GPid child_pid;
 typedef struct
 {
   int original_stdout_fd;
+  int original_stderr_fd;
   int *pass_fds;
 } ChildSetupData;
 
@@ -159,6 +160,11 @@ child_setup_cb (gpointer user_data)
       data->original_stdout_fd > 0 &&
       dup2 (data->original_stdout_fd, STDOUT_FILENO) != STDOUT_FILENO)
     _srt_async_signal_safe_error ("pressure-vessel-adverb: Unable to reinstate original stdout\n", LAUNCH_EX_FAILED);
+
+  if (data != NULL &&
+      data->original_stderr_fd > 0 &&
+      dup2 (data->original_stderr_fd, STDERR_FILENO) != STDERR_FILENO)
+    _srt_async_signal_safe_error ("pressure-vessel-adverb: Unable to reinstate original stderr\n", LAUNCH_EX_FAILED);
 
   /* Make the fds we pass through *not* be close-on-exec */
   if (data != NULL && data->pass_fds)
@@ -959,8 +965,9 @@ main (int argc,
   int ret = EX_USAGE;
   int wait_status = -1;
   g_autofree gchar *locales_temp_dir = NULL;
-  g_autoptr(FILE) original_stdout = NULL;
-  ChildSetupData child_setup_data = { -1, NULL };
+  glnx_autofd int original_stdout = -1;
+  glnx_autofd int original_stderr = -1;
+  ChildSetupData child_setup_data = { -1, -1, NULL };
   sigset_t mask;
   struct sigaction terminate_child_action = {};
   g_autoptr(FlatpakBwrap) wrapped_command = NULL;
@@ -989,10 +996,15 @@ main (int argc,
   locks = g_ptr_array_new_with_free_func ((GDestroyNotify) pv_bwrap_lock_free);
   global_locks = locks;
 
-  g_set_prgname ("pressure-vessel-adverb");
-
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
+  if (!_srt_util_set_glib_log_handler ("pressure-vessel-adverb",
+                                       G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE,
+                                       &original_stdout, &original_stderr,
+                                       error))
+    {
+      ret = EX_UNAVAILABLE;
+      goto out;
+    }
 
   context = g_option_context_new (
       "COMMAND [ARG...]\n"
@@ -1025,12 +1037,11 @@ main (int argc,
       goto out;
     }
 
-  if (opt_verbose)
-    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
-
-  original_stdout = _srt_divert_stdout_to_stderr (error);
-
-  if (original_stdout == NULL)
+  if (!_srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN,
+                                       (SRT_LOG_FLAGS_DIVERT_STDOUT |
+                                        SRT_LOG_FLAGS_OPTIONALLY_JOURNAL |
+                                        (opt_verbose ? SRT_LOG_FLAGS_DEBUG : 0)),
+                                       NULL, NULL, error))
     {
       ret = 1;
       goto out;
@@ -1316,8 +1327,8 @@ main (int argc,
   sigaction (SIGUSR2, &terminate_child_action, NULL);
 
   g_debug ("Launching child process...");
-  fflush (stdout);
-  child_setup_data.original_stdout_fd = fileno (original_stdout);
+  child_setup_data.original_stdout_fd = original_stdout;
+  child_setup_data.original_stderr_fd = original_stderr;
 
   if (global_pass_fds != NULL)
     {
@@ -1353,6 +1364,9 @@ main (int argc,
         }
     }
 
+  fflush (stdout);
+  fflush (stderr);
+
   /* We use LEAVE_DESCRIPTORS_OPEN to work around a deadlock in older GLib,
    * see flatpak_close_fds_workaround */
   if (!g_spawn_async (NULL,   /* working directory */
@@ -1386,7 +1400,8 @@ main (int argc,
   g_free (child_setup_data.pass_fds);
 
   /* If the child writes to stdout and closes it, don't interfere */
-  g_clear_pointer (&original_stdout, fclose);
+  glnx_close_fd (&original_stdout);
+  glnx_close_fd (&original_stderr);
 
   /* Reap child processes until child_pid exits */
   if (!pv_wait_for_child_processes (child_pid, &wait_status, error))

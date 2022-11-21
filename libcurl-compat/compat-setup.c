@@ -184,7 +184,6 @@ run (gboolean runtime_optional,
      char **argv,
      GError **error)
 {
-  g_autoptr(FILE) original_stdout = NULL;
   g_autofree gchar *scout_expectations = NULL;
   g_autofree gchar *upstream_expectations = NULL;
   g_autoptr(SrtSystemInfo) scout_abi = NULL;
@@ -195,11 +194,6 @@ run (gboolean runtime_optional,
   gsize i, j;
 
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-  original_stdout = _srt_divert_stdout_to_stderr (error);
-
-  if (original_stdout == NULL)
-    return FALSE;
 
   if (argc >= 2 && strcmp (argv[1], "--") == 0)
     {
@@ -459,8 +453,13 @@ main (int argc,
   int status = EXIT_SUCCESS;
 
   setlocale (LC_ALL, "");
-  g_set_prgname ("steam-runtime-libcurl-compat-setup");
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
+  if (!_srt_util_set_glib_log_handler ("steam-runtime-libcurl-compat-setup",
+                                       G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE,
+                                       NULL, NULL, &error))
+    {
+      status = EX_UNAVAILABLE;
+      goto out;
+    }
 
   option_context = g_option_context_new ("$STEAM_RUNTIME");
   g_option_context_add_main_entries (option_context, option_entries, NULL);
@@ -480,8 +479,14 @@ main (int argc,
       goto out;
     }
 
-  if (opt_verbose)
-    _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_DEBUG);
+  if (!_srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN,
+                                       (SRT_LOG_FLAGS_DIVERT_STDOUT |
+                                        (opt_verbose ? SRT_LOG_FLAGS_DEBUG : 0)),
+                                       NULL, NULL, &error))
+    {
+      status = EX_UNAVAILABLE;
+      goto out;
+    }
 
   if (!run (opt_runtime_optional, argc, argv, &error))
     {

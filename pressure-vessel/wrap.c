@@ -1062,7 +1062,8 @@ main (int argc,
   const gchar *home;
   g_autofree gchar *tools_dir = NULL;
   g_autoptr(PvRuntime) runtime = NULL;
-  g_autoptr(FILE) original_stdout = NULL;
+  glnx_autofd int original_stdout = -1;
+  glnx_autofd int original_stderr = -1;
   g_autoptr(GArray) pass_fds_through_adverb = g_array_new (FALSE, FALSE, sizeof (int));
   const char *steam_app_id;
   g_autoptr(GPtrArray) adverb_preload_argv = NULL;
@@ -1074,10 +1075,11 @@ main (int argc,
 
   setlocale (LC_ALL, "");
 
-  g_set_prgname ("pressure-vessel-wrap");
-
   /* Set up the initial base logging */
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE);
+  if (!_srt_util_set_glib_log_handler ("pressure-vessel-wrap",
+                                       G_LOG_DOMAIN, SRT_LOG_FLAGS_NONE,
+                                       &original_stdout, &original_stderr, error))
+    goto out;
 
   g_info ("pressure-vessel version %s", VERSION);
 
@@ -1164,7 +1166,7 @@ main (int argc,
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
-  log_flags = SRT_LOG_FLAGS_NONE;
+  log_flags = SRT_LOG_FLAGS_DIVERT_STDOUT | SRT_LOG_FLAGS_OPTIONALLY_JOURNAL;
 
   if (opt_deterministic)
     log_flags |= SRT_LOG_FLAGS_DIFFABLE;
@@ -1172,7 +1174,9 @@ main (int argc,
   if (opt_verbose)
     log_flags |= SRT_LOG_FLAGS_DEBUG;
 
-  _srt_util_set_glib_log_handler (G_LOG_DOMAIN, log_flags);
+  if (!_srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN, log_flags,
+                                       NULL, NULL, error))
+    goto out;
 
   pv_wrap_detect_virtualization (&interpreter_root, &host_machine);
 
@@ -1263,28 +1267,21 @@ main (int argc,
       goto out;
     }
 
-  if (opt_version_only)
+  if (opt_version_only || opt_version)
     {
-      g_print ("%s\n", VERSION);
+      if (original_stdout >= 0
+          && !_srt_util_restore_saved_fd (original_stdout, STDOUT_FILENO, error))
+        goto out;
+
+      if (opt_version_only)
+        g_print ("%s\n", VERSION);
+      else
+        g_print ("%s:\n"
+                 " Package: pressure-vessel\n"
+                 " Version: %s\n",
+                 argv[0], VERSION);
+
       ret = 0;
-      goto out;
-    }
-
-  if (opt_version)
-    {
-      g_print ("%s:\n"
-               " Package: pressure-vessel\n"
-               " Version: %s\n",
-               argv[0], VERSION);
-      ret = 0;
-      goto out;
-    }
-
-  original_stdout = _srt_divert_stdout_to_stderr (error);
-
-  if (original_stdout == NULL)
-    {
-      ret = 1;
       goto out;
     }
 
@@ -2522,7 +2519,7 @@ main (int argc,
   if (opt_systemd_scope)
     pv_wrap_move_into_scope (steam_app_id);
 
-  pv_bwrap_execve (final_argv, fileno (original_stdout), error);
+  pv_bwrap_execve (final_argv, original_stdout, original_stderr, error);
 
 out:
   if (local_error != NULL)

@@ -58,7 +58,6 @@ gboolean _srt_util_set_glib_log_handler (const char *prgname,
                                          int *original_stdout_out,
                                          int *original_stderr_out,
                                          GError **error);
-void _srt_util_set_up_logging (const char *identifier);
 gboolean _srt_util_restore_saved_fd (int saved_fd,
                                      int target_fd,
                                      GError **error);

@@ -1,6 +1,6 @@
 /* flatpak-error.c
  * Adapted from Flatpak
- * Last updated: Flatpak 1.12.7
+ * Last updated: Flatpak 1.14.1
  *
  * Copyright (C) 2015 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.0-or-later
@@ -24,6 +24,12 @@
 
 #ifndef FLATPAK_ERROR_H
 #define FLATPAK_ERROR_H
+
+#if 0
+#if !defined(__FLATPAK_H_INSIDE__) && !defined(FLATPAK_COMPILATION)
+#error "Only <flatpak.h> can be included directly."
+#endif
+#endif
 
 #include <glib.h>
 

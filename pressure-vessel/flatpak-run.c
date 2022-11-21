@@ -1,6 +1,6 @@
-/*
+/* vi:set et sw=2 sts=2 cin cino=t0,f0,(0,{s,>2s,n-s,^-s,e-s:
  * Cut-down version of common/flatpak-run.c from Flatpak
- * Last updated: Flatpak 1.12.7
+ * Last updated: Flatpak 1.14.1
  *
  * Copyright © 2017-2022 Collabora Ltd.
  * Copyright © 2014-2022 Red Hat, Inc
@@ -26,9 +26,6 @@
 
 #include "config.h"
 
-#include "flatpak-run-private.h"
-
-
 #include <string.h>
 #include <ctype.h>
 #include <fcntl.h>
@@ -39,6 +36,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <sys/vfs.h>
+#include <sys/wait.h>
 #include <sys/personality.h>
 #include <grp.h>
 #include <unistd.h>
@@ -72,10 +70,21 @@
 #include <gio/gio.h>
 #include "libglnx.h"
 
+#include "flatpak-run-private.h"
 #include "flatpak-utils-base-private.h"
+#if 0
+#include "flatpak-dir-private.h"
+#include "flatpak-instance-private.h"
+#endif
 #include "flatpak-utils-private.h"
 #include "flatpak-systemd-dbus-generated.h"
+#if 0
+#include "flatpak-document-dbus-generated.h"
+#endif
 #include "flatpak-error.h"
+#if 0
+#include "session-helper/flatpak-session-helper.h"
+#endif
 
 #define DEFAULT_SHELL "/bin/sh"
 
@@ -610,6 +619,46 @@ flatpak_run_add_cups_args (FlatpakBwrap *bwrap)
 
   flatpak_bwrap_add_args (bwrap,
                           "--ro-bind", cups_server_name, sandbox_server_name,
+                          NULL);
+}
+
+static void
+flatpak_run_add_gpg_agent_args (FlatpakBwrap *bwrap)
+{
+  const char * agent_socket;
+  g_autofree char * sandbox_agent_socket = NULL;
+  g_autoptr(GError) gpgconf_error = NULL;
+  g_autoptr(GSubprocess) process = NULL;
+  g_autoptr(GInputStream) base_stream = NULL;
+  g_autoptr(GDataInputStream) data_stream = NULL;
+
+  process = g_subprocess_new (G_SUBPROCESS_FLAGS_STDOUT_PIPE,
+                    &gpgconf_error,
+                    "gpgconf", "--list-dir", "agent-socket", NULL);
+
+  if (gpgconf_error)
+    {
+      g_debug ("GPG-Agent directories: %s", gpgconf_error->message);
+      return;
+    }
+
+  base_stream = g_subprocess_get_stdout_pipe (process);
+  data_stream = g_data_input_stream_new (base_stream);
+
+  agent_socket = g_data_input_stream_read_line (data_stream,
+                                                NULL, NULL,
+                                                &gpgconf_error);
+
+  if (!agent_socket || gpgconf_error)
+    {
+      g_debug ("GPG-Agent directories: %s", gpgconf_error->message);
+      return;
+    }
+
+  sandbox_agent_socket = g_strdup_printf ("/run/user/%d/gnupg/S.gpg-agent", getuid ());
+
+  flatpak_bwrap_add_args (bwrap,
+                          "--ro-bind-try", agent_socket, sandbox_agent_socket,
                           NULL);
 }
 #endif
@@ -1267,6 +1316,7 @@ add_bwrap_wrapper (FlatpakBwrap *bwrap,
 
   /* This is a file rather than a bind mount, because it will then
      not be unmounted from the namespace when the namespace dies. */
+  flatpak_bwrap_add_args (bwrap, "--perms", "0600", NULL);
   flatpak_bwrap_add_args_data_fd (bwrap, "--file", glnx_steal_fd (&app_info_fd), "/.flatpak-info");
 
   if (!flatpak_bwrap_bundle_args (bwrap, 1, -1, FALSE, error))
@@ -1796,6 +1846,11 @@ flatpak_run_add_environment_args (FlatpakBwrap    *bwrap,
       flatpak_run_add_cups_args (bwrap);
     }
 
+  if (context->sockets & FLATPAK_CONTEXT_SOCKET_GPG_AGENT)
+    {
+      flatpak_run_add_gpg_agent_args (bwrap);
+    }
+
   flatpak_run_add_session_dbus_args (bwrap, proxy_arg_bwrap, context, flags, app_id);
   flatpak_run_add_system_dbus_args (bwrap, proxy_arg_bwrap, context, flags);
   flatpak_run_add_a11y_dbus_args (bwrap, proxy_arg_bwrap, context, flags);
@@ -1835,7 +1890,11 @@ static const ExportData default_exports[] = {
   {"XDG_CONFIG_DIRS", "/app/etc/xdg:/etc/xdg"},
   {"XDG_DATA_DIRS", "/app/share:/usr/share"},
   {"SHELL", "/bin/sh"},
-  {"TMPDIR", NULL}, /* Unset TMPDIR as it may not exist in the sandbox */
+  /* Unset temporary file paths as they may not exist in the sandbox */
+  {"TEMP", NULL},
+  {"TEMPDIR", NULL},
+  {"TMP", NULL},
+  {"TMPDIR", NULL},
   /* We always use /run/user/UID, even if the user's XDG_RUNTIME_DIR
    * outside the sandbox is somewhere else. Don't allow a different
    * setting from outside the sandbox to overwrite this. */
@@ -2003,13 +2062,19 @@ flatpak_run_apply_env_appid (FlatpakBwrap *bwrap,
   g_autoptr(GFile) app_dir_data = NULL;
   g_autoptr(GFile) app_dir_config = NULL;
   g_autoptr(GFile) app_dir_cache = NULL;
+  g_autoptr(GFile) app_dir_state = NULL;
 
   app_dir_data = g_file_get_child (app_dir, "data");
   app_dir_config = g_file_get_child (app_dir, "config");
   app_dir_cache = g_file_get_child (app_dir, "cache");
+  /* Yes, this is inconsistent with data, config and cache. However, using
+   * this path lets apps provide backwards-compatibility with older Flatpak
+   * versions by using `--persist=.local/state --unset-env=XDG_STATE_DIR`. */
+  app_dir_state = g_file_get_child (app_dir, ".local/state");
   flatpak_bwrap_set_env (bwrap, "XDG_DATA_HOME", flatpak_file_get_path_cached (app_dir_data), TRUE);
   flatpak_bwrap_set_env (bwrap, "XDG_CONFIG_HOME", flatpak_file_get_path_cached (app_dir_config), TRUE);
   flatpak_bwrap_set_env (bwrap, "XDG_CACHE_HOME", flatpak_file_get_path_cached (app_dir_cache), TRUE);
+  flatpak_bwrap_set_env (bwrap, "XDG_STATE_HOME", flatpak_file_get_path_cached (app_dir_state), TRUE);
 
   if (g_getenv ("XDG_DATA_HOME"))
     flatpak_bwrap_set_env (bwrap, "HOST_XDG_DATA_HOME", g_getenv ("XDG_DATA_HOME"), TRUE);
@@ -2017,6 +2082,8 @@ flatpak_run_apply_env_appid (FlatpakBwrap *bwrap,
     flatpak_bwrap_set_env (bwrap, "HOST_XDG_CONFIG_HOME", g_getenv ("XDG_CONFIG_HOME"), TRUE);
   if (g_getenv ("XDG_CACHE_HOME"))
     flatpak_bwrap_set_env (bwrap, "HOST_XDG_CACHE_HOME", g_getenv ("XDG_CACHE_HOME"), TRUE);
+  if (g_getenv ("XDG_STATE_HOME"))
+    flatpak_bwrap_set_env (bwrap, "HOST_XDG_STATE_HOME", g_getenv ("XDG_STATE_HOME"), TRUE);
 }
 
 void
@@ -2228,7 +2295,7 @@ flatpak_run_add_font_path_args (FlatpakBwrap *bwrap)
 
   g_string_append (xml_snippet,
                    "<?xml version=\"1.0\"?>\n"
-                   "<!DOCTYPE fontconfig SYSTEM \"fonts.dtd\">\n"
+                   "<!DOCTYPE fontconfig SYSTEM \"urn:fontconfig:fonts.dtd\">\n"
                    "<fontconfig>\n");
 
   if (g_file_test (SYSTEM_FONTS_DIR, G_FILE_TEST_EXISTS))
@@ -2793,6 +2860,7 @@ flatpak_run_add_app_info_args (FlatpakBwrap       *bwrap,
       return FALSE;
     }
 
+  flatpak_bwrap_add_args (bwrap, "--perms", "0600", NULL);
   flatpak_bwrap_add_args_data_fd (bwrap,
                                   "--file", fd, "/.flatpak-info");
   flatpak_bwrap_add_args_data_fd (bwrap,
@@ -3466,7 +3534,7 @@ flatpak_run_setup_base_argv (FlatpakBwrap   *bwrap,
                           "--dir", "/tmp",
                           "--dir", "/var/tmp",
                           "--dir", "/run/host",
-                          "--dir", run_dir,
+                          "--perms", "0700", "--dir", run_dir,
                           "--setenv", "XDG_RUNTIME_DIR", run_dir,
                           "--symlink", "../run", "/var/run",
                           "--ro-bind", "/sys/block", "/sys/block",
@@ -3661,7 +3729,7 @@ add_rest_args (FlatpakBwrap   *bwrap,
                int             n_args,
                GError        **error)
 {
-  g_autoptr(XdpDbusDocuments) documents = NULL;
+  g_autoptr(AutoXdpDbusDocuments) documents = NULL;
   gboolean forwarding = FALSE;
   gboolean forwarding_uri = FALSE;
   gboolean can_forward = TRUE;
@@ -4046,27 +4114,6 @@ open_namespace_fd_if_needed (const char *path,
 
 #if 0
 
-static gboolean
-check_sudo (GError **error)
-{
-  const char *sudo_command_env = g_getenv ("SUDO_COMMAND");
-  g_auto(GStrv) split_command = NULL;
-
-  /* This check exists to stop accidental usage of `sudo flatpak run`
-     and is not to prevent running as root.
-   */
-
-  if (!sudo_command_env)
-    return TRUE;
-
-  /* SUDO_COMMAND could be a value like `/usr/bin/flatpak run foo` */
-  split_command = g_strsplit (sudo_command_env, " ", 2);
-  if (g_str_has_suffix (split_command[0], "flatpak"))
-    return flatpak_fail_error (error, FLATPAK_ERROR, _("\"flatpak run\" is not intended to be run as `sudo flatpak run`, use `sudo -i` or `su -l` instead and invoke \"flatpak run\" from inside the new shell"));
-
-  return TRUE;
-}
-
 gboolean
 flatpak_run_app (FlatpakDecomposed *app_ref,
                  FlatpakDeploy     *app_deploy,
@@ -4138,8 +4185,14 @@ flatpak_run_app (FlatpakDecomposed *app_ref,
 
   g_return_val_if_fail (app_ref != NULL, FALSE);
 
-  if (!check_sudo (error))
-    return FALSE;
+  /* This check exists to stop accidental usage of `sudo flatpak run`
+     and is not to prevent running as root.
+   */
+  if (running_under_sudo ())
+    return flatpak_fail_error (error, FLATPAK_ERROR,
+                               _("\"flatpak run\" is not intended to be run as `sudo flatpak run`. "
+                                 "Use `sudo -i` or `su -l` instead and invoke \"flatpak run\" from "
+                                 "inside the new shell."));
 
   app_id = flatpak_decomposed_dup_id (app_ref);
   g_return_val_if_fail (app_id != NULL, FALSE);
@@ -4673,7 +4726,8 @@ flatpak_run_app (FlatpakDecomposed *app_ref,
   commandline = flatpak_quote_argv ((const char **) bwrap->argv->pdata, -1);
   g_debug ("Running '%s'", commandline);
 
-  if ((flags & FLATPAK_RUN_FLAG_BACKGROUND) != 0)
+  if ((flags & (FLATPAK_RUN_FLAG_BACKGROUND)) != 0 ||
+      g_getenv ("FLATPAK_TEST_COVERAGE") != NULL)
     {
       GPid child_pid;
       char pid_str[64];
@@ -4681,7 +4735,8 @@ flatpak_run_app (FlatpakDecomposed *app_ref,
       GSpawnFlags spawn_flags;
 
       spawn_flags = G_SPAWN_SEARCH_PATH;
-      if (flags & FLATPAK_RUN_FLAG_DO_NOT_REAP)
+      if (flags & FLATPAK_RUN_FLAG_DO_NOT_REAP ||
+          (flags & FLATPAK_RUN_FLAG_BACKGROUND) == 0)
         spawn_flags |= G_SPAWN_DO_NOT_REAP_CHILD;
 
       /* We use LEAVE_DESCRIPTORS_OPEN to work around dead-lock, see flatpak_close_fds_workaround */
@@ -4705,6 +4760,22 @@ flatpak_run_app (FlatpakDecomposed *app_ref,
       g_snprintf (pid_str, sizeof (pid_str), "%d", child_pid);
       pid_path = g_build_filename (instance_id_host_dir, "pid", NULL);
       g_file_set_contents (pid_path, pid_str, -1, NULL);
+
+      if ((flags & (FLATPAK_RUN_FLAG_BACKGROUND)) == 0)
+        {
+          int wait_status;
+
+          if (waitpid (child_pid, &wait_status, 0) != child_pid)
+            return glnx_throw_errno_prefix (error, "Failed to wait for child process");
+
+          if (WIFEXITED (wait_status))
+            exit (WEXITSTATUS (wait_status));
+
+          if (WIFSIGNALED (wait_status))
+            exit (128 + WTERMSIG (wait_status));
+
+          return glnx_throw (error, "Unknown wait status from waitpid(): %d", wait_status);
+        }
     }
   else
     {

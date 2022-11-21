@@ -1,6 +1,6 @@
 /*
  * Taken from Flatpak
- * Last updated: Flatpak 1.12.7
+ * Last updated: Flatpak 1.14.1
  *
  * Copyright © 2018 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later

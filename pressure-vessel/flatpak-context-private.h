@@ -1,7 +1,5 @@
 /*
- * Last updated: Flatpak 1.12.7
- * Modified to inline FlatpakPolicy instead of using the
- * header file from xdg-dbus-proxy.
+ * Last updated: Flatpak 1.14.1
  *
  * Copyright © 2014-2018 Red Hat, Inc
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -27,6 +25,8 @@
 #define __FLATPAK_CONTEXT_H__
 
 #include "libglnx.h"
+#include <flatpak-common-types-private.h>
+#include "flatpak-exports-private.h"
 
 typedef enum {
   FLATPAK_POLICY_NONE,
@@ -34,9 +34,6 @@ typedef enum {
   FLATPAK_POLICY_TALK,
   FLATPAK_POLICY_OWN
 } FlatpakPolicy;
-
-#include <flatpak-common-types-private.h>
-#include "flatpak-exports-private.h"
 
 typedef struct FlatpakContext FlatpakContext;
 
@@ -55,6 +52,7 @@ typedef enum {
   FLATPAK_CONTEXT_SOCKET_SSH_AUTH    = 1 << 6,
   FLATPAK_CONTEXT_SOCKET_PCSC        = 1 << 7,
   FLATPAK_CONTEXT_SOCKET_CUPS        = 1 << 8,
+  FLATPAK_CONTEXT_SOCKET_GPG_AGENT   = 1 << 9,
 } FlatpakContextSockets;
 
 typedef enum {

@@ -1,6 +1,6 @@
 /*
  * Taken from Flatpak
- * Last updated: Flatpak 1.12.7
+ * Last updated: Flatpak 1.14.1
  *
  * Copyright © 2021 Collabora Ltd.
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -29,5 +29,11 @@
 
 #define FLATPAK_SESSION_HELPER_PATH_DEVELOPMENT "/org/freedesktop/Flatpak/Development"
 #define FLATPAK_SESSION_HELPER_INTERFACE_DEVELOPMENT "org.freedesktop.Flatpak.Development"
+
+typedef enum {
+  FLATPAK_HOST_COMMAND_FLAGS_CLEAR_ENV = 1 << 0,
+  FLATPAK_HOST_COMMAND_FLAGS_WATCH_BUS = 1 << 1,
+  FLATPAK_HOST_COMMAND_FLAGS_NONE = 0
+} FlatpakHostCommandFlags;
 
 #endif

@@ -230,6 +230,7 @@ append_adjusted_exports (FlatpakBwrap *to,
                          FlatpakBwrap *from,
                          const char *home,
                          const char *interpreter_root,
+                         PvBwrapFlags bwrap_flags,
                          GError **error)
 {
   g_autofree int *fds = NULL;
@@ -289,7 +290,6 @@ append_adjusted_exports (FlatpakBwrap *to,
       else if (g_str_equal (opt, "--dev") ||
                g_str_equal (opt, "--dir") ||
                g_str_equal (opt, "--mqueue") ||
-               g_str_equal (opt, "--perms") ||
                g_str_equal (opt, "--proc") ||
                g_str_equal (opt, "--remount-ro") ||
                g_str_equal (opt, "--tmpfs"))
@@ -365,6 +365,27 @@ append_adjusted_exports (FlatpakBwrap *to,
             }
 
           i += 3;
+        }
+      else if (g_str_equal (opt, "--perms"))
+        {
+          g_assert (i + 2 <= from->argv->len);
+          const char *perms = from->argv->pdata[i + 1];
+          /* pdata[i + 1] is a non-path: unchanged. */
+          g_debug ("%s %s",
+                   opt,
+                   (const char *) from->argv->pdata[i + 1]);
+
+          /* A system copy of bubblewrap older than 0.5.0
+           * (Debian 11 or older) won't support --perms. Fall back to
+           * creating mount-points with the default permissions if
+           * necessary. */
+          if (bwrap_flags & PV_BWRAP_FLAGS_HAS_PERMS)
+            flatpak_bwrap_add_args (to, opt, perms, NULL);
+          else
+            g_debug ("Ignoring \"--perms %s\" because bwrap is too old",
+                     perms);
+
+          i += 2;
         }
       else
         {
@@ -1054,6 +1075,7 @@ main (int argc,
   g_autoptr(FlatpakBwrap) final_argv = NULL;
   g_autoptr(FlatpakExports) exports = NULL;
   g_autofree gchar *bwrap_executable = NULL;
+  PvBwrapFlags bwrap_flags = PV_BWRAP_FLAGS_NONE;
   g_autofree gchar *cwd_p = NULL;
   g_autofree gchar *cwd_l = NULL;
   g_autofree gchar *cwd_p_host = NULL;
@@ -1508,7 +1530,8 @@ main (int argc,
       g_debug ("Checking for bwrap...");
 
       /* if this fails, it will warn */
-      bwrap_executable = pv_wrap_check_bwrap (tools_dir, opt_only_prepare);
+      bwrap_executable = pv_wrap_check_bwrap (tools_dir, opt_only_prepare,
+                                              &bwrap_flags);
 
       if (bwrap_executable == NULL)
         goto out;
@@ -2103,7 +2126,8 @@ main (int argc,
 
       flatpak_exports_append_bwrap_args (exports, exports_bwrap);
       g_warn_if_fail (g_strv_length (exports_bwrap->envp) == 0);
-      if (!append_adjusted_exports (bwrap, exports_bwrap, home, interpreter_root, error))
+      if (!append_adjusted_exports (bwrap, exports_bwrap, home,
+                                   interpreter_root, bwrap_flags, error))
         goto out;
 
       /* The other filesystem arguments have to come after the exports
@@ -2124,7 +2148,8 @@ main (int argc,
                                              is_flatpak_env);
       g_warn_if_fail (g_strv_length (sharing_bwrap->envp) == 0);
 
-      if (!append_adjusted_exports (bwrap, sharing_bwrap, home, interpreter_root, error))
+      if (!append_adjusted_exports (bwrap, sharing_bwrap, home,
+                                    interpreter_root, bwrap_flags, error))
         goto out;
     }
   else if (flatpak_subsandbox != NULL)

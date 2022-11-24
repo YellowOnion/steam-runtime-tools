@@ -1,3 +1,32 @@
+steam-runtime-tools (0.20221124.0) UNRELEASED; urgency=medium
+
+  * pressure-vessel: Update Flatpak-derived code to 1.14.1
+    * Don't bind-mount /efi into containers, same as /boot
+    * Slightly better debug info for failures
+    * Use a better XML DOCTYPE for fonts.conf
+    - The remaining changes are in code that doesn't get compiled into
+      pressure-vessel.
+  * pressure-vessel: Update included copy of bubblewrap to 0.7.0
+    - Improve error messages
+    - The remaining changes are not relevant to pressure-vessel.
+  * pressure-vessel: Make sure we don't use bwrap --perms option if we are
+    using a system copy of bwrap that doesn't support it
+  * s-r-launch-client: Make --version, --list output to standard output
+    as intended, not standard error
+  * library: Improve logging/debugging support
+    - Ensure the three standard file descriptors always point somewhere,
+      even if that's /dev/null
+    - Send warnings and error messages to the systemd journal (on systems
+      where it exists) if they would otherwise go to /dev/null
+    - If output is going to the systemd journal, create our own stream so
+      that it is labelled correctly
+    - pv-wrap: optionally redirect warnings and errors to the Journal
+      (output from the actual game is not redirected)
+    - pv-adverb: optionally redirect warnings and errors to the Journal
+      (output from the actual game is not redirected)
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 24 Nov 2022 18:50:57 +0000
+
 steam-runtime-tools (0.20221115.1) steamrt; urgency=medium
 
   * tests: Don't assume /dev/shm is a real directory.

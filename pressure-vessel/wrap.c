@@ -398,6 +398,19 @@ append_adjusted_exports (FlatpakBwrap *to,
 
 typedef enum
 {
+  PV_WRAP_LOG_FLAGS_OVERRIDES = (1 << 0),
+  PV_WRAP_LOG_FLAGS_CONTAINER = (1 << 1),
+  PV_WRAP_LOG_FLAGS_NONE = 0
+} PvWrapLogFlags;
+
+static const GDebugKey pv_debug_keys[] =
+{
+  { "overrides", PV_WRAP_LOG_FLAGS_OVERRIDES },
+  { "container", PV_WRAP_LOG_FLAGS_CONTAINER },
+};
+
+typedef enum
+{
   TRISTATE_NO = 0,
   TRISTATE_YES,
   TRISTATE_MAYBE
@@ -1094,6 +1107,7 @@ main (int argc,
   glnx_autofd int root_fd = -1;
   SrtMachineType host_machine = SRT_MACHINE_TYPE_UNKNOWN;
   SrtLogFlags log_flags;
+  PvWrapLogFlags pv_log_flags = PV_WRAP_LOG_FLAGS_NONE;
 
   setlocale (LC_ALL, "");
 
@@ -1194,7 +1208,15 @@ main (int argc,
     log_flags |= SRT_LOG_FLAGS_DIFFABLE;
 
   if (opt_verbose)
-    log_flags |= SRT_LOG_FLAGS_DEBUG;
+    {
+      log_flags |= SRT_LOG_FLAGS_DEBUG;
+
+      /* We share the same environment variable as the rest of s-r-t, but look
+       * for additional flags in it */
+      pv_log_flags = g_parse_debug_string (g_getenv ("SRT_LOG"),
+                                           pv_debug_keys,
+                                           G_N_ELEMENTS (pv_debug_keys));
+    }
 
   if (!_srt_util_set_glib_log_handler (NULL, G_LOG_DOMAIN, log_flags,
                                        NULL, NULL, error))
@@ -2480,6 +2502,12 @@ main (int argc,
 
   if (opt_verbose)
     {
+      if (runtime != NULL && (pv_log_flags & PV_WRAP_LOG_FLAGS_OVERRIDES))
+        pv_runtime_log_overrides (runtime);
+
+      if (runtime != NULL && (pv_log_flags & PV_WRAP_LOG_FLAGS_CONTAINER))
+        pv_runtime_log_container (runtime);
+
       g_debug ("Final command to execute:");
 
       for (i = 0; i < final_argv->argv->len; i++)

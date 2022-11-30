@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20221130.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20221130.0) steamrt; urgency=medium
 
   * pressure-vessel: Update Flatpak-derived code to 1.14.1
     * Don't bind-mount /efi into containers, same as /boot
@@ -31,7 +31,7 @@ steam-runtime-tools (0.20221130.0) UNRELEASED; urgency=medium
       container's root filesystem (as modified from the runtime) for
       comparison and debugging
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 24 Nov 2022 18:50:57 +0000
+ -- Simon McVittie <smcv@collabora.com>  Wed, 30 Nov 2022 15:57:57 +0000
 
 steam-runtime-tools (0.20221115.1) steamrt; urgency=medium
 

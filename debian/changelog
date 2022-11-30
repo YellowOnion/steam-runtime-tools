@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20221124.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20221130.0) UNRELEASED; urgency=medium
 
   * pressure-vessel: Update Flatpak-derived code to 1.14.1
     * Don't bind-mount /efi into containers, same as /boot
@@ -20,10 +20,16 @@ steam-runtime-tools (0.20221124.0) UNRELEASED; urgency=medium
       where it exists) if they would otherwise go to /dev/null
     - If output is going to the systemd journal, create our own stream so
       that it is labelled correctly
-    - pv-wrap: optionally redirect warnings and errors to the Journal
-      (output from the actual game is not redirected)
-    - pv-adverb: optionally redirect warnings and errors to the Journal
-      (output from the actual game is not redirected)
+    - pv-wrap: Log more details about the changes made to the runtime to
+      create the container's root filesystem
+    - pv-wrap, pv-adverb: with SRT_LOG=journal, redirect warnings and
+      errors to the systemd journal (output from the actual game is not
+      redirected)
+    - pv-wrap: With SRT_LOG=overrides, log the full contents of /overrides
+      for comparison and debugging
+    - pv-wrap: With SRT_LOG=container, log the full contents of the
+      container's root filesystem (as modified from the runtime) for
+      comparison and debugging
 
  -- Simon McVittie <smcv@collabora.com>  Thu, 24 Nov 2022 18:50:57 +0000
 

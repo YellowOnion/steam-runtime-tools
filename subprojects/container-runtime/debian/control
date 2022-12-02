@@ -1,0 +1,13 @@
+Source: steam-container-runtime
+Section: misc
+Priority: extra
+Maintainer: SteamOS Maintainers <steamos@valvesoftware.com>
+Standards-Version: 4.3.0
+Vcs-Git: https://gitlab.steamos.cloud/steamrt/steamlinuxruntime.git
+Vcs-Browser: https://gitlab.steamos.cloud/steamrt/steamlinuxruntime
+
+Package: steam-container-runtime
+Architecture: all
+Description: Not a real package
+ This package description is only here as a way to run tests using
+ Debian's autopkgtest tool. Don't build it.

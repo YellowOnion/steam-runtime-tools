@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Copyright 2021 Collabora Ltd.
+# SPDX-License-Identifier: MIT
+
+set -eu
+set -o pipefail
+
+echo "*** Steam restart required for this Steam Linux Runtime update" >&2
+
+"${STEAM_ZENITY:-zenity}" \
+--error \
+--title="Steam restart required" \
+--width=400 \
+--text="\
+This version of the Steam Linux Runtime requires a configuration update.
+
+Please exit from Steam completely, then launch Steam again.\
+"
+
+exit 1
+
+# vim:set sw=4 sts=4 et:

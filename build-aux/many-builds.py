@@ -110,7 +110,8 @@ class Environment:
             self.docker = []
 
         self.populate_depot = (
-            self.abs_srcdir / 'pressure-vessel' / 'populate-depot.py'
+            self.abs_srcdir / 'subprojects' / 'container-runtime'
+            / 'populate-depot.py'
         )
 
         self.cache = self.abs_builddir_parent / 'cache'

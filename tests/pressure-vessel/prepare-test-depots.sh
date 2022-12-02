@@ -32,7 +32,7 @@ for suite in $suites; do
             ;;
     esac
 
-    time python3 ./pressure-vessel/populate-depot.py \
+    time python3 ./subprojects/container-runtime/populate-depot.py \
         --depot="$builddir/depots/$suite" \
         --include-archives \
         --no-versioned-directories \

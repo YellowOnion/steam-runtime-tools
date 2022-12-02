@@ -151,8 +151,8 @@ several things have to be pulled together:
 
 * We need at least one Steam Linux Runtime container to use for testing,
     but for full test coverage, we need several containers. These can be
-    downloaded by using `pressure-vessel/populate-depot.py`, which is
-    a copy of the same script that is used to build official
+    downloaded by using `subprojects/container-runtime/populate-depot.py`,
+    which is a copy of the same script that is used to build official
     Steam Linux Runtime releases. `build-aux/many-builds.py setup`
     automates this, placing a suitable set of containers in
     `_build/containers` by default.

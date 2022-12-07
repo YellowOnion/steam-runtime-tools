@@ -203,34 +203,6 @@ executable(
   install_dir : pv_bindir,
 )
 
-if get_option('srcdir') != ''
-  conf_data = configuration_data()
-  conf_data.set('prefix', get_option('prefix'))
-  conf_data.set('pv_dir', pv_dir)
-  conf_data.set('python', python.full_path())
-  conf_data.set('sh', sh.full_path())
-  conf_data.set('srcdir', get_option('srcdir'))
-  conf_data.set('version', version)
-  install_data(
-    configure_file(
-      input : 'build-relocatable-install.in',
-      output : 'pressure-vessel-build-relocatable-install',
-      configuration : conf_data,
-    ),
-    install_dir : pv_bindir,
-    install_mode : 'rwxr-xr-x',
-  )
-  meson.add_install_script(
-    python.full_path(),
-    meson.current_source_dir() / 'copy-source-code.py',
-    '--srcdir', meson.project_source_root(),
-    '--prefix', get_option('prefix'),
-    '--pressure-vessel-dir', pv_dir,
-    '--set-version', version,
-    get_option('srcdir'),
-  )
-endif
-
 if build_man_pages
   foreach tool : [
     'adverb',

@@ -254,7 +254,7 @@ relocatable-install:i386:
 
             rm -fr _build/i386/relocatable-install
             mkdir -p _build/i386
-            /usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+            python3.5 pressure-vessel/build-relocatable-install.py \
               --cache _build/cache \
               --output _build/i386/relocatable-install \
               --archive "$(pwd)/_build/i386" \
@@ -305,7 +305,7 @@ relocatable-install:production:
 
             rm -fr _build/production/relocatable-install
             mkdir -p _build/production
-            /usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+            python3.5 pressure-vessel/build-relocatable-install.py \
               --cache _build/cache \
               --output _build/production/relocatable-install \
               --archive "$(pwd)/_build/production" \

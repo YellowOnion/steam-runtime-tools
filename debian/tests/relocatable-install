@@ -13,16 +13,16 @@ apt-get -y install \
     steam-runtime-tools-bin \
     ${NULL+}
 
-/usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
-    ${CI_ALLOW_MISSING_SOURCES:+--allow-missing-sources} \
-    --output "${AUTOPKGTEST_TMP}/relocatable-install" \
-    --archive "${AUTOPKGTEST_ARTIFACTS}"
-
 if command -v python3.5; then
    PYTHON=python3.5
 else
    PYTHON=python3
 fi
+
+"$PYTHON" pressure-vessel/build-relocatable-install.py \
+    --allow-missing-sources \
+    --output "${AUTOPKGTEST_TMP}/relocatable-install" \
+    --archive "${AUTOPKGTEST_ARTIFACTS}"
 
 "$PYTHON" ./tests/pressure-vessel/relocatable-install.py \
     "${AUTOPKGTEST_TMP}/relocatable-install"

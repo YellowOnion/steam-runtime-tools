@@ -155,15 +155,13 @@ def install(args):
         if e.errno != errno.ENOENT:
             raise
 
-    script = os.path.join(
-        destdir, 'usr', 'lib', 'pressure-vessel', 'relocatable', 'bin',
-        'pressure-vessel-build-relocatable-install',
-    )
-
     subprocess.check_call([
         'env',
         'DESTDIR=' + destdir,
-        script,
+        'python3.5',
+        os.path.join(
+            args.abs_srcdir, 'pressure-vessel', 'build-relocatable-install.py',
+        ),
         '--archive', args.abs_builddir_parent,
         '--no-archive-versions',
         '--allow-missing-sources',

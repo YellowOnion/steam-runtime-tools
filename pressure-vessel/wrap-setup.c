@@ -1,6 +1,9 @@
 /*
  * Copyright © 2014-2019 Red Hat, Inc
  * Copyright © 2017-2021 Collabora Ltd.
+ * Copyright © 2017 Jonas Ådahl
+ * Copyright © 2018 Erick555
+ * Copyright © 2022 Julian Orth
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
@@ -241,6 +244,39 @@ pv_wrap_check_bwrap (const char *tools_dir,
   return g_steal_pointer (&bwrap);
 }
 
+/* Based on Flatpak's flatpak_run_add_wayland_args() */
+static void
+pv_wrap_add_gamescope_args (FlatpakBwrap *sharing_bwrap,
+                            PvEnviron *container_env)
+{
+  const char *wayland_display;
+  g_autofree char *user_runtime_dir = flatpak_get_real_xdg_runtime_dir ();
+  g_autofree char *wayland_socket = NULL;
+  const char *sandbox_wayland_socket = NULL;
+  struct stat statbuf;
+
+  wayland_display = g_getenv ("GAMESCOPE_WAYLAND_DISPLAY");
+
+  if (wayland_display == NULL)
+    return;
+
+  if (wayland_display[0] == '/')
+    wayland_socket = g_strdup (wayland_display);
+  else
+    wayland_socket = g_build_filename (user_runtime_dir, wayland_display, NULL);
+
+  if (stat (wayland_socket, &statbuf) == 0 &&
+      (statbuf.st_mode & S_IFMT) == S_IFSOCK)
+    {
+      sandbox_wayland_socket = "/run/pressure-vessel/gamescope-socket";
+      pv_environ_setenv (container_env, "GAMESCOPE_WAYLAND_DISPLAY",
+                         sandbox_wayland_socket);
+      flatpak_bwrap_add_args (sharing_bwrap,
+                              "--ro-bind", wayland_socket, sandbox_wayland_socket,
+                              NULL);
+    }
+}
+
 /*
  * Use code borrowed from Flatpak to share various bits of the
  * execution environment with the host system, in particular Wayland,
@@ -278,6 +314,7 @@ pv_wrap_share_sockets (PvEnviron *container_env,
   if (using_a_runtime)
     {
       flatpak_run_add_wayland_args (sharing_bwrap);
+      pv_wrap_add_gamescope_args (sharing_bwrap, container_env);
 
       /* When in a Flatpak container the "DISPLAY" env is equal to ":99.0",
        * but it might be different on the host system. As a workaround we simply

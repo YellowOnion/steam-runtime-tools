@@ -4,6 +4,8 @@
 
 set -eux
 
+# Intentionally word-splitting build-dependencies:
+# shellcheck disable=SC2086
 apt-get install -y --no-install-recommends \
 apt-utils \
 build-essential \
@@ -24,12 +26,13 @@ dbus-uuidgen --ensure || :
 
 tempdir="$(mktemp -d)"
 
+# shellcheck source=/dev/null
 case "$(. /usr/lib/os-release; echo "${VERSION_CODENAME-${VERSION}}")" in
     (scout)
-        git clone --branch steam/for-ci https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/autopkgtest.git "$tempdir/autopkgtest"
-        git clone --branch debian/buster https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/chardet.git "$tempdir/chardet"
-        git clone --branch debian/buster https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-debian.git "$tempdir/python-debian"
-        git clone --branch debian/buster https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/six.git "$tempdir/six"
+        git clone --branch steam/for-ci "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/autopkgtest.git" "$tempdir/autopkgtest"
+        git clone --branch debian/buster "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/chardet.git" "$tempdir/chardet"
+        git clone --branch debian/buster "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-debian.git" "$tempdir/python-debian"
+        git clone --branch debian/buster "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/six.git" "$tempdir/six"
 
         export PYTHONPATH="$tempdir/chardet:$tempdir/python-debian/lib:$tempdir/six"
         set -- python3.5 "$tempdir/autopkgtest/runner/autopkgtest"
@@ -37,7 +40,7 @@ case "$(. /usr/lib/os-release; echo "${VERSION_CODENAME-${VERSION}}")" in
 
     (heavy)
         apt-get install -y python3-debian
-        git clone --branch steam/for-ci https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/autopkgtest.git "$tempdir/autopkgtest"
+        git clone --branch steam/for-ci "https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/autopkgtest.git" "$tempdir/autopkgtest"
         set -- python3 "$tempdir/autopkgtest/runner/autopkgtest"
         ;;
 

@@ -12,6 +12,7 @@ apt-get install -y --no-install-recommends \
     rsync \
     "$@"
 
+# shellcheck source=/dev/null
 case "$(. /usr/lib/os-release; echo "${VERSION_CODENAME-${VERSION}}")" in
     (scout)
         apt-get -y install pkg-create-dbgsym

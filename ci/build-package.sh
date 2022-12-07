@@ -17,6 +17,7 @@ apt-get install -y --no-install-recommends \
 apt-get install -y --no-install-recommends eatmydata || :
 dbus-uuidgen --ensure || :
 
+# shellcheck source=/dev/null
 case "$(. /usr/lib/os-release; echo "${VERSION_CODENAME-${VERSION}}")" in
     (scout)
         apt-get -y install pkg-create-dbgsym

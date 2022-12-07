@@ -10,6 +10,7 @@ chmod +x /usr/sbin/policy-rc.d
 echo "Acquire::Languages \"none\";" > /etc/apt/apt.conf.d/90nolanguages
 echo 'force-unsafe-io' > /etc/dpkg/dpkg.cfg.d/autopkgtest
 
+# shellcheck source=/dev/null
 case "$(. /usr/lib/os-release; echo "${VERSION_CODENAME-${VERSION}}")" in
     (heavy)
         if [ -n "${HEAVY_APT_SOURCES_FILE-}" ]; then

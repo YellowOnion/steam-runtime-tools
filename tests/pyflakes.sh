@@ -50,6 +50,8 @@ elif "${PYFLAKES}" \
     ./build-aux/*.py \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \
+    ./subprojects/container-runtime/*.py \
+    ./subprojects/container-runtime/tests/depot/*.py \
     ./tests/*.py \
     ./tests/*/*.py \
     >&2; then

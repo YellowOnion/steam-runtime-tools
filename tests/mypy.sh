@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright © 2016-2018 Simon McVittie
-# Copyright © 2018 Collabora Ltd.
+# Copyright © 2018-2020 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -41,6 +41,8 @@ for script in \
     ./build-aux/*.py \
     ./pressure-vessel/*.py \
     ./pressure-vessel/pressure-vessel-test-ui \
+    ./subprojects/container-runtime/*.py \
+    ./subprojects/container-runtime/tests/depot/*.py \
     ./tests/*.py \
     ./tests/*/*.py \
 ; do

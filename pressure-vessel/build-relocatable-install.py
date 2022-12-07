@@ -129,6 +129,11 @@ def install_exe(src, dst, mode=0o755):
     install(src, dst, mode)
 
 
+def v_call(command, **kwargs):
+    print('# {}'.format(command))
+    return subprocess.call(command, **kwargs)
+
+
 def v_check_call(command, **kwargs):
     print('# {}'.format(command))
     subprocess.check_call(command, **kwargs)
@@ -546,6 +551,35 @@ def main():
         )
 
         if args.check_source_directory is None:
+            source_should_be_in = os.path.join(installation, 'sources')
+        else:
+            source_should_be_in = args.check_source_directory
+
+        for source in sorted(source_to_download):
+            package, version = source.split('=')
+
+            if ':' in version:
+                version = version.split(':', 1)[1]
+
+            filename = os.path.join(
+                source_should_be_in,
+                '{}_{}.dsc'.format(package, version),
+            )
+
+            if os.path.exists(filename) and v_call([
+                'dscverify', '--no-sig-check', filename,
+            ]) == 0:
+                source_to_download.remove(source)
+            elif args.check_source_directory is None:
+                pass
+            elif args.allow_missing_sources:
+                logger.warning(
+                    'Source code not found in %s', filename)
+            else:
+                raise RuntimeError(
+                    'Source code not found in %s', filename)
+
+        if args.check_source_directory is None and source_to_download:
             try:
                 v_check_call(
                     [
@@ -617,25 +651,6 @@ def main():
                     'w',
                 ) as writer:
                     writer.write('{}\n'.format(args.version))
-
-        else:       # args.check_source_directory is not None
-            for source in sorted(source_to_download):
-                package, version = source.split('=')
-
-                if ':' in version:
-                    version = version.split(':', 1)[1]
-
-                filename = os.path.join(
-                    args.check_source_directory,
-                    '{}_{}.dsc'.format(package, version),
-                )
-                if not os.path.exists(filename):
-                    if args.allow_missing_sources:
-                        logger.warning(
-                            'Source code not found in %s', filename)
-                    else:
-                        raise RuntimeError(
-                            'Source code not found in %s', filename)
 
         if args.archive:
             if args.archive_versions:

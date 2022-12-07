@@ -500,11 +500,21 @@ def main():
                     source_to_download.add(
                         re.sub(r'[+]srt[0-9a-z.]+$', '', expr))
             else:
-                install(
-                    '{}/build-relocatable/usr/share/doc/{}/copyright'.format(
+                if source == 'steam-runtime-tools':
+                    copyright_file = os.path.join(
+                        srcdir, 'debian', 'copyright',
+                    )
+                    source = source + '=' + args.version
+                else:
+                    copyright_file = os.path.join(
                         tmpdir,
+                        'build-relocatable/usr/share/doc',
                         package,
-                    ),
+                        'copyright',
+                    )
+
+                install(
+                    copyright_file,
                     os.path.join(
                         installation,
                         'metadata',

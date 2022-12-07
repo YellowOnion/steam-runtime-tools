@@ -196,6 +196,10 @@ def main():
         ),
     )
     parser.add_argument(
+        '--cache', default='', metavar='DIR',
+        help='Cache downloaded source code in DIR',
+    )
+    parser.add_argument(
         '--output', '-o', default=None,
         help='Write an unpacked binary tree to OUTPUT',
     )
@@ -566,6 +570,25 @@ def main():
                 '{}_{}.dsc'.format(package, version),
             )
 
+            if args.cache:
+                cache_filename = os.path.join(
+                    args.cache,
+                    '{}_{}.dsc'.format(package, version),
+                )
+
+                if (
+                    os.path.exists(cache_filename)
+                    and args.check_source_directory is None
+                ):
+                    if v_call([
+                        'dcmd', 'cp', '-al', cache_filename,
+                        source_should_be_in,
+                    ]) != 0:
+                        try:
+                            os.remove(filename)
+                        except FileNotFoundError:
+                            pass
+
             if os.path.exists(filename) and v_call([
                 'dscverify', '--no-sig-check', filename,
             ]) == 0:
@@ -602,6 +625,23 @@ def main():
                         pass
                 else:
                     raise
+
+            if args.cache:
+                for source in source_to_download:
+                    package, version = source.split('=')
+
+                    if ':' in version:
+                        version = version.split(':', 1)[1]
+
+                    filename = os.path.join(
+                        source_should_be_in,
+                        '{}_{}.dsc'.format(package, version),
+                    )
+
+                    if os.path.exists(filename):
+                        v_check_call([
+                            'dcmd', 'cp', '-al', filename, args.cache + '/',
+                        ])
 
             if not args.apt_get_source:
                 os.makedirs(

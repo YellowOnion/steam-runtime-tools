@@ -168,6 +168,7 @@ def install(args):
         '--no-archive-versions',
         '--allow-missing-sources',
         '--output', relocatable,
+        '--cache', os.path.join(args.abs_builddir_parent, 'cache'),
     ])
 
     subprocess.check_call([

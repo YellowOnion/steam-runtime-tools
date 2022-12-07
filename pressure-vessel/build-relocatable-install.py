@@ -279,8 +279,11 @@ def main():
         architectures += X86_ARCHS
 
     if args.version is None:
-        with open(os.path.join(args.srcdir, '.tarball-version')) as reader:
-            args.version = reader.read().strip()
+        path = os.path.join(args.pv_dir, 'bin', 'pressure-vessel-wrap')
+        args.version = v_check_output(
+            [path, '--version-only'],
+            universal_newlines=True,
+        ).rstrip('\n')
 
     with tempfile.TemporaryDirectory(prefix='pressure-vessel-') as tmpdir:
         if args.output is None:

@@ -189,13 +189,6 @@ def main():
         ),
     )
     parser.add_argument(
-        '--srcdir', default=None,
-        help=(
-            'Assume steam-runtime-tools source code is installed in SRCDIR '
-            '(relative to PREFIX/PV_DIR) instead of finding it automatically'
-        ),
-    )
-    parser.add_argument(
         '--cache', default='', metavar='DIR',
         help='Cache downloaded source code in DIR',
     )
@@ -236,8 +229,7 @@ def main():
     )
     args = parser.parse_args()
 
-    if args.srcdir is None:
-        args.srcdir = os.path.dirname(os.path.dirname(__file__))
+    srcdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     if args.prefix is None:
         args.prefix = '/usr'
@@ -247,15 +239,9 @@ def main():
 
     args.pv_dir = args.prefix + '/' + args.pv_dir
 
-    if not os.path.isabs(args.srcdir):
-        args.srcdir = os.path.join(args.prefix, args.pv_dir, args.srcdir)
-
     if args.destdir:
         args.prefix = args.destdir + args.prefix
         args.pv_dir = args.destdir + args.pv_dir
-
-        if os.path.exists(args.destdir + args.srcdir):
-            args.srcdir = args.destdir + args.srcdir
 
     if args.archive is None and args.output is None:
         parser.error('Either --archive or --output is required')
@@ -324,7 +310,7 @@ def main():
             install_exe(path, os.path.join(installation, 'bin'))
 
         install(
-            os.path.join(args.srcdir, 'pressure-vessel', 'THIRD-PARTY.md'),
+            os.path.join(srcdir, 'pressure-vessel', 'THIRD-PARTY.md'),
             os.path.join(installation, 'metadata', 'README.txt'),
             0o644,
         )

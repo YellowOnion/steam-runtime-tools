@@ -240,10 +240,14 @@ build:clang:
 relocatable-install:i386:
     extends: .relocatable_install
     needs:
+        - package       # for the source code
         - package:i386
     image: "${SCOUT_DOCKER_REGISTRY}/${SCOUT_I386_DOCKER_IMAGE}"
     script:
         - |
+            mkdir -p _build/cache
+            dcmd cp -al debian/tmp/artifacts/build/*.dsc _build/cache
+
             dpkg -i \
             debian/tmp/artifacts/build/*_i386.*deb \
             ${NULL+}
@@ -251,6 +255,7 @@ relocatable-install:i386:
             rm -fr _build/i386/relocatable-install
             mkdir -p _build/i386
             /usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+              --cache _build/cache \
               --output _build/i386/relocatable-install \
               --archive "$(pwd)/_build/i386" \
               --no-archive-versions \
@@ -275,6 +280,9 @@ relocatable-install:production:
     image: "${SCOUT_DOCKER_REGISTRY}/${SCOUT_DOCKER_IMAGE}"
     script:
         - |
+            mkdir -p _build/cache
+            dcmd cp -al debian/tmp/artifacts/build/*.dsc _build/cache
+
             apt-get -y --no-install-recommends install \
             libglib2.0-dev:amd64 \
             libglib2.0-dev:i386 \
@@ -298,6 +306,7 @@ relocatable-install:production:
             rm -fr _build/production/relocatable-install
             mkdir -p _build/production
             /usr/lib/pressure-vessel/relocatable/bin/pressure-vessel-build-relocatable-install \
+              --cache _build/cache \
               --output _build/production/relocatable-install \
               --archive "$(pwd)/_build/production" \
               --no-archive-versions \

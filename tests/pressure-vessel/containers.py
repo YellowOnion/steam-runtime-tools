@@ -45,8 +45,7 @@ that was built against scout:
         python3.5 ./pressure-vessel/build-relocatable-install.py \
         --output="$PRESSURE_VESSEL_TEST_CONTAINERS/pressure-vessel" \
         --check-source-directory="$PRESSURE_VESSEL_TEST_CONTAINERS" \
-        --allow-missing-sources \
-        --srcdir="$(pwd)" --set-version "$(git describe)"
+        --allow-missing-sources
     ./tests/pressure-vessel/containers.py
 
 or against the SteamLinuxRuntime depot that gets uploaded to the Steam CDN:

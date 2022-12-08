@@ -1,3 +1,16 @@
+steam-runtime-tools (0.20221208.0) UNRELEASED; urgency=medium
+
+  * pressure-vessel: Pass through Gamescope's special Wayland display
+  * subprojects: Add a copy of the SteamLinuxRuntime scripts.
+    This will help us to coordinate changes between steam-runtime-tools and
+    SteamLinuxRuntime.
+  * CI: Refactoring
+  * debian: Stop including redundant source code in
+    pressure-vessel-relocatable.deb (if source code is required, use the
+    steam-runtime-tools.dsc source package)
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 08 Dec 2022 14:04:02 +0000
+
 steam-runtime-tools (0.20221130.0) steamrt; urgency=medium
 
   * pressure-vessel: Update Flatpak-derived code to 1.14.1

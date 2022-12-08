@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20221208.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20221208.0) steamrt; urgency=medium
 
   * pressure-vessel: Pass through Gamescope's special Wayland display
   * subprojects: Add a copy of the SteamLinuxRuntime scripts.
@@ -9,7 +9,7 @@ steam-runtime-tools (0.20221208.0) UNRELEASED; urgency=medium
     pressure-vessel-relocatable.deb (if source code is required, use the
     steam-runtime-tools.dsc source package)
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 08 Dec 2022 14:04:02 +0000
+ -- Simon McVittie <smcv@collabora.com>  Thu, 08 Dec 2022 14:42:15 +0000
 
 steam-runtime-tools (0.20221130.0) steamrt; urgency=medium
 

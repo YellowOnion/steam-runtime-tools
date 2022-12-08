@@ -246,7 +246,7 @@ class Uploader:
             elif str(a).endswith(('.deb', '.ddeb')):
                 os.link(str(a), str(packages / a.name))
 
-                if '-dbgsym_' in a.name or '-dbg_' in a.name:
+                if '_all.' not in a.name:
                     os.link(str(a), str(dbgsym / a.name))
 
         a = Path('_build', 'production', 'pressure-vessel-bin.tar.gz')
@@ -355,8 +355,9 @@ class Uploader:
         ]
 
         if self.dbgsym_path:
-            # Upload detached debug symbols to a directory from which
-            # debuginfod will read them
+            # Upload detached debug symbols and all packages that might
+            # contain executables to a directory from which debuginfod will
+            # read them
             commands.append([
                 'rsync',
                 '--rsh', ' '.join(map(shlex.quote, self.ssh[:-1])),

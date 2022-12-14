@@ -482,7 +482,7 @@ wrap_preload_module_clear (gpointer p)
 {
   WrapPreloadModule *self = p;
 
-  g_free (self->preload);
+  g_clear_pointer (&self->preload, g_free);
 }
 
 static gboolean

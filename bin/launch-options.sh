@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # launch-options.sh — undo Steam Runtime environment to run launch-options.py
 #
@@ -26,43 +26,37 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 set -e
-set -o pipefail
 set -u
-shopt -s nullglob
 
 main () {
-    local me="$0"
     me="$(readlink -f "$0")"
-    local here="${me%/*}"
+    here="${me%/*}"
     me="${me##*/}"
 
-    local default_path="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
-    local steam_runtime="${STEAM_RUNTIME-}"
+    default_path="/usr/local/sbin:/usr/sbin:/sbin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games"
+    steam_runtime="${STEAM_RUNTIME-}"
 
     # Undo any weird environment before we start running external
     # executables. We put it back before running the actual app/game.
 
-    local -a options
-    options=()
-
     if [ -n "${LD_LIBRARY_PATH-}" ]; then
-        options+=("--steam-runtime-env=LD_LIBRARY_PATH=$LD_LIBRARY_PATH")
+        set -- "--steam-runtime-env=LD_LIBRARY_PATH=$LD_LIBRARY_PATH" "$@"
     fi
 
     if [ -n "${LD_AUDIT-}" ]; then
-        options+=("--steam-runtime-env=LD_AUDIT=$LD_AUDIT")
+        set -- "--steam-runtime-env=LD_AUDIT=$LD_AUDIT" "$@"
     fi
 
     if [ -n "${LD_PRELOAD-}" ]; then
-        options+=("--steam-runtime-env=LD_PRELOAD=$LD_PRELOAD")
+        set -- "--steam-runtime-env=LD_PRELOAD=$LD_PRELOAD" "$@"
     fi
 
     if [ -n "${PATH-}" ]; then
-        options+=("--steam-runtime-env=PATH=$PATH")
+        set -- "--steam-runtime-env=PATH=$PATH" "$@"
     fi
 
     if [ -n "${STEAM_RUNTIME-}" ]; then
-        options+=("--steam-runtime-env=STEAM_RUNTIME=$STEAM_RUNTIME")
+        set -- "--steam-runtime-env=STEAM_RUNTIME=$STEAM_RUNTIME" "$@"
     fi
 
     unset LD_AUDIT
@@ -72,29 +66,27 @@ main () {
     unset STEAM_RUNTIME
 
     if [ -n "${SYSTEM_LD_LIBRARY_PATH+set}" ]; then
-        options+=("--steam-runtime-env=SYSTEM_LD_LIBRARY_PATH=$SYSTEM_LD_LIBRARY_PATH")
+        set -- "--steam-runtime-env=SYSTEM_LD_LIBRARY_PATH=$SYSTEM_LD_LIBRARY_PATH" "$@"
         export LD_LIBRARY_PATH="$SYSTEM_LD_LIBRARY_PATH"
     fi
 
     if [ -n "${SYSTEM_LD_PRELOAD+set}" ]; then
-        options+=("--steam-runtime-env=SYSTEM_LD_PRELOAD=$SYSTEM_LD_PRELOAD")
+        set -- "--steam-runtime-env=SYSTEM_LD_PRELOAD=$SYSTEM_LD_PRELOAD" "$@"
         export LD_PRELOAD="$SYSTEM_LD_PRELOAD"
     fi
 
     if [ -n "${STEAM_RUNTIME_LIBRARY_PATH+set}" ]; then
-        options+=("--steam-runtime-env=STEAM_RUNTIME_LIBRARY_PATH=$STEAM_RUNTIME_LIBRARY_PATH")
+        set -- "--steam-runtime-env=STEAM_RUNTIME_LIBRARY_PATH=$STEAM_RUNTIME_LIBRARY_PATH" "$@"
     fi
 
     if [ -n "${SYSTEM_PATH+set}" ]; then
-        options+=("--steam-runtime-env=SYSTEM_PATH=$SYSTEM_PATH")
+        set -- "--steam-runtime-env=SYSTEM_PATH=$SYSTEM_PATH" "$@"
         export PATH="$SYSTEM_PATH"
     fi
 
     if [ -n "${PRESSURE_VESSEL_APP_LD_LIBRARY_PATH+set}" ]; then
-        options+=("--steam-runtime-env=PRESSURE_VESSEL_APP_LD_LIBRARY_PATH=$PRESSURE_VESSEL_APP_LD_LIBRARY_PATH")
+        set -- "--steam-runtime-env=PRESSURE_VESSEL_APP_LD_LIBRARY_PATH=$PRESSURE_VESSEL_APP_LD_LIBRARY_PATH" "$@"
     fi
-
-    local script
 
     if [ -x "$here/../libexec/steam-runtime-tools-0/launch-options.py" ]; then
         script="$here/../libexec/steam-runtime-tools-0/launch-options.py"
@@ -105,10 +97,9 @@ main () {
         script="$here/../libexec/steam-runtime-tools-0/launch-options.py"
     fi
 
-    local result
     if ! result="$("$script" --check-gui-dependencies 2>&1)"; then
         result="$(printf '%s' "$result" | sed -e 's/&/\&amp;/' -e 's/</\&lt;/' -e 's/>/\&gt;/')"
-        local run="env"
+        run="env"
 
         case "$steam_runtime" in
             (/*)
@@ -126,14 +117,13 @@ main () {
             text="$result"
         fi
 
-        "$run" "${STEAM_ZENITY:-zenity}" --error --width 500 --text "$text"
+        "$run" "${STEAM_ZENITY:-zenity}" --error --width 500 --text "$text" || :
         exit 125
     fi
 
-    exec "$script" ${options+"${options[@]}"} "$@"
+    exec "$script" "$@" || exit 125
 }
 
-trap 'exit 125' ERR
 main "$@"
 
 # vim:set sw=4 sts=4 et:

@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # pressure-vessel-unruntime — undo the Steam Runtime's environment
 #
-# Copyright © 2017-2019 Collabora Ltd.
+# Copyright © 2017-2022 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -26,9 +26,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 set -e
-set -o pipefail
 set -u
-shopt -s nullglob
 
 me="$0"
 me="$(readlink -f "$0")"

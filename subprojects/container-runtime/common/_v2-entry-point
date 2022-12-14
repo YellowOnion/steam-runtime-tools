@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-# Copyright 2020-2021 Collabora Ltd.
+#!/bin/sh
+# Copyright 2020-2022 Collabora Ltd.
 # SPDX-License-Identifier: MIT
 
 set -eu
@@ -59,7 +59,7 @@ verbose () {
 }
 
 usage () {
-    local code="$1"
+    code="$1"
     shift
 
     if [ "$code" -ne 0 ]; then
@@ -180,7 +180,7 @@ fi
 if [ -n "$log_to_file" ]; then
     app=
     log_filename=
-    if [[ -z "${STEAM_COMPAT_APP_ID-}" && -z "${SteamAppId-}" ]]; then
+    if [ -z "${STEAM_COMPAT_APP_ID-}" ] && [ -z "${SteamAppId-}" ]; then
         app="non-steam-game"
     else
         app="app${STEAM_COMPAT_APP_ID-${SteamAppId}}"
@@ -211,7 +211,7 @@ if [ -n "$log_to_file" ]; then
     export PRESSURE_VESSEL_LOG_WITH_TIMESTAMP=1
 fi
 
-info "argv: $(printf '%q ' "$@")"
+info "argv (unescaped): $*"
 
 if [ "$#" -eq 0 ] || [ "$1" = -- ]; then
     log "Error: A command to run is required"
@@ -240,7 +240,7 @@ case "${STEAM_RUNTIME-}" in
         paths=
 
         for path in ${LD_LIBRARY_PATH-}; do
-            if [ "${path}" == "${STEAM_RUNTIME}" ]; then
+            if [ "${path}" = "${STEAM_RUNTIME}" ]; then
                 # path is exactly the ${STEAM_RUNTIME}; ignore
                 continue
             elif [ "${path#"${STEAM_RUNTIME}/"}" != "${path}" ]; then

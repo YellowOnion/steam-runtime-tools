@@ -414,4 +414,6 @@ if meson.version().version_compare('>=0.58')
   meson.add_devenv(uninstalled_env)
 endif
 
+meson.add_dist_script('build-aux/set-version.py', version)
+
 # vim:set sw=2 sts=2 et:

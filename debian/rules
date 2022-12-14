@@ -45,6 +45,10 @@ endif
 %:
 	dh $@ $(dh_options)
 
+override_dh_clean:
+	dh_clean
+	MESON_DIST_ROOT=$(CURDIR) build-aux/set-version.py $(DEB_VERSION_UPSTREAM)
+
 # We open-code the Meson clean, configure, build, test, install steps
 # because the debhelper in SteamRT 1 'scout' is too old to have built-in
 # knowledge of Meson.

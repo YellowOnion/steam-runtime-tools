@@ -65,7 +65,7 @@ from debian.deb822 import (
 )
 
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = Path(__file__).resolve().parent
 
 
 logger = logging.getLogger('populate-depot')
@@ -548,7 +548,7 @@ class Main:
         pressure_vessel_uri: str = DEFAULT_PRESSURE_VESSEL_URI,
         pressure_vessel_version: str = '',
         runtime: str = 'scout',
-        source_dir: str = HERE,
+        source_dir: str = str(HERE),
         ssh_host: str = '',
         ssh_path: str = '',
         steam_app_id: str = '',
@@ -1214,6 +1214,12 @@ class Main:
 
     def write_component_versions(self) -> None:
         try:
+            with open(HERE / '.tarball-version', 'r') as reader:
+                version = reader.read().strip()
+        except OSError:
+            version = 'unknown'
+
+        try:
             with subprocess.Popen(
                 [
                     'git', 'describe',
@@ -1227,11 +1233,11 @@ class Main:
             ) as describe:
                 stdout = describe.stdout
                 assert stdout is not None
-                version = stdout.read().strip()
+                version = stdout.read().strip() or version
                 # Deliberately ignoring exit status:
                 # if git is missing or old we'll use 'unknown'
         except (OSError, subprocess.SubprocessError):
-            version = 'unknown'
+            pass
 
         if self.depot_version:
             component_version = ComponentVersion('depot', sort_weight=-1)
@@ -1872,7 +1878,7 @@ def main() -> None:
         )
     )
     parser.add_argument(
-        '--source-dir', default=HERE,
+        '--source-dir', default=str(HERE),
         help=(
             'Source directory for files to include in the depot'
         )

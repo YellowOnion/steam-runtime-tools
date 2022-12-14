@@ -17,14 +17,8 @@ log_to_file=
 log_dir=${STEAM_LINUX_RUNTIME_LOG_DIR-"${PRESSURE_VESSEL_VARIABLE_DIR-"${here}/var"}"}
 keep_logs=
 use_timestamp=
-# Arguments for pressure-vessel-wrap
-declare -a container_args=()
 
-if [ -n "${LD_PRELOAD-}" ]; then
-    container_args+=("--env-if-host=LD_PRELOAD=$LD_PRELOAD")
-    container_args+=("--ld-preloads="$LD_PRELOAD")
-fi
-
+ld_preload="${LD_PRELOAD-}"
 unset LD_PRELOAD
 
 
@@ -288,11 +282,20 @@ else
     run="run-in-${suite}"
 fi
 
-exec "${here}/${run}" \
-    ${container_args[0]+"${container_args[@]}"} \
-    -- \
-    "$@" \
-    ${NULL+}
+# Before this point, "$@" contains the wrapped program and its arguments.
+# After this point, it contains arguments for ./run (or equivalently for
+# pv-wrap).
+set -- -- "$@"
+
+# We prepend options to "$@" because that's the only array available
+# in generic POSIX /bin/sh, and bash is not always practical to use.
+
+if [ -n "${ld_preload}" ]; then
+    set -- "--env-if-host=LD_PRELOAD=$ld_preload" "$@"
+    set -- "--ld-preloads=$ld_preload" "$@"
+fi
+
+exec "${here}/${run}" "$@"
 exit 125
 
 # vim:set sw=4 sts=4 et:

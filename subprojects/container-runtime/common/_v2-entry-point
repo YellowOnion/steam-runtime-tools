@@ -261,17 +261,10 @@ case "${STEAM_RUNTIME-}" in
         ;;
 esac
 
-if [ -x "$here/pressure-vessel/bin/steam-runtime-launcher-interface-0" ]; then
-    set -- \
-        "$here/pressure-vessel/bin/steam-runtime-launcher-interface-0" \
-        container-runtime \
-        "$@"
-elif command -v steam-runtime-launcher-interface-0 >/dev/null; then
-    set -- \
-        steam-runtime-launcher-interface-0 \
-        container-runtime \
-        "$@"
-fi
+set -- \
+    "$here/pressure-vessel/bin/steam-runtime-launcher-interface-0" \
+    container-runtime \
+    "$@"
 
 unset LD_LIBRARY_PATH
 unset STEAM_RUNTIME

@@ -17,13 +17,12 @@ log_to_file=
 log_dir=${STEAM_LINUX_RUNTIME_LOG_DIR-"${PRESSURE_VESSEL_VARIABLE_DIR-"${here}/var"}"}
 keep_logs=
 use_timestamp=
-ld_preload=
 # Arguments for pressure-vessel-wrap
 declare -a container_args=()
 
 if [ -n "${LD_PRELOAD-}" ]; then
     container_args+=("--env-if-host=LD_PRELOAD=$LD_PRELOAD")
-    ld_preload="$LD_PRELOAD"
+    container_args+=("--ld-preloads="$LD_PRELOAD")
 fi
 
 unset LD_PRELOAD
@@ -267,15 +266,6 @@ case "${STEAM_RUNTIME-}" in
         export PRESSURE_VESSEL_APP_LD_LIBRARY_PATH="${LD_LIBRARY_PATH-}"
         ;;
 esac
-
-old_IFS="$IFS"
-IFS=": "
-for word in $ld_preload; do
-    if [ -n "$word" ]; then
-        container_args+=("--ld-preload=$word")
-    fi
-done
-IFS="$old_IFS"
 
 if [ -x "$here/pressure-vessel/bin/steam-runtime-launcher-interface-0" ]; then
     set -- \

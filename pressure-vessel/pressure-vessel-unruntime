@@ -42,8 +42,6 @@ steam_runtime="${STEAM_RUNTIME-}"
 # executables. We put it back before running the actual app/game.
 
 declare -a options
-ld_audit=
-ld_preload=
 options=()
 
 if [ -n "${LD_LIBRARY_PATH-}" ]; then
@@ -52,12 +50,12 @@ fi
 
 if [ -n "${LD_AUDIT-}" ]; then
     options+=("--env-if-host=LD_AUDIT=$LD_AUDIT")
-    ld_audit="$LD_AUDIT"
+    options+=("--ld-audits=$LD_AUDIT")
 fi
 
 if [ -n "${LD_PRELOAD-}" ]; then
     options+=("--env-if-host=LD_PRELOAD=$LD_PRELOAD")
-    ld_preload="$LD_PRELOAD"
+    options+=("--ld-preloads=$LD_PRELOAD")
 fi
 
 if [ -n "${PATH-}" ]; then
@@ -107,21 +105,6 @@ if [ -n "${PRESSURE_VESSEL_APP_LD_LIBRARY_PATH+set}" ]; then
 fi
 
 unset PRESSURE_VESSEL_APP_LD_LIBRARY_PATH
-
-old_IFS="$IFS"
-IFS=":"
-for word in $ld_audit; do
-    if [ -n "$word" ]; then
-        options+=("--ld-audit=$word")
-    fi
-done
-IFS=": "
-for word in $ld_preload; do
-    if [ -n "$word" ]; then
-        options+=("--ld-preload=$word")
-    fi
-done
-IFS="$old_IFS"
 
 for word in "$@"; do
     case "$word" in

@@ -121,12 +121,20 @@ pressure-vessel-wrap - run programs in a bubblewrap container
     will be run in a different container or on the host system, then the
     path of the *MODULE* will be adjusted as necessary.
 
+`--ld-audits` *MODULE*[**:**_MODULE_...]
+:   Same as `--ld-audit`, but the argument is a colon-delimited string
+    (the same as `$LD_AUDIT` itself).
+
 `--ld-preload` *MODULE*
 :   Add *MODULE* from the current execution environment to `LD_PRELOAD`
     when executing *COMMAND*. If *COMMAND* is run in a container, or if
     **pressure-vessel-wrap** is run in a Flatpak sandbox and *COMMAND*
     will be run in a different container or on the host system, then the
     path of the *MODULE* will be adjusted as necessary.
+
+`--ld-preloads` *MODULE*[**:**_MODULE_...]
+:   Same as `--ld-preload`, but the argument is a string delimited by
+    colons and/or spaces (the same as `$LD_PRELOAD` itself).
 
 `--only-prepare`
 :   Prepare the runtime, but do not actually run *COMMAND*.

@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: SteamLinuxRuntime
-Source: https://gitlab.steamos.cloud/steamrt/steamlinuxruntime/
+Upstream-Name: Steam container runtime
+Source: https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/tree/main/subprojects/container-runtime
 
 Files:
  README.md

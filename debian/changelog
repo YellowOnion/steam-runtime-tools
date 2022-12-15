@@ -1,3 +1,12 @@
+steam-runtime-tools (0.20221215.0) steamrt; urgency=medium
+
+  * CI fixes only:
+    - build: Write .tarball-version into source tarballs
+    - populate-depot: Use .tarball-version to determine scripts version
+    - populate-depot: Use scout as default LD_LIBRARY_PATH runtime
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 15 Dec 2022 12:10:03 +0000
+
 steam-runtime-tools (0.20221208.1) steamrt; urgency=medium
 
   * CI: Also make the actual binaries available to debuginfod

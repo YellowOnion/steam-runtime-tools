@@ -702,7 +702,7 @@ class Main:
             self.pressure_vessel_runtime = self.new_runtime(
                 'scout',
                 {'path': pressure_vessel_archive},
-                default_suite='local',
+                default_suite='scout',
             )
         elif self.runtime.name == pressure_vessel_from_runtime:
             self.pressure_vessel_runtime = self.runtime

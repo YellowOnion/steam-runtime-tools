@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2022 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -201,11 +201,66 @@ print_strescape (const char *bytestring)
     }
 }
 
+/*
+ * Print an element as either a line based or, if @name_line_based
+ * is %NULL, as an entry in a JSON array.
+ */
+static void
+print_array_entry (const char *entry,
+                   const char *name_line_based,
+                   bool *first)
+{
+  assert (entry != NULL);
+  assert (first != NULL);
+
+  if (*first)
+    *first = false;
+  else if (name_line_based == NULL)
+    printf (",");
+
+  if (name_line_based == NULL)
+    {
+      printf ("\n      \"");
+      print_json_string_content (entry);
+      printf ("\"");
+    }
+  else
+    {
+      fprintf (stdout, "%s=", name_line_based);
+      print_strescape (entry);
+      putc ('\n', stdout);
+    }
+}
+
+/*
+ * Print an array in stdout as either a formatted JSON entry or
+ * a line based
+ */
+static void
+print_argz (const char *name,
+            const char *argz_values,
+            size_t argz_n,
+            bool line_based)
+{
+  const char *entry = 0;
+  bool first = true;
+
+  if (!line_based)
+    printf (",\n    \"%s\": [", name);
+
+  while ((entry = argz_next (argz_values, argz_n, entry)))
+    print_array_entry (entry, line_based ? name : NULL, &first);
+
+  if (!line_based)
+    printf ("\n    ]");
+}
+
+
+
 int
 main (int argc,
       char **argv)
 {
-  const char *entry;
   const char *soname;
   const char *version;
   const char *symbol;
@@ -471,65 +526,11 @@ main (int argc,
                    argv[optind + 1], soname);
         }
 
-      first = true;
-      entry = 0;
+      print_argz (line_based ? "missing_symbol" : "missing_symbols",
+                  missing_symbols, missing_n, line_based);
 
-      if (!line_based)
-        printf (",\n    \"missing_symbols\": [");
-
-      while ((entry = argz_next (missing_symbols, missing_n, entry)))
-        {
-          if (first)
-            first = false;
-          else if (!line_based)
-            printf (",");
-
-          if (line_based)
-            {
-              fputs ("missing_symbol=", stdout);
-              print_strescape (entry);
-              putc ('\n', stdout);
-            }
-          else
-            {
-              printf ("\n      \"");
-              print_json_string_content (entry);
-              printf ("\"");
-            }
-        }
-
-      if (!line_based)
-        printf ("\n    ]");
-
-      first = true;
-      entry = 0;
-
-      if (!line_based)
-        printf (",\n    \"misversioned_symbols\": [");
-
-      while ((entry = argz_next (misversioned_symbols, misversioned_n, entry)))
-        {
-          if (first)
-            first = false;
-          else if (!line_based)
-            printf (",");
-
-          if (line_based)
-            {
-              fputs ("misversioned_symbol=", stdout);
-              print_strescape (entry);
-              putc ('\n', stdout);
-            }
-          else
-            {
-              printf ("\n      \"");
-              print_json_string_content (entry);
-              printf ("\"");
-            }
-        }
-
-      if (!line_based)
-        printf ("\n    ]");
+      print_argz (line_based ? "misversioned_symbol" : "misversioned_symbols",
+                  misversioned_symbols, misversioned_n, line_based);
     }
   dep_map = the_library;
 
@@ -547,29 +548,7 @@ main (int argc,
       if (dep_map == the_library || strcmp (dep_map->l_name, "") == 0)
         continue;
 
-      if (first)
-        {
-          if (!line_based)
-            printf ("\n      \"");
-
-          first = false;
-        }
-      else if (!line_based)
-        {
-          printf (",\n      \"");
-        }
-
-      if (line_based)
-        {
-          fputs ("dependency=", stdout);
-          print_strescape (dep_map->l_name);
-          putc ('\n', stdout);
-        }
-      else
-        {
-          print_json_string_content (dep_map->l_name);
-          printf ("\"");
-        }
+      print_array_entry (dep_map->l_name, line_based ? "dependency" : NULL, &first);
     }
 
   if (!line_based)

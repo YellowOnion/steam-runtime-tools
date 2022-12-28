@@ -48,7 +48,7 @@ executable(
 executable(
   multiarch + '-inspect-library',
   'inspect-library.c',
-  dependencies : [libdl],
+  dependencies : [libdl, libelf],
   include_directories : project_include_dirs,
   install : true,
   install_dir : pkglibexecdir,

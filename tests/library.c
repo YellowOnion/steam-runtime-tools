@@ -70,6 +70,7 @@ test_object (Fixture *f,
   SrtLibrary *library;
   const char * const *missing;
   const char * const *misversioned;
+  const char * const *missing_versions;
   const char * const *dependencies;
   SrtLibraryIssues issues;
   gchar *messages;
@@ -80,9 +81,11 @@ test_object (Fixture *f,
   gchar *absolute_path;
   GStrv missing_mutable;
   GStrv misversioned_mutable;
+  GStrv missing_versions_mutable;
   GStrv dependencies_mutable;
   const char *one_missing[] = { "jpeg_mem_src@LIBJPEGTURBO_6.2", NULL };
   const char *one_misversioned[] = { "jpeg_mem_dest@LIBJPEGTURBO_6.2", NULL };
+  const char *one_missing_version[] = { "LIBJPEGTURBO_6.9000", NULL };
   const char *two_deps[] = { "linux-vdso.so.1", "/usr/lib/libdl.so.2", NULL };
 
   library = _srt_library_new ("arm-linux-gnueabihf",
@@ -90,6 +93,7 @@ test_object (Fixture *f,
                               "libz.so.1",
                               SRT_LIBRARY_ISSUES_NONE,
                               "",
+                              NULL,
                               NULL,
                               NULL,
                               NULL,
@@ -117,6 +121,9 @@ test_object (Fixture *f,
   misversioned = srt_library_get_misversioned_symbols (library);
   g_assert_nonnull (misversioned);
   g_assert_cmpstr (misversioned[0], ==, NULL);
+  missing_versions = srt_library_get_missing_versions (library);
+  g_assert_nonnull (missing_versions);
+  g_assert_cmpstr (missing_versions[0], ==, NULL);
   dependencies = srt_library_get_dependencies (library);
   g_assert_nonnull (dependencies);
   g_assert_cmpstr (dependencies[0], ==, NULL);
@@ -128,6 +135,7 @@ test_object (Fixture *f,
                 "absolute-path", &absolute_path,
                 "missing-symbols", &missing_mutable,
                 "misversioned-symbols", &misversioned_mutable,
+                "missing-versions", &missing_versions_mutable,
                 "dependencies", &dependencies_mutable,
                 "issues", &issues,
                 "soname", &compat_soname,
@@ -143,6 +151,8 @@ test_object (Fixture *f,
   g_assert_cmpstr (missing_mutable[0], ==, NULL);
   g_assert_nonnull (misversioned_mutable);
   g_assert_cmpstr (misversioned_mutable[0], ==, NULL);
+  g_assert_nonnull (missing_versions_mutable);
+  g_assert_cmpstr (missing_versions_mutable[0], ==, NULL);
   g_assert_nonnull (dependencies_mutable);
   g_assert_cmpstr (dependencies_mutable[0], ==, NULL);
   g_free (messages);
@@ -153,6 +163,7 @@ test_object (Fixture *f,
   g_free (absolute_path);
   g_strfreev (missing_mutable);
   g_strfreev (misversioned_mutable);
+  g_strfreev (missing_versions_mutable);
   g_strfreev (dependencies_mutable);
   g_object_unref (library);
 
@@ -160,18 +171,20 @@ test_object (Fixture *f,
                               "/usr/lib/libjpeg.so.62",
                               "libjpeg.so.62",
                               SRT_LIBRARY_ISSUES_MISSING_SYMBOLS |
-                              SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS,
+                              SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS |
+                              SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
                               "ld.so: libjpeg.so.62: nope\n",
                               one_missing,
                               one_misversioned,
+                              one_missing_version,
                               two_deps,
                               NULL,
                               0,
                               0);
-  g_assert_cmpint (srt_library_get_issues (library) &
-                   SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
-  g_assert_cmpint (srt_library_get_issues (library) &
-                   SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS, !=, 0);
+  g_assert_cmpint (srt_library_get_issues (library), ==,
+                   SRT_LIBRARY_ISSUES_MISSING_SYMBOLS |
+                   SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS |
+                   SRT_LIBRARY_ISSUES_MISSING_VERSIONS);
   g_assert_cmpstr (srt_library_get_messages (library), ==,
                    "ld.so: libjpeg.so.62: nope\n");
   g_assert_cmpstr (srt_library_get_multiarch_tuple (library), ==,
@@ -189,6 +202,10 @@ test_object (Fixture *f,
   g_assert_nonnull (misversioned);
   g_assert_cmpstr (misversioned[0], ==, one_misversioned[0]);
   g_assert_cmpstr (misversioned[1], ==, NULL);
+  missing_versions = srt_library_get_missing_versions (library);
+  g_assert_nonnull (missing_versions);
+  g_assert_cmpstr (missing_versions[0], ==, one_missing_version[0]);
+  g_assert_cmpstr (missing_versions[1], ==, NULL);
   dependencies = srt_library_get_dependencies (library);
   g_assert_nonnull (dependencies);
   g_assert_cmpstr (dependencies[0], ==, two_deps[0]);
@@ -201,6 +218,7 @@ test_object (Fixture *f,
                 "real-soname", &real_soname,
                 "absolute-path", &absolute_path,
                 "missing-symbols", &missing_mutable,
+                "missing-versions", &missing_versions_mutable,
                 "misversioned-symbols", &misversioned_mutable,
                 "dependencies", &dependencies_mutable,
                 "issues", &issues,
@@ -215,6 +233,9 @@ test_object (Fixture *f,
   g_assert_nonnull (missing_mutable);
   g_assert_cmpstr (missing_mutable[0], ==, one_missing[0]);
   g_assert_cmpstr (missing_mutable[1], ==, NULL);
+  g_assert_nonnull (missing_versions_mutable);
+  g_assert_cmpstr (missing_versions_mutable[0], ==, one_missing_version[0]);
+  g_assert_cmpstr (missing_versions_mutable[1], ==, NULL);
   g_assert_nonnull (misversioned_mutable);
   g_assert_cmpstr (misversioned_mutable[0], ==, one_misversioned[0]);
   g_assert_cmpstr (misversioned_mutable[1], ==, NULL);
@@ -228,6 +249,7 @@ test_object (Fixture *f,
   g_free (requested_name);
   g_free (absolute_path);
   g_strfreev (missing_mutable);
+  g_strfreev (missing_versions_mutable);
   g_strfreev (misversioned_mutable);
   g_strfreev (dependencies_mutable);
   g_object_unref (library);
@@ -240,6 +262,7 @@ typedef struct
   const gchar *library_name;  /* Defaults to `libz.so.1` */
   const gchar *expected_symbols;
   const gchar *missing_symbols[5];
+  const gchar *missing_versions[5];
   const gchar *misversioned_symbols[5];
   SrtLibraryIssues issues;
   gboolean is_library_missing;
@@ -251,6 +274,7 @@ static const LibraryTest library_test[] =
     .description = "presence of `libz.so.1` that should be available in the system",
     .expected_symbols = "inflateCopy@ZLIB_1.2.0\n"
                         "inflateBack@ZLIB_1.2.0\n"
+                        "ZLIB_1.2.0@ZLIB_1.2.0\n"
                         "adler32\n"
                         "gzopen@Base",
   },
@@ -273,6 +297,8 @@ static const LibraryTest library_test[] =
                          * miss checking for symbols in the correct section of the file. */
                         " nope@MISSING 1:1.2.0\n"
                         " also_nope@Base 1:1.2.0\n"
+                        /* A missing version definition */
+                        " MISSING@MISSING 1:1.2.0\n"
                         /* This library doesn't exist either. */
                         "libzmore.so.0 libzmore0 #MINVER#\n"
                         " some_other_fictitious_symbol@Base 1:2.0\n",
@@ -282,7 +308,12 @@ static const LibraryTest library_test[] =
       "also_nope",
       NULL
     },
-    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS,
+    .missing_versions =
+    {
+      "MISSING",
+      NULL
+    },
+    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
   },
 
   {
@@ -296,17 +327,26 @@ static const LibraryTest library_test[] =
   },
 
   {
-    .description = "library with wrong/missing symbols",
+    .description = "library with wrong/missing symbols and versions",
     .expected_symbols = "inflateCopy@ZLIB_1.2.0\n"
                         "inflateFooBar@ZLIB_1.2.0\n"
-                        "jpeg_mem_src@LIBJPEGTURBO_6.2",
+                        "jpeg_mem_src@LIBJPEGTURBO_6.2\n"
+                        "ZLIB_1.2.0@ZLIB_1.2.0\n"
+                        "LIBJPEGTURBO_6.2@LIBJPEGTURBO_6.2\n"
+                        "LIBJPEGTURBO_9000@LIBJPEGTURBO_9000",
     .missing_symbols =
     {
       "inflateFooBar@ZLIB_1.2.0",
       "jpeg_mem_src@LIBJPEGTURBO_6.2",
       NULL
     },
-    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS,
+    .missing_versions =
+    {
+      "LIBJPEGTURBO_6.2",
+      "LIBJPEGTURBO_9000",
+      NULL
+    },
+    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
   },
 
   {
@@ -345,6 +385,19 @@ static const LibraryTest library_test[] =
     .library_name = "libMISSING.so.62",
     .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD | SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS,
     .is_library_missing = TRUE,
+  },
+
+  {
+    .description = "library which is unexpectedly not versioned",
+    .library_name = "libgobject-2.0.so.0",
+    .expected_symbols = "g_value_get_uint@Base\n"
+                        "VERSION_9000@VERSION_9000",
+    .missing_versions =
+    {
+      "VERSION_9000",
+      NULL
+    },
+    .issues = SRT_LIBRARY_ISSUES_MISSING_VERSIONS | SRT_LIBRARY_ISSUES_UNVERSIONED,
   },
 };
 
@@ -429,6 +482,8 @@ test_libraries (Fixture *f,
 
       check_list_elements (srt_library_get_missing_symbols (library),
                            test->missing_symbols);
+      check_list_elements (srt_library_get_missing_versions (library),
+                           test->missing_versions);
       check_list_elements (srt_library_get_misversioned_symbols (library),
                           test->misversioned_symbols);
 

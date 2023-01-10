@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2022 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -22,6 +22,8 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+
+#include <libglnx.h>
 
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
@@ -68,6 +70,7 @@ test_object (Fixture *f,
   SrtLibrary *library;
   const char * const *missing;
   const char * const *misversioned;
+  const char * const *missing_versions;
   const char * const *dependencies;
   SrtLibraryIssues issues;
   gchar *messages;
@@ -78,9 +81,11 @@ test_object (Fixture *f,
   gchar *absolute_path;
   GStrv missing_mutable;
   GStrv misversioned_mutable;
+  GStrv missing_versions_mutable;
   GStrv dependencies_mutable;
   const char *one_missing[] = { "jpeg_mem_src@LIBJPEGTURBO_6.2", NULL };
   const char *one_misversioned[] = { "jpeg_mem_dest@LIBJPEGTURBO_6.2", NULL };
+  const char *one_missing_version[] = { "LIBJPEGTURBO_6.9000", NULL };
   const char *two_deps[] = { "linux-vdso.so.1", "/usr/lib/libdl.so.2", NULL };
 
   library = _srt_library_new ("arm-linux-gnueabihf",
@@ -88,6 +93,7 @@ test_object (Fixture *f,
                               "libz.so.1",
                               SRT_LIBRARY_ISSUES_NONE,
                               "",
+                              NULL,
                               NULL,
                               NULL,
                               NULL,
@@ -115,6 +121,9 @@ test_object (Fixture *f,
   misversioned = srt_library_get_misversioned_symbols (library);
   g_assert_nonnull (misversioned);
   g_assert_cmpstr (misversioned[0], ==, NULL);
+  missing_versions = srt_library_get_missing_versions (library);
+  g_assert_nonnull (missing_versions);
+  g_assert_cmpstr (missing_versions[0], ==, NULL);
   dependencies = srt_library_get_dependencies (library);
   g_assert_nonnull (dependencies);
   g_assert_cmpstr (dependencies[0], ==, NULL);
@@ -126,6 +135,7 @@ test_object (Fixture *f,
                 "absolute-path", &absolute_path,
                 "missing-symbols", &missing_mutable,
                 "misversioned-symbols", &misversioned_mutable,
+                "missing-versions", &missing_versions_mutable,
                 "dependencies", &dependencies_mutable,
                 "issues", &issues,
                 "soname", &compat_soname,
@@ -141,6 +151,8 @@ test_object (Fixture *f,
   g_assert_cmpstr (missing_mutable[0], ==, NULL);
   g_assert_nonnull (misversioned_mutable);
   g_assert_cmpstr (misversioned_mutable[0], ==, NULL);
+  g_assert_nonnull (missing_versions_mutable);
+  g_assert_cmpstr (missing_versions_mutable[0], ==, NULL);
   g_assert_nonnull (dependencies_mutable);
   g_assert_cmpstr (dependencies_mutable[0], ==, NULL);
   g_free (messages);
@@ -151,6 +163,7 @@ test_object (Fixture *f,
   g_free (absolute_path);
   g_strfreev (missing_mutable);
   g_strfreev (misversioned_mutable);
+  g_strfreev (missing_versions_mutable);
   g_strfreev (dependencies_mutable);
   g_object_unref (library);
 
@@ -158,18 +171,20 @@ test_object (Fixture *f,
                               "/usr/lib/libjpeg.so.62",
                               "libjpeg.so.62",
                               SRT_LIBRARY_ISSUES_MISSING_SYMBOLS |
-                              SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS,
+                              SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS |
+                              SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
                               "ld.so: libjpeg.so.62: nope\n",
                               one_missing,
                               one_misversioned,
+                              one_missing_version,
                               two_deps,
                               NULL,
                               0,
                               0);
-  g_assert_cmpint (srt_library_get_issues (library) &
-                   SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
-  g_assert_cmpint (srt_library_get_issues (library) &
-                   SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS, !=, 0);
+  g_assert_cmpint (srt_library_get_issues (library), ==,
+                   SRT_LIBRARY_ISSUES_MISSING_SYMBOLS |
+                   SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS |
+                   SRT_LIBRARY_ISSUES_MISSING_VERSIONS);
   g_assert_cmpstr (srt_library_get_messages (library), ==,
                    "ld.so: libjpeg.so.62: nope\n");
   g_assert_cmpstr (srt_library_get_multiarch_tuple (library), ==,
@@ -187,6 +202,10 @@ test_object (Fixture *f,
   g_assert_nonnull (misversioned);
   g_assert_cmpstr (misversioned[0], ==, one_misversioned[0]);
   g_assert_cmpstr (misversioned[1], ==, NULL);
+  missing_versions = srt_library_get_missing_versions (library);
+  g_assert_nonnull (missing_versions);
+  g_assert_cmpstr (missing_versions[0], ==, one_missing_version[0]);
+  g_assert_cmpstr (missing_versions[1], ==, NULL);
   dependencies = srt_library_get_dependencies (library);
   g_assert_nonnull (dependencies);
   g_assert_cmpstr (dependencies[0], ==, two_deps[0]);
@@ -199,6 +218,7 @@ test_object (Fixture *f,
                 "real-soname", &real_soname,
                 "absolute-path", &absolute_path,
                 "missing-symbols", &missing_mutable,
+                "missing-versions", &missing_versions_mutable,
                 "misversioned-symbols", &misversioned_mutable,
                 "dependencies", &dependencies_mutable,
                 "issues", &issues,
@@ -213,6 +233,9 @@ test_object (Fixture *f,
   g_assert_nonnull (missing_mutable);
   g_assert_cmpstr (missing_mutable[0], ==, one_missing[0]);
   g_assert_cmpstr (missing_mutable[1], ==, NULL);
+  g_assert_nonnull (missing_versions_mutable);
+  g_assert_cmpstr (missing_versions_mutable[0], ==, one_missing_version[0]);
+  g_assert_cmpstr (missing_versions_mutable[1], ==, NULL);
   g_assert_nonnull (misversioned_mutable);
   g_assert_cmpstr (misversioned_mutable[0], ==, one_misversioned[0]);
   g_assert_cmpstr (misversioned_mutable[1], ==, NULL);
@@ -226,30 +249,184 @@ test_object (Fixture *f,
   g_free (requested_name);
   g_free (absolute_path);
   g_strfreev (missing_mutable);
+  g_strfreev (missing_versions_mutable);
   g_strfreev (misversioned_mutable);
   g_strfreev (dependencies_mutable);
   g_object_unref (library);
 }
 
-/*
- * Test the presence of `libz.so.1` that should be availabe in the system.
- */
-static void
-test_presence (Fixture *f,
-               gconstpointer context)
+typedef struct
 {
-  gboolean result;
-  char *tmp_file = NULL;
-  GString *expected_symbols = NULL;
-  SrtLibrary *library = NULL;
+  const gchar *description;
+  SrtLibrarySymbolsFormat format;
+  const gchar *library_name;  /* Defaults to `libz.so.1` */
+  const gchar *expected_symbols;
+  const gchar *missing_symbols[5];
+  const gchar *missing_versions[5];
+  const gchar *misversioned_symbols[5];
   SrtLibraryIssues issues;
-  const char * const *missing_symbols;
-  const char * const *misversioned_symbols;
-  const char * const *dependencies;
+  gboolean is_library_missing;
+} LibraryTest;
+
+static const LibraryTest library_test[] =
+{
+  {
+    .description = "presence of `libz.so.1` that should be available in the system",
+    .expected_symbols = "inflateCopy@ZLIB_1.2.0\n"
+                        "inflateBack@ZLIB_1.2.0\n"
+                        "ZLIB_1.2.0@ZLIB_1.2.0\n"
+                        "adler32\n"
+                        "gzopen@Base",
+  },
+
+  {
+    .description = "parsing a deb-symbols(5) file",
+    .format = SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
+    .expected_symbols = "# A comment.\n"
+                        /* Obviously this library doesn't really exist: it's here to check
+                         * that we do the right thing for files that describe more than
+                         * one SONAME, like libglib2.0-0:*.symbols. */
+                        "libzextra.so.0 libzextra0 #MINVER#\n"
+                        " some_fictitious_symbol@Base 1:2.0\n"
+                        "libz.so.1 zlib1g #MINVER#\n"
+                        "| libz1 #MINVER\n"
+                        "* Build-Depends-Package: zlib1g-dev\n"
+                        " adler32@Base 1:1.1.4\n"
+                        " inflateBack@ZLIB_1.2.0 1:1.2.0\n"
+                        /* These symbols don't exist: they're here to check that we don't
+                         * miss checking for symbols in the correct section of the file. */
+                        " nope@MISSING 1:1.2.0\n"
+                        " also_nope@Base 1:1.2.0\n"
+                        /* A missing version definition */
+                        " MISSING@MISSING 1:1.2.0\n"
+                        /* This library doesn't exist either. */
+                        "libzmore.so.0 libzmore0 #MINVER#\n"
+                        " some_other_fictitious_symbol@Base 1:2.0\n",
+    .missing_symbols =
+    {
+      "nope@MISSING",
+      "also_nope",
+      NULL
+    },
+    .missing_versions =
+    {
+      "MISSING",
+      NULL
+    },
+    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
+  },
+
+  {
+    .description = "presence of empty lines in expected symbols file",
+    .expected_symbols = "\n"
+                        "inflateCopy@ZLIB_1.2.0\n"
+                        "\n"
+                        "inflateBack@ZLIB_1.2.0\n"
+                        "gzopen@Base"
+                        "\n",
+  },
+
+  {
+    .description = "library with wrong/missing symbols and versions",
+    .expected_symbols = "inflateCopy@ZLIB_1.2.0\n"
+                        "inflateFooBar@ZLIB_1.2.0\n"
+                        "jpeg_mem_src@LIBJPEGTURBO_6.2\n"
+                        "ZLIB_1.2.0@ZLIB_1.2.0\n"
+                        "LIBJPEGTURBO_6.2@LIBJPEGTURBO_6.2\n"
+                        "LIBJPEGTURBO_9000@LIBJPEGTURBO_9000",
+    .missing_symbols =
+    {
+      "inflateFooBar@ZLIB_1.2.0",
+      "jpeg_mem_src@LIBJPEGTURBO_6.2",
+      NULL
+    },
+    .missing_versions =
+    {
+      "LIBJPEGTURBO_6.2",
+      "LIBJPEGTURBO_9000",
+      NULL
+    },
+    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
+  },
+
+  {
+    .description = "library with misversioned symbols",
+    .expected_symbols = "inflateBack@MISSING",
+    .misversioned_symbols =
+    {
+      "inflateBack@MISSING",
+      NULL
+    },
+    .issues = SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS,
+  },
+
+  {
+    .description = "library with wrong/missing symbols and misversioned symbols",
+    .expected_symbols = "inflateCopy@ZLIB_1.2.0\n"
+                        "inflateBack@MISSING\n"
+                        "inflateFooBar@ZLIB_1.2.0\n"
+                        "gzopen@ZLIB_1.2.0",
+    .missing_symbols =
+    {
+      "inflateFooBar@ZLIB_1.2.0",
+      NULL
+    },
+    .misversioned_symbols =
+    {
+      "inflateBack@MISSING",
+      "gzopen@ZLIB_1.2.0",
+      NULL
+    },
+    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS,
+  },
+
+  {
+    .description = "library that is missing",
+    .library_name = "libMISSING.so.62",
+    .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD | SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS,
+    .is_library_missing = TRUE,
+  },
+
+  {
+    .description = "library which is unexpectedly not versioned",
+    .library_name = "libgobject-2.0.so.0",
+    .expected_symbols = "g_value_get_uint@Base\n"
+                        "VERSION_9000@VERSION_9000",
+    .missing_versions =
+    {
+      "VERSION_9000",
+      NULL
+    },
+    .issues = SRT_LIBRARY_ISSUES_MISSING_VERSIONS | SRT_LIBRARY_ISSUES_UNVERSIONED,
+  },
+};
+
+static void
+check_list_elements (const gchar * const *list,
+                     const gchar * const *expected)
+{
+  gsize i;
+
+  g_assert_nonnull (list);
+  g_assert_nonnull (expected);
+
+  for (i = 0; list[i] != NULL; i++)
+    g_assert_cmpstr (list[i], ==, expected[i]);
+
+  g_assert_cmpstr (expected[i], ==, NULL);
+}
+
+
+static void
+test_libraries (Fixture *f,
+                gconstpointer context)
+{
   const char *multiarch_tuple = NULL;
+  g_autofree gchar *tmp_file = NULL;
   int fd;
-  gboolean seen_libc;
-  GError *error = NULL;
+  gsize i;
+  gsize j;
+  g_autoptr(GError) error = NULL;
 
 #ifndef _SRT_MULTIARCH
   g_test_skip ("Unsupported architecture");
@@ -263,494 +440,75 @@ test_presence (Fixture *f,
   g_assert_cmpint (fd, !=, -1);
   close (fd);
 
-  expected_symbols = g_string_new ("inflateCopy@ZLIB_1.2.0\n"
-                                   "inflateBack@ZLIB_1.2.0\n"
-                                   "adler32\n"
-                                   "gzopen@Base");
-
-  result = g_file_set_contents (tmp_file, expected_symbols->str, -1, &error);
-  g_assert_no_error (error);
-  g_assert_true (result);
-
-  issues = srt_check_library_presence ("libz.so.1",
-                                       multiarch_tuple,
-                                       tmp_file,
-                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
-                                       &library);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
-
-  missing_symbols = srt_library_get_missing_symbols (library);
-  g_assert_nonnull (missing_symbols);
-  g_assert_cmpstr (missing_symbols[0], ==, NULL);
-
-  misversioned_symbols = srt_library_get_misversioned_symbols (library);
-  g_assert_nonnull (misversioned_symbols);
-  g_assert_cmpstr (misversioned_symbols[0], ==, NULL);
-
-  dependencies = srt_library_get_dependencies (library);
-  g_assert_nonnull (dependencies);
-  g_assert_cmpstr (dependencies[0], !=, NULL);
-  seen_libc = FALSE;
-
-  for (gsize i = 0; dependencies[i] != NULL; i++)
+  for (i = 0; i < G_N_ELEMENTS (library_test); i++)
     {
-      g_debug ("libz.so.1 depends on %s", dependencies[i]);
+      const LibraryTest *test = &library_test[i];
+      const char * const *dependencies;
+      gboolean result;
+      SrtLibraryIssues issues;
+      gboolean seen_libc = FALSE;
+      g_autoptr(SrtLibrary) library = NULL;
+      const gchar *library_name = test->library_name == NULL ? "libz.so.1" : test->library_name;
 
-      if (strstr (dependencies[i], "/libc.so.") != NULL)
-        seen_libc = TRUE;
+      g_test_message ("%s", test->description);
+
+      if (test->expected_symbols != NULL)
+        {
+          result = g_file_set_contents (tmp_file, test->expected_symbols, -1, &error);
+          g_assert_no_error (error);
+          g_assert_true (result);
+        }
+
+      issues = srt_check_library_presence (library_name,
+                                           multiarch_tuple,
+                                           test->expected_symbols == NULL ? NULL : tmp_file,
+                                           test->format,
+                                           &library);
+      g_assert_cmpint (issues, ==, test->issues);
+      g_assert_cmpint (srt_library_get_terminating_signal (library), ==, 0);
+
+      if (test->is_library_missing)
+        {
+          g_assert_cmpint (srt_library_get_exit_status (library), ==, 1);
+          g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
+        }
+      else
+        {
+          g_assert_cmpint (srt_library_get_exit_status (library), ==, 0);
+          g_debug ("path to %s is %s", library_name, srt_library_get_absolute_path (library));
+          g_assert_true (srt_library_get_absolute_path (library)[0] == '/');
+          g_assert_true (g_file_test (srt_library_get_absolute_path (library), G_FILE_TEST_EXISTS));
+        }
+
+      check_list_elements (srt_library_get_missing_symbols (library),
+                           test->missing_symbols);
+      check_list_elements (srt_library_get_missing_versions (library),
+                           test->missing_versions);
+      check_list_elements (srt_library_get_misversioned_symbols (library),
+                          test->misversioned_symbols);
+
+      dependencies = srt_library_get_dependencies (library);
+      g_assert_nonnull (dependencies);
+
+      if (test->is_library_missing)
+        {
+          g_assert_cmpstr (dependencies[0], ==, NULL);
+        }
+      else
+        {
+          for (j = 0; dependencies[j] != NULL && !seen_libc; j++)
+            {
+              g_debug ("%s depends on %s", test->library_name, dependencies[j]);
+
+              if (strstr (dependencies[j], "/libc.so.") != NULL)
+                seen_libc = TRUE;
+            }
+
+          g_assert_true (seen_libc);
+        }
     }
 
-  g_assert_true (seen_libc);
-
   g_unlink (tmp_file);
-  g_free (tmp_file);
-  g_string_free (expected_symbols, TRUE);
-  g_object_unref (library);
-  g_clear_error (&error);
-}
-
-/*
- * Test parsing a deb-symbols(5) file.
- */
-static void
-test_deb_symbols (Fixture *f,
-                  gconstpointer context)
-{
-  gboolean result;
-  char *tmp_file = NULL;
-  static const char expected_symbols[] =
-    "# A comment.\n"
-    /* Obviously this library doesn't really exist: it's here to check
-     * that we do the right thing for files that describe more than one
-     * SONAME, like libglib2.0-0:*.symbols. */
-    "libzextra.so.0 libzextra0 #MINVER#\n"
-    " some_fictitious_symbol@Base 1:2.0\n"
-    "libz.so.1 zlib1g #MINVER#\n"
-    "| libz1 #MINVER\n"
-    "* Build-Depends-Package: zlib1g-dev\n"
-    " adler32@Base 1:1.1.4\n"
-    " inflateBack@ZLIB_1.2.0 1:1.2.0\n"
-    /* These symbols don't exist: they're here to check that we don't miss
-     * checking for symbols in the correct section of the file. */
-    " nope@MISSING 1:1.2.0\n"
-    " also_nope@Base 1:1.2.0\n"
-    /* This library doesn't exist either. */
-    "libzmore.so.0 libzmore0 #MINVER#\n"
-    " some_other_fictitious_symbol@Base 1:2.0\n";
-  SrtLibrary *library = NULL;
-  SrtLibraryIssues issues;
-  const char * const *missing_symbols;
-  const char *multiarch_tuple = NULL;
-  int fd;
-  GError *error = NULL;
-
-#ifndef _SRT_MULTIARCH
-  g_test_skip ("Unsupported architecture");
-  return;
-#else
-  multiarch_tuple = _SRT_MULTIARCH;
-#endif
-
-  fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
-  g_assert_no_error (error);
-  g_assert_cmpint (fd, !=, -1);
-  close (fd);
-
-  result = g_file_set_contents (tmp_file, expected_symbols, -1, &error);
-  g_assert_no_error (error);
-  g_assert_true (result);
-
-  issues = srt_check_library_presence ("libz.so.1",
-                                       multiarch_tuple,
-                                       tmp_file,
-                                       SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS,
-                                       &library);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_MISSING_SYMBOLS);
-  g_assert_cmpint (srt_library_get_exit_status (library), ==, 0);
-  g_assert_cmpint (srt_library_get_terminating_signal (library), ==, 0);
-
-  /* If we had mistakenly parsed the sections that refer to libzextra.so.0
-   * and libzmore.so.0, then we would see more missing symbols than this.
-   * If we had not parsed the libz.so.1 section, we would see fewer. */
-  missing_symbols = srt_library_get_missing_symbols (library);
-  g_assert_nonnull (missing_symbols);
-  g_assert_cmpstr (missing_symbols[0], ==, "nope@MISSING");
-  g_assert_cmpstr (missing_symbols[1], ==, "also_nope");
-  g_assert_cmpstr (missing_symbols[2], ==, NULL);
-
-  g_unlink (tmp_file);
-  g_free (tmp_file);
-  g_object_unref (library);
-  g_clear_error (&error);
-}
-
-/*
- * Test the presence of empty lines in expected symbols file.
- */
-static void
-test_empty_line (Fixture *f,
-                 gconstpointer context)
-{
-  gboolean result;
-  char *tmp_file = NULL;
-  GString *expected_symbols = NULL;
-  SrtLibrary *library = NULL;
-  SrtLibraryIssues issues;
-  const char * const *missing_symbols;
-  const char * const *misversioned_symbols;
-  const char *multiarch_tuple = NULL;
-  int fd;
-  GError *error = NULL;
-
-#ifndef _SRT_MULTIARCH
-  g_test_skip ("Unsupported architecture");
-  return;
-#else
-  multiarch_tuple = _SRT_MULTIARCH;
-#endif
-
-  fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
-  g_assert_no_error (error);
-  g_assert_cmpint (fd, !=, -1);
-  close (fd);
-
-  expected_symbols = g_string_new ("\n"
-                                   "inflateCopy@ZLIB_1.2.0\n"
-                                   "\n"
-                                   "inflateBack@ZLIB_1.2.0\n"
-                                   "gzopen@Base"
-                                   "\n");
-
-  result = g_file_set_contents (tmp_file, expected_symbols->str, -1, &error);
-  g_assert_no_error (error);
-  g_assert_true (result);
-
-  issues = srt_check_library_presence ("libz.so.1",
-                                       multiarch_tuple,
-                                       tmp_file,
-                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
-                                       &library);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_NONE);
-
-  missing_symbols = srt_library_get_missing_symbols (library);
-  g_assert_nonnull (missing_symbols);
-  g_assert_cmpstr (missing_symbols[0], ==, NULL);
-
-  misversioned_symbols = srt_library_get_misversioned_symbols (library);
-  g_assert_nonnull (misversioned_symbols);
-  g_assert_cmpstr (misversioned_symbols[0], ==, NULL);
-
-  g_unlink (tmp_file);
-  g_free (tmp_file);
-  g_string_free (expected_symbols, TRUE);
-  g_object_unref (library);
-  g_clear_error (&error);
-}
-
-/*
- * Test a library with wrong/missing symbols.
- */
-static void
-test_missing_symbols (Fixture *f,
-                      gconstpointer context)
-{
-  gboolean result;
-  char *tmp_file = NULL;
-  GString *expected_symbols = NULL;
-  SrtLibrary *library = NULL;
-  SrtLibraryIssues issues;
-  const char * const *missing_symbols;
-  const char * const *misversioned_symbols;
-  const char * const *dependencies;
-  const char *multiarch_tuple = NULL;
-  int fd;
-  gboolean seen_libc;
-  GError *error = NULL;
-
-#ifndef _SRT_MULTIARCH
-  g_test_skip ("Unsupported architecture");
-  return;
-#else
-  multiarch_tuple = _SRT_MULTIARCH;
-#endif
-
-  fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
-  g_assert_no_error (error);
-  g_assert_cmpint (fd, !=, -1);
-  close (fd);
-
-  expected_symbols = g_string_new ("inflateCopy@ZLIB_1.2.0\n"
-                                   "inflateFooBar@ZLIB_1.2.0\n"
-                                   "jpeg_mem_src@LIBJPEGTURBO_6.2");
-
-  result = g_file_set_contents (tmp_file, expected_symbols->str, -1, &error);
-  g_assert_no_error (error);
-  g_assert_true (result);
-
-  issues = srt_check_library_presence ("libz.so.1",
-                                       multiarch_tuple,
-                                       tmp_file,
-                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
-                                       &library);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_MISSING_SYMBOLS);
-
-  g_debug ("path to libz.so.1 is %s", srt_library_get_absolute_path (library));
-  g_assert_true (srt_library_get_absolute_path (library)[0] == '/');
-  g_assert_true (g_file_test (srt_library_get_absolute_path (library), G_FILE_TEST_EXISTS));
-
-  missing_symbols = srt_library_get_missing_symbols (library);
-  g_assert_nonnull (missing_symbols);
-  g_assert_cmpstr (missing_symbols[0], ==, "inflateFooBar@ZLIB_1.2.0");
-  g_assert_cmpstr (missing_symbols[1], ==, "jpeg_mem_src@LIBJPEGTURBO_6.2");
-  g_assert_cmpstr (missing_symbols[2], ==, NULL);
-
-  misversioned_symbols = srt_library_get_misversioned_symbols (library);
-  g_assert_nonnull (misversioned_symbols);
-  g_assert_cmpstr (misversioned_symbols[0], ==, NULL);
-
-  dependencies = srt_library_get_dependencies (library);
-  g_assert_nonnull (dependencies);
-  g_assert_cmpstr (dependencies[0], !=, NULL);
-  seen_libc = FALSE;
-
-  for (gsize i = 0; dependencies[i] != NULL; i++)
-    {
-      g_debug ("libz.so.1 depends on %s", dependencies[i]);
-
-      if (strstr (dependencies[i], "/libc.so.") != NULL)
-        seen_libc = TRUE;
-    }
-
-  g_assert_true (seen_libc);
-
-  g_unlink (tmp_file);
-  g_free (tmp_file);
-  g_string_free (expected_symbols, TRUE);
-  g_object_unref (library);
-  g_clear_error (&error);
-}
-
-/*
- * Test a library with wrong/missing symbols and misversioned symbols.
- */
-static void
-test_misversioned_symbols (Fixture *f,
-                           gconstpointer context)
-{
-  gboolean result;
-  char *tmp_file = NULL;
-  GString *expected_symbols = NULL;
-  SrtLibrary *library = NULL;
-  SrtLibraryIssues issues;
-  const char * const *missing_symbols;
-  const char * const *misversioned_symbols;
-  const char * const *dependencies;
-  const char *multiarch_tuple = NULL;
-  int fd;
-  gboolean seen_libc;
-  GError *error = NULL;
-
-#ifndef _SRT_MULTIARCH
-  g_test_skip ("Unsupported architecture");
-  return;
-#else
-  multiarch_tuple = _SRT_MULTIARCH;
-#endif
-
-  fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
-  g_assert_no_error (error);
-  g_assert_cmpint (fd, !=, -1);
-  close (fd);
-
-  expected_symbols = g_string_new ("inflateBack@MISSING");
-
-  result = g_file_set_contents (tmp_file, expected_symbols->str, -1, &error);
-  g_assert_no_error (error);
-  g_assert_true (result);
-
-  issues = srt_check_library_presence ("libz.so.1",
-                                       multiarch_tuple,
-                                       tmp_file,
-                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
-                                       &library);
-  g_assert_cmpint (issues, ==, SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS);
-
-  g_debug ("path to libz.so.1 is %s", srt_library_get_absolute_path (library));
-  g_assert_true (srt_library_get_absolute_path (library)[0] == '/');
-  g_assert_true (g_file_test (srt_library_get_absolute_path (library), G_FILE_TEST_EXISTS));
-
-  missing_symbols = srt_library_get_missing_symbols (library);
-  g_assert_nonnull (missing_symbols);
-  g_assert_cmpstr (missing_symbols[0], ==, NULL);
-
-  misversioned_symbols = srt_library_get_misversioned_symbols (library);
-  g_assert_nonnull (misversioned_symbols);
-  g_assert_cmpstr (misversioned_symbols[0], ==, "inflateBack@MISSING");
-  g_assert_cmpstr (misversioned_symbols[1], ==, NULL);
-
-  dependencies = srt_library_get_dependencies (library);
-  g_assert_nonnull (dependencies);
-  g_assert_cmpstr (dependencies[0], !=, NULL);
-  seen_libc = FALSE;
-
-  for (gsize i = 0; dependencies[i] != NULL; i++)
-    {
-      g_debug ("libz.so.1 depends on %s", dependencies[i]);
-
-      if (strstr (dependencies[i], "/libc.so.") != NULL)
-        seen_libc = TRUE;
-    }
-
-  g_assert_true (seen_libc);
-
-  g_unlink (tmp_file);
-  g_free (tmp_file);
-  g_string_free (expected_symbols, TRUE);
-  g_object_unref (library);
-  g_clear_error (&error);
-}
-
-/*
- * Test a library with wrong/missing symbols and misversioned symbols.
- */
-static void
-test_missing_symbols_and_versions (Fixture *f,
-                                   gconstpointer context)
-{
-  gboolean result;
-  char *tmp_file = NULL;
-  GString *expected_symbols = NULL;
-  SrtLibrary *library = NULL;
-  SrtLibraryIssues issues;
-  const char * const *missing_symbols;
-  const char * const *misversioned_symbols;
-  const char * const *dependencies;
-  const char *multiarch_tuple = NULL;
-  int fd;
-  gboolean seen_libc;
-  GError *error = NULL;
-
-#ifndef _SRT_MULTIARCH
-  g_test_skip ("Unsupported architecture");
-  return;
-#else
-  multiarch_tuple = _SRT_MULTIARCH;
-#endif
-
-  fd = g_file_open_tmp ("library-XXXXXX", &tmp_file, &error);
-  g_assert_no_error (error);
-  g_assert_cmpint (fd, !=, -1);
-  close (fd);
-
-  expected_symbols = g_string_new ("inflateCopy@ZLIB_1.2.0\n"
-                                   "inflateBack@MISSING\n"
-                                   "inflateFooBar@ZLIB_1.2.0\n"
-                                   "gzopen@ZLIB_1.2.0");
-
-  result = g_file_set_contents (tmp_file, expected_symbols->str, -1, &error);
-  g_assert_no_error (error);
-  g_assert_true (result);
-
-  issues = srt_check_library_presence ("libz.so.1",
-                                       multiarch_tuple,
-                                       tmp_file,
-                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
-                                       &library);
-  g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_MISSING_SYMBOLS, !=, 0);
-  g_assert_cmpint (issues & SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS, !=, 0);
-
-  g_debug ("path to libz.so.1 is %s", srt_library_get_absolute_path (library));
-  g_assert_true (srt_library_get_absolute_path (library)[0] == '/');
-  g_assert_true (g_file_test (srt_library_get_absolute_path (library), G_FILE_TEST_EXISTS));
-
-  missing_symbols = srt_library_get_missing_symbols (library);
-  g_assert_nonnull (missing_symbols);
-  g_assert_cmpstr (missing_symbols[0], ==, "inflateFooBar@ZLIB_1.2.0");
-  g_assert_cmpstr (missing_symbols[1], ==, NULL);
-
-  misversioned_symbols = srt_library_get_misversioned_symbols (library);
-  g_assert_nonnull (misversioned_symbols);
-  g_assert_cmpstr (misversioned_symbols[0], ==, "inflateBack@MISSING");
-  g_assert_cmpstr (misversioned_symbols[1], ==, "gzopen@ZLIB_1.2.0");
-  g_assert_cmpstr (misversioned_symbols[2], ==, NULL);
-
-  dependencies = srt_library_get_dependencies (library);
-  g_assert_nonnull (dependencies);
-  g_assert_cmpstr (dependencies[0], !=, NULL);
-  seen_libc = FALSE;
-
-  for (gsize i = 0; dependencies[i] != NULL; i++)
-    {
-      g_debug ("libz.so.1 depends on %s", dependencies[i]);
-
-      if (strstr (dependencies[i], "/libc.so.") != NULL)
-        seen_libc = TRUE;
-    }
-
-  g_assert_true (seen_libc);
-
-  g_unlink (tmp_file);
-  g_free (tmp_file);
-  g_string_free (expected_symbols, TRUE);
-  g_object_unref (library);
-  g_clear_error (&error);
-}
-
-/*
- * Test the presence of a missing library.
- */
-static void
-test_missing_library (Fixture *f,
-                      gconstpointer context)
-{
-  SrtLibrary *library = NULL;
-  SrtLibraryIssues issues;
-  const char * const *missing_symbols;
-  const char * const *misversioned_symbols;
-  const char * const *dependencies;
-  const char *multiarch_tuple = NULL;
-
-#ifndef _SRT_MULTIARCH
-  g_test_skip ("Unsupported architecture");
-  return;
-#else
-  multiarch_tuple = _SRT_MULTIARCH;
-#endif
-
-  issues = srt_check_library_presence ("libMISSING.so.62",
-                                       multiarch_tuple,
-                                       NULL,
-                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
-                                       NULL);
-  g_assert_cmpint (issues, ==,
-                   (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
-                    SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
-
-  issues = srt_check_library_presence ("libMISSING.so.62",
-                                       multiarch_tuple,
-                                       NULL,
-                                       SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
-                                       &library);
-  g_assert_cmpint (issues, ==,
-                   (SRT_LIBRARY_ISSUES_CANNOT_LOAD |
-                    SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS));
-  g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
-  g_assert_cmpint (srt_library_get_exit_status (library), ==, 1);
-  g_assert_cmpint (srt_library_get_terminating_signal (library), ==, 0);
-
-  missing_symbols = srt_library_get_missing_symbols (library);
-  g_assert_nonnull (missing_symbols);
-  g_assert_cmpstr (missing_symbols[0], ==, NULL);
-
-  misversioned_symbols = srt_library_get_misversioned_symbols (library);
-  g_assert_nonnull (misversioned_symbols);
-  g_assert_cmpstr (misversioned_symbols[0], ==, NULL);
-
-  dependencies = srt_library_get_dependencies (library);
-  g_assert_nonnull (dependencies);
-  g_assert_cmpstr (dependencies[0], ==, NULL);
-
-  g_object_unref (library);
 }
 
 /*
@@ -810,20 +568,8 @@ main (int argc,
   _srt_tests_init (&argc, &argv, NULL);
   g_test_add ("/library/object", Fixture, NULL,
               setup, test_object, teardown);
-  g_test_add ("/library/presence", Fixture, NULL, setup, test_presence,
+  g_test_add ("/library/expectations", Fixture, NULL, setup, test_libraries,
               teardown);
-  g_test_add ("/library/deb_symbols", Fixture, NULL, setup, test_deb_symbols,
-              teardown);
-  g_test_add ("/library/empty_line", Fixture, NULL, setup, test_empty_line,
-              teardown);
-  g_test_add ("/library/missing_symbol", Fixture, NULL, setup,
-              test_missing_symbols, teardown);
-  g_test_add ("/library/misversioned_symbol_version", Fixture, NULL, setup,
-              test_misversioned_symbols, teardown);
-  g_test_add ("/library/missing_symbol_and_version", Fixture, NULL, setup,
-              test_missing_symbols_and_versions, teardown);
-  g_test_add ("/library/missing_library", Fixture, NULL, setup,
-              test_missing_library, teardown);
   g_test_add ("/library/missing_arch", Fixture, NULL, setup,
               test_missing_arch, teardown);
 

@@ -53,6 +53,7 @@ struct _SrtLibrary
   GStrv dependencies;
   GStrv missing_symbols;
   GStrv misversioned_symbols;
+  GStrv missing_versions;
   GQuark multiarch_tuple;
   SrtLibraryIssues issues;
   int exit_status;
@@ -72,6 +73,7 @@ enum {
   PROP_ISSUES,
   PROP_MESSAGES,
   PROP_MISSING_SYMBOLS,
+  PROP_MISSING_VERSIONS,
   PROP_MULTIARCH_TUPLE,
   PROP_SONAME,
   PROP_REAL_SONAME,
@@ -117,6 +119,10 @@ srt_library_get_property (GObject *object,
 
       case PROP_MISSING_SYMBOLS:
         g_value_set_boxed (value, self->missing_symbols);
+        break;
+
+      case PROP_MISSING_VERSIONS:
+        g_value_set_boxed (value, self->missing_versions);
         break;
 
       case PROP_MULTIARCH_TUPLE:
@@ -207,6 +213,17 @@ srt_library_set_property (GObject *object,
 
         break;
 
+      case PROP_MISSING_VERSIONS:
+        /* Construct-only */
+        g_return_if_fail (self->missing_versions == NULL);
+        self->missing_versions = g_value_dup_boxed (value);
+
+        /* Guarantee non-NULL */
+        if (self->missing_versions == NULL)
+          self->missing_versions = g_new0 (gchar *, 1);
+
+        break;
+
       case PROP_MULTIARCH_TUPLE:
         /* Construct-only */
         g_return_if_fail (self->multiarch_tuple == 0);
@@ -271,6 +288,7 @@ srt_library_finalize (GObject *object)
   g_strfreev (self->dependencies);
   g_strfreev (self->missing_symbols);
   g_strfreev (self->misversioned_symbols);
+  g_strfreev (self->missing_versions);
 
   G_OBJECT_CLASS (srt_library_parent_class)->finalize (object);
 }
@@ -314,6 +332,13 @@ srt_library_class_init (SrtLibraryClass *cls)
   properties[PROP_MISSING_SYMBOLS] =
     g_param_spec_boxed ("missing-symbols", "Missing symbols",
                         "Symbols that were expected to be in this "
+                        "library, but were found to be missing",
+                        G_TYPE_STRV,
+                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
+                        G_PARAM_STATIC_STRINGS);
+  properties[PROP_MISSING_VERSIONS] =
+    g_param_spec_boxed ("missing-versions", "Missing versions",
+                        "Versions that were expected to be in this "
                         "library, but were found to be missing",
                         G_TYPE_STRV,
                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY |
@@ -579,6 +604,25 @@ srt_library_get_misversioned_symbols (SrtLibrary *self)
 }
 
 /**
+ * srt_library_get_missing_versions:
+ * @self: a library
+ *
+ * Return the version definitions that were expected to be provided by @self
+ * but were not found. This array is non-empty if and only if the
+ * %SRT_LIBRARY_ISSUES_MISSING_VERSIONS issue flag is set.
+ *
+ * Returns: (array zero-terminated=1) (element-type filename): The versions
+ *  that were missing from @self, as a %NULL-terminated array. The
+ *  pointer remains valid until @self is destroyed.
+ */
+const char * const *
+srt_library_get_missing_versions (SrtLibrary *self)
+{
+  g_return_val_if_fail (SRT_IS_LIBRARY (self), NULL);
+  return (const char * const *) self->missing_versions;
+}
+
+/**
  * srt_check_library_presence:
  * @requested_name: (type filename): The `SONAME` or absolute or relative
  *  path of a shared library, for example `libjpeg.so.62`
@@ -640,6 +684,7 @@ _srt_check_library_presence (const char *helpers_path,
   GError *error = NULL;
   g_autoptr(GPtrArray) missing_symbols = NULL;
   g_autoptr(GPtrArray) misversioned_symbols = NULL;
+  g_autoptr(GPtrArray) missing_versions = NULL;
   g_autoptr(GPtrArray) dependencies = NULL;
   SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
   GStrv my_environ = NULL;
@@ -648,6 +693,7 @@ _srt_check_library_presence (const char *helpers_path,
   gchar *next_line;
   const char * const *missing_symbols_strv = NULL;
   const char * const *misversioned_symbols_strv = NULL;
+  const char * const *missing_versions_strv = NULL;
   const char * const *dependencies_strv = NULL;
 
   g_return_val_if_fail (requested_name != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
@@ -749,6 +795,7 @@ _srt_check_library_presence (const char *helpers_path,
 
   missing_symbols = g_ptr_array_new_with_free_func (g_free);
   misversioned_symbols = g_ptr_array_new_with_free_func (g_free);
+  missing_versions = g_ptr_array_new_with_free_func (g_free);
   dependencies = g_ptr_array_new_with_free_func (g_free);
 
   next_line = output;
@@ -804,6 +851,13 @@ _srt_check_library_presence (const char *helpers_path,
           else
             g_warning ("More than one path in inspect-library output");
         }
+      else if (g_str_has_prefix (line, "unexpectedly_unversioned="))
+        {
+          if (g_strcmp0 (decoded, "true") == 0)
+            issues |= SRT_LIBRARY_ISSUES_UNVERSIONED;
+          else if (g_strcmp0 (decoded, "false") != 0)
+            g_warning ("Unknown value in inspect-library's output line: %s", line);
+        }
       else if (g_str_has_prefix (line, "missing_symbol="))
         {
           g_ptr_array_add (missing_symbols, g_steal_pointer (&decoded));
@@ -811,6 +865,10 @@ _srt_check_library_presence (const char *helpers_path,
       else if (g_str_has_prefix (line, "misversioned_symbol="))
         {
           g_ptr_array_add (misversioned_symbols, g_steal_pointer (&decoded));
+        }
+      else if (g_str_has_prefix (line, "missing_version="))
+        {
+          g_ptr_array_add (missing_versions, g_steal_pointer (&decoded));
         }
       else if (g_str_has_prefix (line, "dependency="))
         {
@@ -837,6 +895,13 @@ out:
       misversioned_symbols_strv = (const char * const *) misversioned_symbols->pdata;
     }
 
+  if (missing_versions != NULL && missing_versions->len > 0)
+    {
+      issues |= SRT_LIBRARY_ISSUES_MISSING_VERSIONS;
+      g_ptr_array_add (missing_versions, NULL);
+      missing_versions_strv = (const char * const *) missing_versions->pdata;
+    }
+
   if (dependencies != NULL && dependencies->len > 0)
     {
       g_ptr_array_add (dependencies, NULL);
@@ -851,6 +916,7 @@ out:
                                           child_stderr,
                                           missing_symbols_strv,
                                           misversioned_symbols_strv,
+                                          missing_versions_strv,
                                           dependencies_strv,
                                           real_soname,
                                           exit_status,

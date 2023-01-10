@@ -64,6 +64,11 @@ GType srt_library_get_type (void);
  *  expected ABIs has been set, so we cannot know which libraries we are
  *  meant to have found
  * @SRT_LIBRARY_ISSUES_TIMEOUT: Helper timed out when executing
+ * @SRT_LIBRARY_ISSUES_MISSING_VERSIONS: Some of the expected version
+ *  definitions were not present
+ * @SRT_LIBRARY_ISSUES_UNVERSIONED: The library was expected to have
+ *  at least one version definition, but has no version definitions
+ *  at all. Implies %SRT_LIBRARY_ISSUES_MISSING_VERSIONS.
  *
  * A bitfield with flags representing problems with a library, or
  * %SRT_LIBRARY_ISSUES_NONE (which is numerically zero) if no problems
@@ -79,6 +84,8 @@ typedef enum
   SRT_LIBRARY_ISSUES_UNKNOWN = (1 << 3),
   SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS = (1 << 4),
   SRT_LIBRARY_ISSUES_TIMEOUT = (1 << 5),
+  SRT_LIBRARY_ISSUES_MISSING_VERSIONS = (1 << 6),
+  SRT_LIBRARY_ISSUES_UNVERSIONED = (1 << 7),
   SRT_LIBRARY_ISSUES_NONE = 0
 } SrtLibraryIssues;
 
@@ -113,6 +120,8 @@ _SRT_PUBLIC
 const char * const *srt_library_get_missing_symbols (SrtLibrary *self);
 _SRT_PUBLIC
 const char * const *srt_library_get_misversioned_symbols (SrtLibrary *self);
+_SRT_PUBLIC
+const char * const *srt_library_get_missing_versions (SrtLibrary *self);
 _SRT_PUBLIC
 const char * const *srt_library_get_dependencies (SrtLibrary *self);
 _SRT_PUBLIC

@@ -41,6 +41,8 @@
  * @misversioned_symbols: (nullable) (array zero-terminated=1) (element-type utf8):
  *  Symbols we expected to find in @requested_name but were available with a
  *  different version
+ * @missing_versions: (nullable) (array zero-terminated=1) (element-type utf8):
+ *  Versions we expected to find in @requested_name but did not
  * @dependencies: (nullable) (array zero-terminated=1) (element-type utf8):
  *  Dependencies of @requested_name
  * @exit_status: exit status of helper, or -1 if it did not exit normally
@@ -58,6 +60,7 @@ static inline SrtLibrary *_srt_library_new (const char *multiarch_tuple,
                                             const char *messages,
                                             const char * const *missing_symbols,
                                             const char * const *misversioned_symbols,
+                                            const char * const *missing_versions,
                                             const char * const *dependencies,
                                             const char *real_soname,
                                             int exit_status,
@@ -72,6 +75,7 @@ _srt_library_new (const char *multiarch_tuple,
                   const char *messages,
                   const char * const *missing_symbols,
                   const char * const *misversioned_symbols,
+                  const char * const *missing_versions,
                   const char * const *dependencies,
                   const char *real_soname,
                   int exit_status,
@@ -87,6 +91,7 @@ _srt_library_new (const char *multiarch_tuple,
                        "missing-symbols", missing_symbols,
                        "multiarch-tuple", multiarch_tuple,
                        "misversioned-symbols", misversioned_symbols,
+                       "missing-versions", missing_versions,
                        "exit-status", exit_status,
                        "real-soname", real_soname,
                        "requested-name", requested_name,

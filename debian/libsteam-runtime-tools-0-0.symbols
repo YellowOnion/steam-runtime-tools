@@ -118,6 +118,7 @@ libsteam-runtime-tools-0.so.0 libsteam-runtime-tools-0-0 #MINVER#
  srt_library_get_issues@Base 0.20190801.0
  srt_library_get_messages@Base 0.20190926.0
  srt_library_get_missing_symbols@Base 0.20190801.0
+ srt_library_get_missing_versions@Base 0.20230112.0
  srt_library_get_misversioned_symbols@Base 0.20190801.0
  srt_library_get_multiarch_tuple@Base 0.20190801.0
  srt_library_get_real_soname@Base 0.20200908.0

@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20230112.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20230112.0) steamrt; urgency=medium
 
   [ Simon McVittie ]
   * scripts: Convert most scripts from bash to the POSIX shell /bin/sh.
@@ -15,7 +15,7 @@ steam-runtime-tools (0.20230112.0) UNRELEASED; urgency=medium
     from a library, either having different version definitions or being
     completely unversioned (steamrt/steam-runtime-tools#95)
 
- -- Simon McVittie <smcv@collabora.com>  Thu, 12 Jan 2023 13:09:50 +0000
+ -- Simon McVittie <smcv@collabora.com>  Thu, 12 Jan 2023 19:51:50 +0000
 
 steam-runtime-tools (0.20221215.0) steamrt; urgency=medium
 

@@ -1,3 +1,22 @@
+steam-runtime-tools (0.20230112.0) UNRELEASED; urgency=medium
+
+  [ Simon McVittie ]
+  * scripts: Convert most scripts from bash to the POSIX shell /bin/sh.
+    This improves robustness if the bash found in $PATH cannot be run
+    in the scout environment, in particular if it was installed via Nix
+    and relies on DT_RUNPATH. (steam-runtime#545, steamrt/tasks#209)
+  * container-runtime: Remove backwards compatibility with old versions
+    of the pressure-vessel/ directory
+  * container-runtime: Update documentation to reflect this now being part
+    of steam-runtime-tools
+
+  [ Ludovico de Nittis ]
+  * system-info: Detect when an expected version definition was missing
+    from a library, either having different version definitions or being
+    completely unversioned (steamrt/steam-runtime-tools#95)
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 12 Jan 2023 13:09:50 +0000
+
 steam-runtime-tools (0.20221215.0) steamrt; urgency=medium
 
   * CI fixes only:

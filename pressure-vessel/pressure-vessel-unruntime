@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # pressure-vessel-unruntime — undo the Steam Runtime's environment
 #
-# Copyright © 2017-2019 Collabora Ltd.
+# Copyright © 2017-2022 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -26,9 +26,7 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 set -e
-set -o pipefail
 set -u
-shopt -s nullglob
 
 me="$0"
 me="$(readlink -f "$0")"
@@ -40,32 +38,29 @@ steam_runtime="${STEAM_RUNTIME-}"
 
 # Undo any weird environment before we start running external
 # executables. We put it back before running the actual app/game.
-
-declare -a options
-ld_audit=
-ld_preload=
-options=()
+# We prepend options to "$@" because that's the only array available
+# in generic POSIX /bin/sh, and bash is not always practical to use.
 
 if [ -n "${LD_LIBRARY_PATH-}" ]; then
-    options+=("--env-if-host=LD_LIBRARY_PATH=$LD_LIBRARY_PATH")
+    set -- "--env-if-host=LD_LIBRARY_PATH=$LD_LIBRARY_PATH" "$@"
 fi
 
 if [ -n "${LD_AUDIT-}" ]; then
-    options+=("--env-if-host=LD_AUDIT=$LD_AUDIT")
-    ld_audit="$LD_AUDIT"
+    set -- "--env-if-host=LD_AUDIT=$LD_AUDIT" "$@"
+    set -- "--ld-audits=$LD_AUDIT" "$@"
 fi
 
 if [ -n "${LD_PRELOAD-}" ]; then
-    options+=("--env-if-host=LD_PRELOAD=$LD_PRELOAD")
-    ld_preload="$LD_PRELOAD"
+    set -- "--env-if-host=LD_PRELOAD=$LD_PRELOAD" "$@"
+    set -- "--ld-preloads=$LD_PRELOAD" "$@"
 fi
 
 if [ -n "${PATH-}" ]; then
-    options+=("--env-if-host=PATH=$PATH")
+    set -- "--env-if-host=PATH=$PATH" "$@"
 fi
 
 if [ -n "${STEAM_RUNTIME-}" ]; then
-    options+=("--env-if-host=STEAM_RUNTIME=$STEAM_RUNTIME")
+    set -- "--env-if-host=STEAM_RUNTIME=$STEAM_RUNTIME" "$@"
 fi
 
 unset LD_AUDIT
@@ -75,7 +70,7 @@ PATH="$default_path"
 unset STEAM_RUNTIME
 
 if [ -n "${SYSTEM_LD_LIBRARY_PATH+set}" ]; then
-    options+=("--env-if-host=SYSTEM_LD_LIBRARY_PATH=$SYSTEM_LD_LIBRARY_PATH")
+    set -- "--env-if-host=SYSTEM_LD_LIBRARY_PATH=$SYSTEM_LD_LIBRARY_PATH" "$@"
     # This has been superseeded by the new $PRESSURE_VESSEL_APP_LD_LIBRARY_PATH
     # environment variable. When we are sure that we are always using the new
     # _v2-entry-point with $PRESSURE_VESSEL_APP_LD_LIBRARY_PATH support, the
@@ -84,16 +79,16 @@ if [ -n "${SYSTEM_LD_LIBRARY_PATH+set}" ]; then
 fi
 
 if [ -n "${SYSTEM_LD_PRELOAD+set}" ]; then
-    options+=("--env-if-host=SYSTEM_LD_PRELOAD=$SYSTEM_LD_PRELOAD")
+    set -- "--env-if-host=SYSTEM_LD_PRELOAD=$SYSTEM_LD_PRELOAD" "$@"
     export LD_PRELOAD="$SYSTEM_LD_PRELOAD"
 fi
 
 if [ -n "${STEAM_RUNTIME_LIBRARY_PATH+set}" ]; then
-    options+=("--env-if-host=STEAM_RUNTIME_LIBRARY_PATH=$STEAM_RUNTIME_LIBRARY_PATH")
+    set -- "--env-if-host=STEAM_RUNTIME_LIBRARY_PATH=$STEAM_RUNTIME_LIBRARY_PATH" "$@"
 fi
 
 if [ -n "${SYSTEM_PATH+set}" ]; then
-    options+=("--env-if-host=SYSTEM_PATH=$SYSTEM_PATH")
+    set -- "--env-if-host=SYSTEM_PATH=$SYSTEM_PATH" "$@"
     export PATH="$SYSTEM_PATH"
 fi
 
@@ -102,26 +97,11 @@ unset SYSTEM_LD_PRELOAD
 unset SYSTEM_PATH
 
 if [ -n "${PRESSURE_VESSEL_APP_LD_LIBRARY_PATH+set}" ]; then
-    options+=("--env-if-host=PRESSURE_VESSEL_APP_LD_LIBRARY_PATH=$PRESSURE_VESSEL_APP_LD_LIBRARY_PATH")
+    set -- "--env-if-host=PRESSURE_VESSEL_APP_LD_LIBRARY_PATH=$PRESSURE_VESSEL_APP_LD_LIBRARY_PATH" "$@"
     export LD_LIBRARY_PATH="$PRESSURE_VESSEL_APP_LD_LIBRARY_PATH"
 fi
 
 unset PRESSURE_VESSEL_APP_LD_LIBRARY_PATH
-
-old_IFS="$IFS"
-IFS=":"
-for word in $ld_audit; do
-    if [ -n "$word" ]; then
-        options+=("--ld-audit=$word")
-    fi
-done
-IFS=": "
-for word in $ld_preload; do
-    if [ -n "$word" ]; then
-        options+=("--ld-preload=$word")
-    fi
-done
-IFS="$old_IFS"
 
 for word in "$@"; do
     case "$word" in
@@ -156,9 +136,9 @@ if [ -n "${PRESSURE_VESSEL_WRAP_GUI+set}" ]; then
 <small>$result</small>"
     fi
 
-    exec "${here}/pressure-vessel-test-ui" ${options+"${options[@]}"} "$@"
+    exec "${here}/pressure-vessel-test-ui" "$@"
 fi
 
-exec "$here/pressure-vessel-wrap" ${options+"${options[@]}"} "$@"
+exec "$here/pressure-vessel-wrap" "$@"
 
 # vim:set sw=4 sts=4 et:

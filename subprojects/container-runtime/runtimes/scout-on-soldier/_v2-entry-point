@@ -1,9 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Copyright 2021 Collabora Ltd.
 # SPDX-License-Identifier: MIT
 
 set -eu
-set -o pipefail
 
 echo "*** Steam restart required for this Steam Linux Runtime update" >&2
 

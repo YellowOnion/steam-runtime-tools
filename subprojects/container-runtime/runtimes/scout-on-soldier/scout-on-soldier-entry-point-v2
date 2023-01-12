@@ -1,6 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Copyright 2021 Collabora Ltd.
 # SPDX-License-Identifier: MIT
+
+# This script runs inside a SteamLinuxRuntime_soldier container, so we can
+# safely assume that /bin/bash exists and is under our control.
 
 set -eu
 set -o pipefail

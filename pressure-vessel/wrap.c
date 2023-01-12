@@ -482,15 +482,28 @@ wrap_preload_module_clear (gpointer p)
 {
   WrapPreloadModule *self = p;
 
-  g_free (self->preload);
+  g_clear_pointer (&self->preload, g_free);
 }
 
 static gboolean
 opt_ld_something (PreloadVariableIndex which,
                   const char *value,
+                  const char *separators,
                   GError **error)
 {
-  WrapPreloadModule module = { which, g_strdup (value) };
+  g_auto(GStrv) tokens = NULL;
+  size_t i;
+
+  if (separators != NULL)
+    {
+      tokens = g_strsplit_set (value, separators, 0);
+    }
+  else
+    {
+      tokens = g_new0 (char *, 2);
+      tokens[0] = g_strdup (value);
+      tokens[1] = NULL;
+    }
 
   if (opt_preload_modules == NULL)
     {
@@ -498,7 +511,16 @@ opt_ld_something (PreloadVariableIndex which,
       g_array_set_clear_func (opt_preload_modules, wrap_preload_module_clear);
     }
 
-  g_array_append_val (opt_preload_modules, module);
+  for (i = 0; tokens[i] != NULL; i++)
+    {
+      WrapPreloadModule module = { which, g_steal_pointer (&tokens[i]) };
+
+      if (module.preload[0] == '\0')
+        wrap_preload_module_clear (&module);
+      else
+        g_array_append_val (opt_preload_modules, module);
+    }
+
   return TRUE;
 }
 
@@ -508,7 +530,18 @@ opt_ld_audit_cb (const gchar *option_name,
                  gpointer data,
                  GError **error)
 {
-  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_AUDIT, value, error);
+  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_AUDIT, value, NULL, error);
+}
+
+static gboolean
+opt_ld_audits_cb (const gchar *option_name,
+                  const gchar *value,
+                  gpointer data,
+                  GError **error)
+{
+  /* "The items in the list are colon-separated, and there is no support
+   * for escaping the separator." —ld.so(8) */
+  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_AUDIT, value, ":", error);
 }
 
 static gboolean
@@ -517,7 +550,18 @@ opt_ld_preload_cb (const gchar *option_name,
                    gpointer data,
                    GError **error)
 {
-  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_PRELOAD, value, error);
+  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_PRELOAD, value, NULL, error);
+}
+
+static gboolean
+opt_ld_preloads_cb (const gchar *option_name,
+                    const gchar *value,
+                    gpointer data,
+                    GError **error)
+{
+  /* "The items of the list can be separated by spaces or colons, and
+   * there is no support for escaping either separator." —ld.so(8) */
+  return opt_ld_something (PRELOAD_VARIABLE_INDEX_LD_PRELOAD, value, ": ", error);
 }
 
 static gboolean
@@ -876,11 +920,21 @@ static GOptionEntry options[] =
     "Add MODULE from current execution environment to LD_AUDIT when "
     "executing COMMAND.",
     "MODULE" },
+  { "ld-audits", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, &opt_ld_audits_cb,
+    "Add MODULEs from current execution environment to LD_AUDIT when "
+    "executing COMMAND. Modules are separated by colons.",
+    "MODULE[:MODULE...]" },
   { "ld-preload", '\0',
     G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, &opt_ld_preload_cb,
     "Add MODULE from current execution environment to LD_PRELOAD when "
     "executing COMMAND.",
     "MODULE" },
+  { "ld-preloads", '\0',
+    G_OPTION_FLAG_FILENAME, G_OPTION_ARG_CALLBACK, &opt_ld_preloads_cb,
+    "Add MODULEs from current execution environment to LD_PRELOAD when "
+    "executing COMMAND. Modules are separated by colons and/or spaces.",
+    "MODULE[:MODULE...]" },
   { "pass-fd", '\0',
     G_OPTION_FLAG_NONE, G_OPTION_ARG_CALLBACK, opt_pass_fd_cb,
     "Let the launched process inherit the given fd.",

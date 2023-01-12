@@ -1,9 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Copyright 2022 Collabora Ltd.
 # SPDX-License-Identifier: MIT
 
 set -eu
-set -o pipefail
 
 me="$(readlink -f "$0")"
 here="${me%/*}"

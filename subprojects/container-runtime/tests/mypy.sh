@@ -29,6 +29,8 @@ for script in "$@"; do
             --ignore-missing-imports \
             "$script" >&2; then
         echo "ok $i - $script"
+    elif [ -n "${LINT_WARNINGS_ARE_ERRORS-}" ]; then
+        echo "not ok $i - $script"
     else
         echo "not ok $i - $script # TODO mypy issues reported"
     fi

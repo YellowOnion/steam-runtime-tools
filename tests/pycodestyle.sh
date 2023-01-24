@@ -66,6 +66,8 @@ for script in \
             --ignore=E402,W503 \
             "$script" >&2; then
         echo "ok $i - $script"
+    elif [ -n "${LINT_WARNINGS_ARE_ERRORS-}" ]; then
+        echo "not ok $i - $script"
     else
         echo "not ok $i - $script # TODO pycodestyle issues reported"
     fi

@@ -53,6 +53,8 @@ for shell_script in \
     # Ignore SC2039,SC3043: we assume a Debian-style shell that has 'local'.
     if shellcheck --exclude=SC2039,SC3043 "$shell_script" >&2; then
         echo "ok $n - $shell_script"
+    elif [ -n "${LINT_WARNINGS_ARE_ERRORS-}" ]; then
+        echo "not ok $n - $shell_script"
     else
         echo "not ok $n # TODO - $shell_script"
     fi

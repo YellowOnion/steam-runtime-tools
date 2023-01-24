@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
 #
-# Copyright © 2018-2020 Collabora Ltd
+# Copyright © 2018-2023 Collabora Ltd
 #
 # This package is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -32,6 +32,7 @@ if [ -z "${G_TEST_SRCDIR-}" ]; then
 fi
 
 cd "$G_TEST_SRCDIR/.."
+echo "TAP version 13"
 
 n=0
 for shell_script in \

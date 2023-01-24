@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright © 2016-2018 Simon McVittie
-# Copyright © 2019-2020 Collabora Ltd.
+# Copyright © 2018-2023 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 
@@ -8,6 +8,7 @@ set -e
 set -u
 
 export MYPYPATH="${PYTHONPATH:=$(pwd)}"
+echo "TAP version 13"
 
 set --
 

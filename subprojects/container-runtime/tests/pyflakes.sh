@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright © 2016-2018 Simon McVittie
-# Copyright © 2019-2020 Collabora Ltd.
+# Copyright © 2018-2023 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 
@@ -14,6 +14,8 @@ if [ -z "${TESTS_ONLY-}" ]; then
 fi
 
 set -- "$@" tests/depot/*.py
+
+echo "TAP version 13"
 
 if [ "${PYFLAKES:=pyflakes3}" = false ] || \
         [ -z "$(command -v "$PYFLAKES")" ]; then

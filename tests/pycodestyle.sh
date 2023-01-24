@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright © 2016-2018 Simon McVittie
-# Copyright © 2018-2020 Collabora Ltd.
+# Copyright © 2018-2023 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -32,6 +32,7 @@ if [ -z "${G_TEST_SRCDIR-}" ]; then
 fi
 
 cd "$G_TEST_SRCDIR/.."
+echo "TAP version 13"
 
 if [ "${PYCODESTYLE:=pycodestyle}" = false ] || \
         [ -z "$(command -v "$PYCODESTYLE")" ]; then

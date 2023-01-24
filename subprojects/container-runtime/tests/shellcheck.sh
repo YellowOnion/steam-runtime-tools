@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright © 2018-2020 Collabora Ltd
+# Copyright © 2018-2023 Collabora Ltd
 # SPDX-License-Identifier: MIT
 
 set -e
@@ -18,6 +18,7 @@ if [ -z "${G_TEST_SRCDIR-}" ]; then
 fi
 
 cd "$G_TEST_SRCDIR"
+echo "TAP version 13"
 
 n=0
 for shell_script in \

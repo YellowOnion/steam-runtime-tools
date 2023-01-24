@@ -1,6 +1,6 @@
 #!/bin/sh
 # Copyright © 2016-2018 Simon McVittie
-# Copyright © 2018-2020 Collabora Ltd.
+# Copyright © 2018-2023 Collabora Ltd.
 #
 # SPDX-License-Identifier: MIT
 #
@@ -34,6 +34,7 @@ fi
 cd "$G_TEST_SRCDIR/.."
 
 export MYPYPATH="${PYTHONPATH:="$(pwd)"}"
+echo "TAP version 13"
 
 i=0
 for script in \

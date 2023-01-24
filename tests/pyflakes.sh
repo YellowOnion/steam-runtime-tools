@@ -44,9 +44,8 @@ else
     PYFLAKES=false
 fi
 
-if [ "${PYFLAKES}" = false ] || [ -z "$(command -v "$PYFLAKES")" ]; then
-    echo "1..0 # SKIP pyflakes not found"
-elif "${PYFLAKES}" \
+i=0
+for script in \
     ./bin/*.py \
     ./build-aux/*.py \
     ./pressure-vessel/*.py \
@@ -55,12 +54,27 @@ elif "${PYFLAKES}" \
     ./subprojects/container-runtime/tests/depot/*.py \
     ./tests/*.py \
     ./tests/*/*.py \
-    >&2; then
-    echo "1..1"
-    echo "ok 1 - $PYFLAKES reported no issues"
+; do
+    if ! [ -e "$script" ]; then
+        continue
+    fi
+
+    i=$((i + 1))
+    if [ "${PYFLAKES}" = false ] || \
+            [ -z "$(command -v "$PYFLAKES")" ]; then
+        echo "ok $i - $script # SKIP pyflakes3 not found"
+    elif "${PYFLAKES}" \
+            "$script" >&2; then
+        echo "ok $i - $script"
+    else
+        echo "not ok $i - $script # TODO pycodestyle issues reported"
+    fi
+done
+
+if [ "$i" = 0 ]; then
+    echo "1..0 # SKIP no Python scripts to test"
 else
-    echo "1..1"
-    echo "not ok 1 # TODO $PYFLAKES issues reported"
+    echo "1..$i"
 fi
 
 # vim:set sw=4 sts=4 et:

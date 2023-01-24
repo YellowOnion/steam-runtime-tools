@@ -20,12 +20,31 @@ echo "TAP version 13"
 if [ "${PYCODESTYLE:=pycodestyle}" = false ] || \
         [ -z "$(command -v "$PYCODESTYLE")" ]; then
     echo "1..0 # SKIP pycodestyle not found"
-elif "${PYCODESTYLE}" "$@" >&2; then
-    echo "1..1"
-    echo "ok 1 - $PYCODESTYLE reported no issues"
+    exit 0
+fi
+
+i=0
+for script in "$@"; do
+    if ! [ -e "$script" ]; then
+        continue
+    fi
+
+    i=$((i + 1))
+    if [ "${PYCODESTYLE}" = false ] || \
+            [ -z "$(command -v "$PYCODESTYLE")" ]; then
+        echo "ok $i - $script # SKIP pycodestyle not found"
+    elif "${PYCODESTYLE}" \
+            "$script" >&2; then
+        echo "ok $i - $script"
+    else
+        echo "not ok $i - $script # TODO pycodestyle issues reported"
+    fi
+done
+
+if [ "$i" = 0 ]; then
+    echo "1..0 # SKIP no Python scripts to test"
 else
-    echo "1..1"
-    echo "not ok 1 # TODO $PYCODESTYLE issues reported"
+    echo "1..$i"
 fi
 
 # vim:set sw=4 sts=4 et:

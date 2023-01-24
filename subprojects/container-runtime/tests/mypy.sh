@@ -33,6 +33,11 @@ for script in "$@"; do
         echo "not ok $i - $script # TODO mypy issues reported"
     fi
 done
-echo "1..$i"
+
+if [ "$i" = 0 ]; then
+    echo "1..0 # SKIP no Python scripts to test"
+else
+    echo "1..$i"
+fi
 
 # vim:set sw=4 sts=4 et:

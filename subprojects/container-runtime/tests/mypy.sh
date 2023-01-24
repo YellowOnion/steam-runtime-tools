@@ -4,8 +4,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-set -e
-set -u
+set -eu
 
 export MYPYPATH="${PYTHONPATH:=$(pwd)}"
 echo "TAP version 13"

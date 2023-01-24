@@ -2,8 +2,7 @@
 # Copyright © 2021 Collabora Ltd.
 # SPDX-License-Identifier: MIT
 
-set -e
-set -u
+set -eu
 
 if [ -n "${TESTS_ONLY-}" ]; then
     echo "1..0 # SKIP This distro is too old to run populate-depot.py"

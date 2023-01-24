@@ -2,8 +2,7 @@
 # Copyright © 2018-2023 Collabora Ltd
 # SPDX-License-Identifier: MIT
 
-set -e
-set -u
+set -eu
 
 if ! command -v shellcheck >/dev/null 2>&1; then
     echo "1..0 # SKIP shellcheck not available"

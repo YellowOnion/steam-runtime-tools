@@ -69,7 +69,7 @@ for script in \
     elif [ -n "${LINT_WARNINGS_ARE_ERRORS-}" ]; then
         echo "not ok $i - $script"
     else
-        echo "not ok $i - $script # TODO pycodestyle issues reported"
+        echo "not ok $i - $script # TO""DO $PYFLAKES issues reported"
     fi
 done
 

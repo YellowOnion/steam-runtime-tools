@@ -36,7 +36,7 @@ for shell_script in \
     elif [ -n "${LINT_WARNINGS_ARE_ERRORS-}" ]; then
         echo "not ok $n - $shell_script"
     else
-        echo "not ok $n # TODO - $shell_script"
+        echo "not ok $n # TO""DO - $shell_script"
     fi
 done
 

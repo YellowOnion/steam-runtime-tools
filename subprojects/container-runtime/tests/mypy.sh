@@ -27,7 +27,7 @@ for script in "$@"; do
             --python-executable="${PYTHON:=python3}" \
             --follow-imports=skip \
             --ignore-missing-imports \
-            "$script"; then
+            "$script" >&2; then
         echo "ok $i - $script"
     else
         echo "not ok $i - $script # TODO mypy issues reported"

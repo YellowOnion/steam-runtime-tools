@@ -52,12 +52,6 @@ info () {
     fi
 }
 
-verbose () {
-    if [ -n "$verbose" ]; then
-        log "$@"
-    fi
-}
-
 usage () {
     code="$1"
     shift

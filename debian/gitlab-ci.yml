@@ -461,6 +461,81 @@ deploy:
             --ssh-private-key="$PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE" \
             ${NULL+}
 
+.test-populate-depot:
+    stage: test
+    script:
+        - make -C subprojects/container-runtime check
+    artifacts:
+        paths:
+            - subprojects/container-runtime/depots/*.txt
+            - subprojects/container-runtime/depots/*/VERSIONS.txt
+
+test-populate-depot:debian-11:
+    extends: .test-populate-depot
+    image: docker.internal.steamos.cloud/steamos/package-builder:bullseye
+
+# Run tests in stretch (this lets us assert that the test script
+# is syntactically valid in Python 3.5). Ignore any pyflakes, shellcheck,
+# etc. warnings because these older versions are probably less good at
+# avoiding false positives.
+test-populate-depot:debian-9:
+    extends: .test-populate-depot
+    image: docker.internal.steamos.cloud/steamos/package-builder:stretch
+    script:
+        - make -C subprojects/container-runtime check TESTS_ONLY=true
+
+# The same, but for brewmaster and Python 3.4
+test-populate-depot:steamos-2:
+    extends: .test-populate-depot
+    image: docker.internal.steamos.cloud/steamos/package-builder:brewmaster
+    script:
+        - make -C subprojects/container-runtime check TESTS_ONLY=true
+
+# The same, but for Ubuntu 18.04
+test-populate-depot:ubuntu-18.04:
+    extends: .test-populate-depot
+    image: ubuntu:18.04
+    before_script:
+        - |
+            set -eux
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get -y update
+            apt-get -y install \
+                ca-certificates \
+                git \
+                make \
+                perl \
+                python3 \
+                python3-debian \
+                ${NULL+}
+            tempdir="$(mktemp -d)"
+            git clone --branch steamrt/soldier https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-vdf.git "$tempdir/python-vdf"
+            export PYTHONPATH="$tempdir/python-vdf"
+
+# The same, but for Arch
+test-populate-depot:archlinux:
+    extends: .test-populate-depot
+    image: archlinux:latest
+    before_script:
+        - |
+            set -eux
+            echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
+            pacman -Syu --needed --noconfirm --noprogressbar \
+            base-devel \
+            git \
+            perl \
+            python \
+            python-chardet \
+            python-six \
+            python-tappy \
+            sudo \
+            ${NULL+}
+            tempdir="$(mktemp -d)"
+            git clone --branch debian/buster https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-debian.git "$tempdir/python-debian"
+            git clone --branch steamrt/soldier https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-vdf.git "$tempdir/python-vdf"
+            export PATH="/usr/bin/core_perl:$PATH"
+            export PYTHONPATH="$tempdir/python-debian/lib:$tempdir/python-vdf"
+
 reuse:
     stage: test
     needs: []

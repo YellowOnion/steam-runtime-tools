@@ -245,7 +245,7 @@ path_visible_in_provider_namespace (PvRuntimeFlags flags,
       (path[3] == '\0' || path[3] == '/'))
     return TRUE;
 
-  if (g_str_has_prefix (path, "sbin") ||
+  if (g_str_has_prefix (path, "sbin") &&
       (path[4] == '\0' || path[4] == '/'))
     return TRUE;
 

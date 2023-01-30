@@ -300,6 +300,11 @@ class Uploader:
         with open(str(upload / 'VERSION.txt')) as reader:
             version = reader.read().strip()
 
+        app1070560 = Path('_build', 'upload', 'app1070560')
+        app1070560.mkdir()
+        a = Path('_build', 'scout-layered', 'steam-container-runtime.tar.gz')
+        os.link(str(a), app1070560 / a.name)
+
         self.check_call([
             'mkdir', version,
         ])

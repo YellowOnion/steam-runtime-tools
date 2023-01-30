@@ -181,9 +181,12 @@ build:devel:
             ninja -C _build/devel install
             G_MESSAGES_DEBUG=all meson test -C _build/devel
 
+            ci/scout-layered.sh
+
     artifacts:
         paths:
             - _build/devel/meson-logs/*.txt
+            - _build/scout-layered/steam-container-runtime.tar.gz
         when: always
 
 build:clang:
@@ -401,6 +404,7 @@ autopkgtest:
 deploy:
     stage: deploy
     needs:
+        - build:devel                   # for steam-container-runtime.tar.gz
         - package
         - package:i386
         - relocatable-install:production

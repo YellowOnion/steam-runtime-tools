@@ -1,3 +1,19 @@
+steam-runtime-tools (0.20230130.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * runtime: Correct path_visible_in_provider_namespace() check.
+    This makes Vulkan layers work more reliably, particularly if installed
+    into ~/.local/share for a home directory in /home (steamrt/tasks#213).
+
+  [ Simon McVittie ]
+  * CI: Build and upload content for Steam app 1070560 (SteamLinuxRuntime)
+    rather than handling it as a special case of the workflows used for
+    soldier and sniper (helps: steamrt/tasks#200, steamrt/tasks#207)
+  * _v2-entry-point: Remove unused verbose() function
+  * tests: Internal improvements
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 30 Jan 2023 16:28:08 +0000
+
 steam-runtime-tools (0.20230112.0) steamrt; urgency=medium
 
   [ Simon McVittie ]

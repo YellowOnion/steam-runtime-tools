@@ -4632,30 +4632,35 @@ setup_json_manifest (PvRuntime *self,
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
-  if (SRT_IS_VULKAN_LAYER (details->icd))
-    layer = SRT_VULKAN_LAYER (details->icd);
-  else if (SRT_IS_VULKAN_ICD (details->icd))
-    icd = SRT_VULKAN_ICD (details->icd);
-  else if (SRT_IS_EGL_ICD (details->icd))
-    egl = SRT_EGL_ICD (details->icd);
-  else if (SRT_IS_EGL_EXTERNAL_PLATFORM (details->icd))
-    ext_platform = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
-  else
-    g_return_val_if_reached (FALSE);
-
   g_debug ("Setting up JSON manifest for %s loadable module #%" G_GSIZE_FORMAT ": %s",
            sub_dir, seq, details->debug_name);
 
-  /* If the layer failed to load, there's nothing to make available */
-  if (layer != NULL)
-    loaded = srt_vulkan_layer_check_error (layer, NULL);
-  else if (egl != NULL)
-    loaded = srt_egl_icd_check_error (egl, NULL);
-  else if (ext_platform != NULL)
-    loaded = srt_egl_external_platform_check_error (ext_platform, NULL);
+  if (SRT_IS_VULKAN_LAYER (details->icd))
+    {
+      layer = SRT_VULKAN_LAYER (details->icd);
+      loaded = srt_vulkan_layer_check_error (layer, NULL);
+    }
+  else if (SRT_IS_VULKAN_ICD (details->icd))
+    {
+      icd = SRT_VULKAN_ICD (details->icd);
+      loaded = srt_vulkan_icd_check_error (icd, NULL);
+    }
+  else if (SRT_IS_EGL_ICD (details->icd))
+    {
+      egl = SRT_EGL_ICD (details->icd);
+      loaded = srt_egl_icd_check_error (egl, NULL);
+    }
+  else if (SRT_IS_EGL_EXTERNAL_PLATFORM (details->icd))
+    {
+      ext_platform = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
+      loaded = srt_egl_external_platform_check_error (ext_platform, NULL);
+    }
   else
-    loaded = srt_vulkan_icd_check_error (icd, NULL);
+    {
+      g_return_val_if_reached (FALSE);
+    }
 
+  /* If the layer failed to load, there's nothing to make available */
   if (!loaded)
     {
       g_debug ("Original JSON manifest failed to load, nothing to do");

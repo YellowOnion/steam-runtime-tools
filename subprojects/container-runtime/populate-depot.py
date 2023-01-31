@@ -190,6 +190,7 @@ class Runtime:
         architecture: str = 'amd64,i386',
         cache: str = '.cache',
         images_uri: str = DEFAULT_IMAGES_URI,
+        official: bool = False,
         path: Optional[str] = None,
         ssh_host: str = '',
         ssh_path: str = '',
@@ -199,6 +200,7 @@ class Runtime:
         self.cache = cache
         self.images_uri = images_uri
         self.name = name
+        self.official = official
         self.path = path
         self.suite = suite
         self.ssh_host = ssh_host
@@ -296,6 +298,7 @@ class Runtime:
             ),
             cache=cache,
             images_uri=images_uri,
+            official=details.get('official', False),
             path=details.get('path', None),
             ssh_host=ssh_host,
             ssh_path=ssh_path,
@@ -543,6 +546,7 @@ class Main:
         pressure_vessel_from_runtime: str = '',
         pressure_vessel_from_runtime_json: str = '',
         pressure_vessel_guess: str = '',
+        pressure_vessel_official: bool = False,
         pressure_vessel_ssh_host: str = '',
         pressure_vessel_ssh_path: str = '',
         pressure_vessel_uri: str = DEFAULT_PRESSURE_VESSEL_URI,
@@ -703,7 +707,10 @@ class Main:
         elif pressure_vessel_archive:
             self.pressure_vessel_runtime = self.new_runtime(
                 'scout',
-                {'path': pressure_vessel_archive},
+                {
+                    'official': pressure_vessel_official,
+                    'path': pressure_vessel_archive,
+                },
                 default_suite='scout',
             )
         elif self.runtime.name == pressure_vessel_from_runtime:
@@ -906,7 +913,11 @@ class Main:
 
             if pressure_vessel_runtime.path:
                 self.use_local_pressure_vessel(pressure_vessel_runtime.path)
-                pv_version.comment = 'from local file'
+
+                if pressure_vessel_runtime.official:
+                    pv_version.comment = 'pressure-vessel-bin.tar.gz'
+                else:
+                    pv_version.comment = 'from local file'
             else:
                 pv_version.comment = (
                     self.download_pressure_vessel_from_runtime(
@@ -1165,7 +1176,7 @@ class Main:
 
             comment = ', '.join(sorted(runtime_files))
 
-            if runtime.path:
+            if runtime.path and not runtime.official:
                 comment += ' (from local build)'
 
             component_version.version = version
@@ -1837,6 +1848,13 @@ def main() -> None:
             '--pressure-vessel-from-runtime-json=DETAILS, '
             'based on form of argument given '
             '(disambiguate with ./ if necessary)'
+        ),
+    )
+    parser.add_argument(
+        '--pressure-vessel-official', default=False, action='store_true',
+        help=(
+            'Assume that a copy of pressure-vessel provided as a local '
+            'file/directory is an official one'
         ),
     )
 

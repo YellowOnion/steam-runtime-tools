@@ -123,6 +123,7 @@ _srt_global_setup_sysroots (const char *argv0)
   const char *argv[] =
   {
     _SRT_PYTHON,
+    "-S",
     "<generate_sysroots.py>",
     "<sysroot>",
     NULL
@@ -156,8 +157,8 @@ _srt_global_setup_sysroots (const char *argv0)
     }
 
   generate_sysroots = g_build_filename (srcdir, "generate-sysroots.py", NULL);
-  argv[1] = generate_sysroots;
-  argv[2] = sysroots;
+  argv[2] = generate_sysroots;
+  argv[3] = sysroots;
 
   g_spawn_sync (NULL, (gchar **) argv, NULL, G_SPAWN_SEARCH_PATH,
                 NULL, NULL, &out, &err, &wait_status, &error);

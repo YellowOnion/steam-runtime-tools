@@ -482,7 +482,7 @@ foreach test_info : test_scripts
   timeout = 30
 
   if test_name.endswith('.py')
-    test_argv += [program]
+    test_argv += ['-S', program]
     program = python
     wrapper = get_option('prefix') / tests_dir / 'find-python.sh'
     relocatable_wrapper = '${G_TEST_BUILDDIR}/find-python.sh'

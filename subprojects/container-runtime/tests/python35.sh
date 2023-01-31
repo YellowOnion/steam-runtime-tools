@@ -18,7 +18,7 @@ for script in \
     tests/depot/*.py \
 ; do
     n=$(( n + 1 ))
-    if python3.5 "$script" --help >/dev/null; then
+    if python3.5 -S "$script" --help >/dev/null; then
         echo "ok $n - $script --help succeeded with python3.5"
     else
         echo "not ok $n - $script --help failed with python3.5"

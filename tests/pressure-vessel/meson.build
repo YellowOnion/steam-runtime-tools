@@ -93,7 +93,7 @@ foreach test_name : tests
   timeout = 30
 
   if test_name.endswith('.py')
-    test_argv += [python.full_path()]
+    test_argv += [python.full_path(), '-S']
   endif
 
   test_argv += [files(test_name)]

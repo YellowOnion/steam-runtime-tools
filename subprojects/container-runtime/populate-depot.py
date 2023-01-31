@@ -548,6 +548,7 @@ class Main:
         pressure_vessel_uri: str = DEFAULT_PRESSURE_VESSEL_URI,
         pressure_vessel_version: str = '',
         runtime: str = 'scout',
+        scripts_version: str = '',
         source_dir: str = str(HERE),
         ssh_host: str = '',
         ssh_path: str = '',
@@ -617,6 +618,7 @@ class Main:
         self.pressure_vessel_ssh_host = pressure_vessel_ssh_host or ssh_host
         self.pressure_vessel_ssh_path = pressure_vessel_ssh_path
         self.pressure_vessel_uri = pressure_vessel_uri
+        self.scripts_version = scripts_version
         self.source_dir = source_dir
         self.ssh_host = ssh_host
         self.ssh_path = ssh_path
@@ -1214,12 +1216,6 @@ class Main:
 
     def write_component_versions(self) -> None:
         try:
-            with open(HERE / '.tarball-version', 'r') as reader:
-                version = reader.read().strip()
-        except OSError:
-            version = 'unknown'
-
-        try:
             with subprocess.Popen(
                 [
                     'git', 'describe',
@@ -1233,11 +1229,20 @@ class Main:
             ) as describe:
                 stdout = describe.stdout
                 assert stdout is not None
-                version = stdout.read().strip() or version
+                version = stdout.read().strip()
                 # Deliberately ignoring exit status:
                 # if git is missing or old we'll use 'unknown'
         except (OSError, subprocess.SubprocessError):
+            version = ''
+
+        try:
+            with open(HERE / '.tarball-version', 'r') as reader:
+                version = reader.read().strip()
+        except OSError:
             pass
+
+        if self.scripts_version:
+            version = self.scripts_version
 
         if self.depot_version:
             component_version = ComponentVersion('depot', sort_weight=-1)
@@ -1246,8 +1251,8 @@ class Main:
             self.versions.append(component_version)
 
         component_version = ComponentVersion('scripts')
-        component_version.version = version
-        component_version.comment = 'Entry point scripts, etc.'
+        component_version.version = version or 'unknown'
+        component_version.comment = 'from steam-runtime-tools'
         self.versions.append(component_version)
 
         with open(os.path.join(self.depot, 'VERSIONS.txt'), 'w') as writer:
@@ -1765,6 +1770,12 @@ def main() -> None:
         '--depot-version', default='',
         help=(
             'Set an overall version number for the depot contents'
+        )
+    )
+    parser.add_argument(
+        '--scripts-version', default='',
+        help=(
+            'Set a version number for the scripts from steam-runtime-tools'
         )
     )
 

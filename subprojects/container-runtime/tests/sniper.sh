@@ -9,7 +9,10 @@ if [ -n "${TESTS_ONLY-}" ]; then
     exit 0
 fi
 
-populate_depot_args=("--steam-app-id=1628350")
+populate_depot_args=( \
+    "--scripts-version=test test" \
+    "--steam-app-id=1628350" \
+)
 
 if [ -n "${IMAGES_DOWNLOAD_CREDENTIAL-}" ]; then
     populate_depot_args=( \

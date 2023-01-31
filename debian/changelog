@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20230130.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20230131.0) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]
   * runtime: Correct path_visible_in_provider_namespace() check.
@@ -10,9 +10,12 @@ steam-runtime-tools (0.20230130.0) UNRELEASED; urgency=medium
     rather than handling it as a special case of the workflows used for
     soldier and sniper (helps: steamrt/tasks#200, steamrt/tasks#207)
   * _v2-entry-point: Remove unused verbose() function
+  * populate-depot.py: Internal improvements for CI
+    (helps: steamrt/tasks#200, steamrt/tasks#206)
+  * tests: Use -S option when invoking old versions of Python
   * tests: Internal improvements
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 30 Jan 2023 16:28:08 +0000
+ -- Simon McVittie <smcv@collabora.com>  Tue, 31 Jan 2023 16:45:14 +0000
 
 steam-runtime-tools (0.20230112.0) steamrt; urgency=medium
 

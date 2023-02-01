@@ -4676,6 +4676,7 @@ setup_json_manifest (PvRuntime *self,
         {
           g_autofree gchar *relative_to_overrides = NULL;
           g_autofree gchar *write_to_file = NULL;
+          g_autofree gchar *write_to_dir = NULL;
           g_autofree gchar *json_in_container = NULL;
           g_autofree gchar *json_base = NULL;
 
@@ -4687,8 +4688,15 @@ setup_json_manifest (PvRuntime *self,
                                                     json_base, NULL);
           write_to_file = g_build_filename (self->overrides,
                                             relative_to_overrides, NULL);
+          write_to_dir = g_path_get_dirname (write_to_file);
           json_in_container = g_build_filename (self->overrides_in_container,
                                                 relative_to_overrides, NULL);
+
+          if (g_mkdir_with_parents (write_to_dir, 0700) != 0)
+            {
+              glnx_throw_errno_prefix (error, "Unable to create %s", write_to_dir);
+              return FALSE;
+            }
 
           g_debug ("Generating \"overrides/%s\" with path \"%s\"",
                    relative_to_overrides, details->paths_in_container[i]);
@@ -4785,8 +4793,6 @@ setup_json_manifest (PvRuntime *self,
  * @bwrap: Append arguments to this bubblewrap invocation to make files
  *  available in the container
  * @sub_dir: `vulkan/icd.d` or similar
- * @write_to_dir: Path to `/overrides/share/${sub_dir}` in the
- *  current execution environment
  * @details: (element-type IcdDetails): A list of #IcdDetails
  *  holding #SrtVulkanLayer, #SrtVulkanIcd or #SrtEglIcd, as appropriate
  *  for @sub_dir
@@ -4804,20 +4810,10 @@ setup_each_json_manifest (PvRuntime *self,
                           GError **error)
 {
   gsize j;
-  g_autofree gchar *write_to_dir = NULL;
   int digits = pv_count_decimal_digits (details->len);
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
-
-  write_to_dir = g_build_filename (self->overrides,
-                                  "share", sub_dir, NULL);
-
-  if (g_mkdir_with_parents (write_to_dir, 0700) != 0)
-    {
-      glnx_throw_errno_prefix (error, "Unable to create %s", write_to_dir);
-      return FALSE;
-    }
 
   for (j = 0; j < details->len; j++)
     {

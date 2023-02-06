@@ -4607,6 +4607,10 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
  *  whichever is appropriate for @sub_dir
  * @digits: Number of digits to pad length of numeric prefix
  * @seq: Sequence number of @details, used to make unique filenames
+ * @json_set: (element-type filename ignored): A map
+ *  `{ owned string => itself }` representing the set
+ *  of JSON manifests already created. Used internally to notice when
+ *  to use unique sub directories to avoid naming conflicts
  * @search_path: Used to build `$VK_DRIVER_FILES` or a similar search path
  * @error: Used to raise an error on failure
  *
@@ -4619,6 +4623,7 @@ setup_json_manifest (PvRuntime *self,
                      IcdDetails *details,
                      int digits,
                      gsize seq,
+                     GHashTable *json_set,
                      GString *search_path,
                      GError **error)
 {
@@ -4628,38 +4633,48 @@ setup_json_manifest (PvRuntime *self,
   SrtEglExternalPlatform *ext_platform = NULL;
   gboolean loaded = FALSE;
   gboolean need_provider_json = FALSE;
+  g_autofree gchar *json_basename = NULL;
+  const char *json_in_provider = NULL;
   gsize i;
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
-
-  g_debug ("Setting up JSON manifest for %s loadable module #%" G_GSIZE_FORMAT ": %s",
-           sub_dir, seq, details->debug_name);
+  g_return_val_if_fail (sub_dir != NULL, FALSE);
+  g_return_val_if_fail (json_set != NULL, FALSE);
 
   if (SRT_IS_VULKAN_LAYER (details->icd))
     {
       layer = SRT_VULKAN_LAYER (details->icd);
       loaded = srt_vulkan_layer_check_error (layer, NULL);
+      json_in_provider = srt_vulkan_layer_get_json_path (layer);
     }
   else if (SRT_IS_VULKAN_ICD (details->icd))
     {
       icd = SRT_VULKAN_ICD (details->icd);
       loaded = srt_vulkan_icd_check_error (icd, NULL);
+      json_in_provider = srt_vulkan_icd_get_json_path (icd);
     }
   else if (SRT_IS_EGL_ICD (details->icd))
     {
       egl = SRT_EGL_ICD (details->icd);
       loaded = srt_egl_icd_check_error (egl, NULL);
+      json_in_provider = srt_egl_icd_get_json_path (egl);
     }
   else if (SRT_IS_EGL_EXTERNAL_PLATFORM (details->icd))
     {
       ext_platform = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
       loaded = srt_egl_external_platform_check_error (ext_platform, NULL);
+      json_in_provider = srt_egl_external_platform_get_json_path (ext_platform);
     }
   else
     {
       g_return_val_if_reached (FALSE);
     }
+
+  json_basename = g_path_get_basename (json_in_provider);
+
+  g_debug ("Setting up JSON manifest for \"%s\" loadable module \"%s\": \"%s\"",
+           sub_dir, json_basename, details->debug_name);
 
   /* If the layer failed to load, there's nothing to make available */
   if (!loaded)
@@ -4675,17 +4690,17 @@ setup_json_manifest (PvRuntime *self,
 
       if (details->kinds[i] == ICD_KIND_ABSOLUTE)
         {
-          g_autofree gchar *relative_to_overrides = NULL;
           g_autofree gchar *write_to_file = NULL;
           g_autofree gchar *write_to_dir = NULL;
           g_autofree gchar *json_in_container = NULL;
-          g_autofree gchar *json_base = NULL;
+          g_autofree gchar *relative_to_overrides = NULL;
 
           g_assert (details->paths_in_container[i] != NULL);
 
-          json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT "-%s.json",
-                                       digits, seq, pv_multiarch_tuples[i]);
-          relative_to_overrides = g_build_filename (sub_dir, json_base, NULL);
+          relative_to_overrides = pv_generate_unique_filepath (sub_dir, digits, seq,
+                                                               json_basename,
+                                                               pv_multiarch_tuples[i],
+                                                               json_set);
           write_to_file = g_build_filename (self->overrides,
                                             relative_to_overrides, NULL);
           write_to_dir = g_path_get_dirname (write_to_file);
@@ -4746,29 +4761,21 @@ setup_json_manifest (PvRuntime *self,
       else if (details->kinds[i] == ICD_KIND_SONAME
                || details->kinds[i] == ICD_KIND_META_LAYER)
         {
-          g_debug ("Will use graphics stack provider JSON as-is for %s #%" G_GSIZE_FORMAT,
-                   sub_dir, seq);
+          g_debug ("Will use graphics stack provider JSON as-is for %s/%s",
+                   sub_dir, json_basename);
           need_provider_json = TRUE;
         }
     }
 
   if (need_provider_json)
     {
+      g_autofree gchar *relative_to_overrides = NULL;
       g_autofree gchar *json_in_container = NULL;
-      g_autofree gchar *json_base = NULL;
-      const char *json_in_provider = NULL;
-      if (layer != NULL)
-        json_in_provider = srt_vulkan_layer_get_json_path (layer);
-      else if (egl != NULL)
-        json_in_provider = srt_egl_icd_get_json_path (egl);
-      else if (ext_platform != NULL)
-        json_in_provider = srt_egl_external_platform_get_json_path (ext_platform);
-      else
-        json_in_provider = srt_vulkan_icd_get_json_path (icd);
 
-      json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT ".json", digits, seq);
+      relative_to_overrides = pv_generate_unique_filepath (sub_dir, digits, seq, json_basename,
+                                                           NULL, json_set);
       json_in_container = g_build_filename (self->overrides_in_container,
-                                            sub_dir, json_base, NULL);
+                                            relative_to_overrides, NULL);
 
       g_debug ("Copying \"%s\" as-is to implement \"%s\" in container",
                json_in_provider, json_in_container);
@@ -4809,16 +4816,19 @@ setup_each_json_manifest (PvRuntime *self,
                           GError **error)
 {
   gsize j;
+  g_autoptr(GHashTable) json_set = NULL;
   int digits = pv_count_decimal_digits (details->len);
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
+  json_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
   for (j = 0; j < details->len; j++)
     {
       if (!setup_json_manifest (self, bwrap, sub_dir,
                                 g_ptr_array_index (details, j),
-                                digits, j, search_path, error))
+                                digits, j, json_set, search_path, error))
         return FALSE;
     }
 

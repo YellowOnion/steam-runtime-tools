@@ -807,3 +807,58 @@ pv_count_decimal_digits (gsize n)
 
   return required;
 }
+
+/*
+ * pv_generate_unique_filepath:
+ * @sub_dir: `share/vulkan/icd.d`, `share/glvnd/egl_vendor.d` or similar
+ * @digits: Number of digits to pad length of numeric prefix if used
+ * @seq: Sequence number of files, used to make unique filenames
+ * @file: basename of the file
+ * @multiarch_tuple: (nullable): Multiarch tuple of the @file, used
+ *  to make unique filenames, or %NULL if architecture-independent
+ * @files_set: (element-type filename ignored): A map
+ *  `{ owned string => itself }` representing the set
+ *  of files for which it has already been generated a unique path. Used
+ *  internally to notice when to use unique sub directories.
+ *
+ * Generate a file path for @file, under @sub_dir, and store it in
+ * @files_set. If "@sub_dir/@file" was already present in @files_set,
+ * a unique subdirectory based on @seq and @multiarch_tuple will be used.
+ *
+ * Returns: (transfer full) (type filename): The unique relative path for @file
+ *  in @sub_dir
+ */
+gchar *
+pv_generate_unique_filepath (const gchar *sub_dir,
+                             int digits,
+                             gsize seq,
+                             const gchar *file,
+                             const gchar *multiarch_tuple,
+                             GHashTable *files_set)
+{
+  g_autofree gchar *relative_to_overrides = NULL;
+
+  relative_to_overrides = g_build_filename (sub_dir, file, NULL);
+
+  /* If we already have a file with this name in this directory, we create
+   * a unique sub directory to avoid conflicts. */
+  if (g_hash_table_contains (files_set, relative_to_overrides))
+    {
+      g_autofree gchar *dedup_dir_basename = NULL;
+
+      g_clear_pointer (&relative_to_overrides, g_free);
+
+      if (multiarch_tuple != NULL)
+        dedup_dir_basename = g_strdup_printf ("%.*" G_GSIZE_FORMAT "-%s", digits,
+                                              seq, multiarch_tuple);
+      else
+        dedup_dir_basename = g_strdup_printf ("%.*" G_GSIZE_FORMAT, digits, seq);
+
+      relative_to_overrides = g_build_filename (sub_dir, dedup_dir_basename,
+                                                file, NULL);
+    }
+
+  g_hash_table_add (files_set, g_strdup (relative_to_overrides));
+
+  return g_steal_pointer (&relative_to_overrides);
+}

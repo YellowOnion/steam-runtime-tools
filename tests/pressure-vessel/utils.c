@@ -124,6 +124,150 @@ test_count_decimal_digits (Fixture *f,
     g_assert_cmpint (pv_count_decimal_digits (tests[i].n), ==, tests[i].digits);
 }
 
+typedef struct
+{
+  const gchar *sub_dir;
+  const gchar *file;
+  const gchar *multiarch_tuple;
+  int seq;
+  int digits; /* Defaults to 1 */
+  const gchar *expected_path;
+} FilepathData;
+
+typedef struct
+{
+  FilepathData filepath_data[10];
+} GenerateFilepathTest;
+
+static void
+test_generate_unique_filepath (Fixture *f,
+                               gconstpointer context)
+{
+#define ICD_SUBDIR "share/vulkan/icd.d"
+#define EXPLICIT_LAYER_SUBDIR "share/vulkan/explicit_layer.d"
+
+  static const GenerateFilepathTest tests[] =
+  {
+    {
+      .filepath_data =
+      {
+        {
+          .sub_dir = ICD_SUBDIR,
+          .file = "radeon_icd.json",
+          .seq = 0,
+        },
+        {
+          .sub_dir = ICD_SUBDIR,
+          .file = "lvp_icd.json",
+          .multiarch_tuple = "x86_64",
+          .seq = 1,
+        },
+        {
+          .sub_dir = ICD_SUBDIR,
+          .file = "radeon_icd.json",
+          .seq = 2,
+          .expected_path = "share/vulkan/icd.d/2/radeon_icd.json",
+        },
+        {
+          .sub_dir = ICD_SUBDIR,
+          .file = "lvp_icd.json",
+          .multiarch_tuple = "x86_64",
+          .seq = 3,
+          .expected_path = "share/vulkan/icd.d/3-x86_64/lvp_icd.json",
+        },
+        {
+          .sub_dir = ICD_SUBDIR,
+          .file = "lvp_icd.json",
+          .multiarch_tuple = "i686",
+          .seq = 3,
+          .expected_path = "share/vulkan/icd.d/3-i686/lvp_icd.json",
+        },
+      }
+    },
+
+    {
+      .filepath_data =
+      {
+        {
+          .sub_dir = ICD_SUBDIR,
+          .file = "radeon_icd.x86_64.json",
+          .seq = 0,
+        },
+        {
+          .sub_dir = ICD_SUBDIR,
+          .file = "lvp_icd.json",
+          .seq = 1,
+        },
+        {
+          .sub_dir = ICD_SUBDIR,
+          .file = "my_custom.json",
+          .seq = 2,
+        },
+        {
+          /* Use a different sub directory. There shouldn't be any conflicts,
+           * even if the filename is the same. */
+          .sub_dir = EXPLICIT_LAYER_SUBDIR,
+          .file = "my_custom.json",
+          .seq = 3,
+        },
+        {
+          .sub_dir = EXPLICIT_LAYER_SUBDIR,
+          .file = "my_custom.json",
+          .seq = 4,
+          .digits = 2,
+          .expected_path = "share/vulkan/explicit_layer.d/04/my_custom.json",
+        },
+        {
+          .sub_dir = EXPLICIT_LAYER_SUBDIR,
+          .file = "my_custom.json",
+          .multiarch_tuple = "x86_64",
+          .seq = 5,
+          .digits = 2,
+          .expected_path = "share/vulkan/explicit_layer.d/05-x86_64/my_custom.json",
+        },
+      }
+    },
+  };
+
+  gsize i;
+  gsize j;
+
+  for (i = 0; i < G_N_ELEMENTS (tests); i++)
+    {
+      g_autoptr(GHashTable) files_set = NULL;
+
+      files_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+      for (j = 0; tests[i].filepath_data[j].file != NULL; j++)
+        {
+          g_autofree gchar *unique_path = NULL;
+          const FilepathData data = tests[i].filepath_data[j];
+
+          unique_path = pv_generate_unique_filepath (data.sub_dir,
+                                                     data.digits == 0 ? 1 : data.digits,
+                                                     data.seq,
+                                                     data.file,
+                                                     data.multiarch_tuple,
+                                                     files_set);
+
+          if (data.expected_path == NULL)
+            {
+              /* This is the case where there isn't a potential conflict */
+              g_autofree gchar *expected = g_build_filename (data.sub_dir, data.file, NULL);
+              g_assert_cmpstr (unique_path, ==, expected);
+            }
+          else
+            {
+              g_assert_cmpstr (unique_path, ==, data.expected_path);
+            }
+
+          g_assert_true (g_hash_table_contains (files_set, unique_path));
+          g_assert_cmpint (g_hash_table_size (files_set), ==, j + 1);
+        }
+
+    }
+}
+
 static void
 test_run_sync (Fixture *f,
                gconstpointer context)
@@ -512,6 +656,8 @@ main (int argc,
               setup, test_count_decimal_digits, teardown);
   g_test_add ("/first-key", Fixture, NULL,
               setup, test_first_key, teardown);
+  g_test_add ("/generate-unique-filepath", Fixture, NULL,
+              setup, test_generate_unique_filepath, teardown);
   g_test_add ("/run-sync", Fixture, NULL,
               setup, test_run_sync, teardown);
   g_test_add ("/delete-dangling-symlink", Fixture, NULL,

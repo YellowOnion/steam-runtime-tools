@@ -4601,11 +4601,16 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
  * @self: The runtime
  * @bwrap: Append arguments to this bubblewrap invocation to make files
  *  available in the container
- * @sub_dir: `vulkan/icd.d`, `glvnd/egl_vendor.d` or similar
+ * @sub_dir: `share/vulkan/icd.d`, `share/glvnd/egl_vendor.d` or similar,
+ *  relative to `/overrides`
  * @details: An #IcdDetails holding a #SrtVulkanLayer or #SrtVulkanIcd,
  *  whichever is appropriate for @sub_dir
  * @digits: Number of digits to pad length of numeric prefix
  * @seq: Sequence number of @details, used to make unique filenames
+ * @json_set: (element-type filename ignored): A map
+ *  `{ owned string => itself }` representing the set
+ *  of JSON manifests already created. Used internally to notice when
+ *  to use unique sub directories to avoid naming conflicts
  * @search_path: Used to build `$VK_DRIVER_FILES` or a similar search path
  * @error: Used to raise an error on failure
  *
@@ -4618,6 +4623,7 @@ setup_json_manifest (PvRuntime *self,
                      IcdDetails *details,
                      int digits,
                      gsize seq,
+                     GHashTable *json_set,
                      GString *search_path,
                      GError **error)
 {
@@ -4627,35 +4633,50 @@ setup_json_manifest (PvRuntime *self,
   SrtEglExternalPlatform *ext_platform = NULL;
   gboolean loaded = FALSE;
   gboolean need_provider_json = FALSE;
+  g_autofree gchar *json_basename = NULL;
+  const char *json_in_provider = NULL;
   gsize i;
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
+  g_return_val_if_fail (sub_dir != NULL, FALSE);
+  g_return_val_if_fail (json_set != NULL, FALSE);
 
   if (SRT_IS_VULKAN_LAYER (details->icd))
-    layer = SRT_VULKAN_LAYER (details->icd);
+    {
+      layer = SRT_VULKAN_LAYER (details->icd);
+      loaded = srt_vulkan_layer_check_error (layer, NULL);
+      json_in_provider = srt_vulkan_layer_get_json_path (layer);
+    }
   else if (SRT_IS_VULKAN_ICD (details->icd))
-    icd = SRT_VULKAN_ICD (details->icd);
+    {
+      icd = SRT_VULKAN_ICD (details->icd);
+      loaded = srt_vulkan_icd_check_error (icd, NULL);
+      json_in_provider = srt_vulkan_icd_get_json_path (icd);
+    }
   else if (SRT_IS_EGL_ICD (details->icd))
-    egl = SRT_EGL_ICD (details->icd);
+    {
+      egl = SRT_EGL_ICD (details->icd);
+      loaded = srt_egl_icd_check_error (egl, NULL);
+      json_in_provider = srt_egl_icd_get_json_path (egl);
+    }
   else if (SRT_IS_EGL_EXTERNAL_PLATFORM (details->icd))
-    ext_platform = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
+    {
+      ext_platform = SRT_EGL_EXTERNAL_PLATFORM (details->icd);
+      loaded = srt_egl_external_platform_check_error (ext_platform, NULL);
+      json_in_provider = srt_egl_external_platform_get_json_path (ext_platform);
+    }
   else
-    g_return_val_if_reached (FALSE);
+    {
+      g_return_val_if_reached (FALSE);
+    }
 
-  g_debug ("Setting up JSON manifest for %s loadable module #%" G_GSIZE_FORMAT ": %s",
-           sub_dir, seq, details->debug_name);
+  json_basename = g_path_get_basename (json_in_provider);
+
+  g_debug ("Setting up JSON manifest for \"%s\" loadable module \"%s\": \"%s\"",
+           sub_dir, json_basename, details->debug_name);
 
   /* If the layer failed to load, there's nothing to make available */
-  if (layer != NULL)
-    loaded = srt_vulkan_layer_check_error (layer, NULL);
-  else if (egl != NULL)
-    loaded = srt_egl_icd_check_error (egl, NULL);
-  else if (ext_platform != NULL)
-    loaded = srt_egl_external_platform_check_error (ext_platform, NULL);
-  else
-    loaded = srt_vulkan_icd_check_error (icd, NULL);
-
   if (!loaded)
     {
       g_debug ("Original JSON manifest failed to load, nothing to do");
@@ -4669,21 +4690,28 @@ setup_json_manifest (PvRuntime *self,
 
       if (details->kinds[i] == ICD_KIND_ABSOLUTE)
         {
-          g_autofree gchar *relative_to_overrides = NULL;
           g_autofree gchar *write_to_file = NULL;
+          g_autofree gchar *write_to_dir = NULL;
           g_autofree gchar *json_in_container = NULL;
-          g_autofree gchar *json_base = NULL;
+          g_autofree gchar *relative_to_overrides = NULL;
 
           g_assert (details->paths_in_container[i] != NULL);
 
-          json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT "-%s.json",
-                                       digits, seq, pv_multiarch_tuples[i]);
-          relative_to_overrides = g_build_filename ("share", sub_dir,
-                                                    json_base, NULL);
+          relative_to_overrides = pv_generate_unique_filepath (sub_dir, digits, seq,
+                                                               json_basename,
+                                                               pv_multiarch_tuples[i],
+                                                               json_set);
           write_to_file = g_build_filename (self->overrides,
                                             relative_to_overrides, NULL);
+          write_to_dir = g_path_get_dirname (write_to_file);
           json_in_container = g_build_filename (self->overrides_in_container,
                                                 relative_to_overrides, NULL);
+
+          if (g_mkdir_with_parents (write_to_dir, 0700) != 0)
+            {
+              glnx_throw_errno_prefix (error, "Unable to create %s", write_to_dir);
+              return FALSE;
+            }
 
           g_debug ("Generating \"overrides/%s\" with path \"%s\"",
                    relative_to_overrides, details->paths_in_container[i]);
@@ -4733,30 +4761,21 @@ setup_json_manifest (PvRuntime *self,
       else if (details->kinds[i] == ICD_KIND_SONAME
                || details->kinds[i] == ICD_KIND_META_LAYER)
         {
-          g_debug ("Will use graphics stack provider JSON as-is for %s #%" G_GSIZE_FORMAT,
-                   sub_dir, seq);
+          g_debug ("Will use graphics stack provider JSON as-is for %s/%s",
+                   sub_dir, json_basename);
           need_provider_json = TRUE;
         }
     }
 
   if (need_provider_json)
     {
+      g_autofree gchar *relative_to_overrides = NULL;
       g_autofree gchar *json_in_container = NULL;
-      g_autofree gchar *json_base = NULL;
-      const char *json_in_provider = NULL;
-      if (layer != NULL)
-        json_in_provider = srt_vulkan_layer_get_json_path (layer);
-      else if (egl != NULL)
-        json_in_provider = srt_egl_icd_get_json_path (egl);
-      else if (ext_platform != NULL)
-        json_in_provider = srt_egl_external_platform_get_json_path (ext_platform);
-      else
-        json_in_provider = srt_vulkan_icd_get_json_path (icd);
 
-      json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT ".json", digits, seq);
+      relative_to_overrides = pv_generate_unique_filepath (sub_dir, digits, seq, json_basename,
+                                                           NULL, json_set);
       json_in_container = g_build_filename (self->overrides_in_container,
-                                            "share", sub_dir,
-                                            json_base, NULL);
+                                            relative_to_overrides, NULL);
 
       g_debug ("Copying \"%s\" as-is to implement \"%s\" in container",
                json_in_provider, json_in_container);
@@ -4779,9 +4798,7 @@ setup_json_manifest (PvRuntime *self,
  * @self: The runtime
  * @bwrap: Append arguments to this bubblewrap invocation to make files
  *  available in the container
- * @sub_dir: `vulkan/icd.d` or similar
- * @write_to_dir: Path to `/overrides/share/${sub_dir}` in the
- *  current execution environment
+ * @sub_dir: `share/vulkan/icd.d` or similar, relative to `/overrides`
  * @details: (element-type IcdDetails): A list of #IcdDetails
  *  holding #SrtVulkanLayer, #SrtVulkanIcd or #SrtEglIcd, as appropriate
  *  for @sub_dir
@@ -4799,26 +4816,19 @@ setup_each_json_manifest (PvRuntime *self,
                           GError **error)
 {
   gsize j;
-  g_autofree gchar *write_to_dir = NULL;
+  g_autoptr(GHashTable) json_set = NULL;
   int digits = pv_count_decimal_digits (details->len);
 
   g_return_val_if_fail (self->provider != NULL, FALSE);
   g_return_val_if_fail (bwrap != NULL || self->mutable_sysroot != NULL, FALSE);
 
-  write_to_dir = g_build_filename (self->overrides,
-                                  "share", sub_dir, NULL);
-
-  if (g_mkdir_with_parents (write_to_dir, 0700) != 0)
-    {
-      glnx_throw_errno_prefix (error, "Unable to create %s", write_to_dir);
-      return FALSE;
-    }
+  json_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   for (j = 0; j < details->len; j++)
     {
       if (!setup_json_manifest (self, bwrap, sub_dir,
                                 g_ptr_array_index (details, j),
-                                digits, j, search_path, error))
+                                digits, j, json_set, search_path, error))
         return FALSE;
     }
 
@@ -7172,7 +7182,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   g_debug ("Setting up EGL ICD JSON...");
 
-  if (!setup_each_json_manifest (self, bwrap, "glvnd/egl_vendor.d",
+  if (!setup_each_json_manifest (self, bwrap, "share/glvnd/egl_vendor.d",
                                  provider_stack->egl_icd_details, egl_path, error))
     return FALSE;
 
@@ -7186,7 +7196,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
         }
     }
 
-  if (!setup_each_json_manifest (self, bwrap, "egl/egl_external_platform.d",
+  if (!setup_each_json_manifest (self, bwrap, "share/egl/egl_external_platform.d",
                                  provider_stack->egl_ext_platform_details,
                                  egl_ext_platform_path, error))
     return FALSE;
@@ -7203,7 +7213,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     }
 
   g_debug ("Setting up Vulkan ICD JSON...");
-  if (!setup_each_json_manifest (self, bwrap, "vulkan/icd.d",
+  if (!setup_each_json_manifest (self, bwrap, "share/vulkan/icd.d",
                                  provider_stack->vulkan_icd_details, vulkan_path, error))
     return FALSE;
 
@@ -7220,7 +7230,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
       g_debug ("Setting up Vulkan explicit layer JSON...");
-      if (!setup_each_json_manifest (self, bwrap, "vulkan/explicit_layer.d",
+      if (!setup_each_json_manifest (self, bwrap, "share/vulkan/explicit_layer.d",
                                      provider_stack->vulkan_exp_layer_details,
                                      vulkan_exp_layer_path, error))
         return FALSE;
@@ -7236,7 +7246,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
         }
 
       g_debug ("Setting up Vulkan implicit layer JSON...");
-      if (!setup_each_json_manifest (self, bwrap, "vulkan/implicit_layer.d",
+      if (!setup_each_json_manifest (self, bwrap, "share/vulkan/implicit_layer.d",
                                      provider_stack->vulkan_imp_layer_details,
                                      vulkan_imp_layer_path, error))
         return FALSE;

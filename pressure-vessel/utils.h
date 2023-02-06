@@ -56,3 +56,10 @@ void pv_delete_dangling_symlink (int dirfd,
                                  const char *name);
 
 int pv_count_decimal_digits (gsize n);
+
+gchar *pv_generate_unique_filepath (const gchar *sub_dir,
+                                    int digits,
+                                    gsize seq,
+                                    const gchar *file,
+                                    const gchar *multiarch_tuple,
+                                    GHashTable *files_set);

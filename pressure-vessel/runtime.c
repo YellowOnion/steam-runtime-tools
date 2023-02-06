@@ -4601,7 +4601,8 @@ pv_runtime_take_ld_so_from_provider (PvRuntime *self,
  * @self: The runtime
  * @bwrap: Append arguments to this bubblewrap invocation to make files
  *  available in the container
- * @sub_dir: `vulkan/icd.d`, `glvnd/egl_vendor.d` or similar
+ * @sub_dir: `share/vulkan/icd.d`, `share/glvnd/egl_vendor.d` or similar,
+ *  relative to `/overrides`
  * @details: An #IcdDetails holding a #SrtVulkanLayer or #SrtVulkanIcd,
  *  whichever is appropriate for @sub_dir
  * @digits: Number of digits to pad length of numeric prefix
@@ -4684,8 +4685,7 @@ setup_json_manifest (PvRuntime *self,
 
           json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT "-%s.json",
                                        digits, seq, pv_multiarch_tuples[i]);
-          relative_to_overrides = g_build_filename ("share", sub_dir,
-                                                    json_base, NULL);
+          relative_to_overrides = g_build_filename (sub_dir, json_base, NULL);
           write_to_file = g_build_filename (self->overrides,
                                             relative_to_overrides, NULL);
           write_to_dir = g_path_get_dirname (write_to_file);
@@ -4768,8 +4768,7 @@ setup_json_manifest (PvRuntime *self,
 
       json_base = g_strdup_printf ("%.*" G_GSIZE_FORMAT ".json", digits, seq);
       json_in_container = g_build_filename (self->overrides_in_container,
-                                            "share", sub_dir,
-                                            json_base, NULL);
+                                            sub_dir, json_base, NULL);
 
       g_debug ("Copying \"%s\" as-is to implement \"%s\" in container",
                json_in_provider, json_in_container);
@@ -4792,7 +4791,7 @@ setup_json_manifest (PvRuntime *self,
  * @self: The runtime
  * @bwrap: Append arguments to this bubblewrap invocation to make files
  *  available in the container
- * @sub_dir: `vulkan/icd.d` or similar
+ * @sub_dir: `share/vulkan/icd.d` or similar, relative to `/overrides`
  * @details: (element-type IcdDetails): A list of #IcdDetails
  *  holding #SrtVulkanLayer, #SrtVulkanIcd or #SrtEglIcd, as appropriate
  *  for @sub_dir
@@ -7173,7 +7172,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
   g_debug ("Setting up EGL ICD JSON...");
 
-  if (!setup_each_json_manifest (self, bwrap, "glvnd/egl_vendor.d",
+  if (!setup_each_json_manifest (self, bwrap, "share/glvnd/egl_vendor.d",
                                  provider_stack->egl_icd_details, egl_path, error))
     return FALSE;
 
@@ -7187,7 +7186,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
         }
     }
 
-  if (!setup_each_json_manifest (self, bwrap, "egl/egl_external_platform.d",
+  if (!setup_each_json_manifest (self, bwrap, "share/egl/egl_external_platform.d",
                                  provider_stack->egl_ext_platform_details,
                                  egl_ext_platform_path, error))
     return FALSE;
@@ -7204,7 +7203,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
     }
 
   g_debug ("Setting up Vulkan ICD JSON...");
-  if (!setup_each_json_manifest (self, bwrap, "vulkan/icd.d",
+  if (!setup_each_json_manifest (self, bwrap, "share/vulkan/icd.d",
                                  provider_stack->vulkan_icd_details, vulkan_path, error))
     return FALSE;
 
@@ -7221,7 +7220,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
   if (self->flags & PV_RUNTIME_FLAGS_IMPORT_VULKAN_LAYERS)
     {
       g_debug ("Setting up Vulkan explicit layer JSON...");
-      if (!setup_each_json_manifest (self, bwrap, "vulkan/explicit_layer.d",
+      if (!setup_each_json_manifest (self, bwrap, "share/vulkan/explicit_layer.d",
                                      provider_stack->vulkan_exp_layer_details,
                                      vulkan_exp_layer_path, error))
         return FALSE;
@@ -7237,7 +7236,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
         }
 
       g_debug ("Setting up Vulkan implicit layer JSON...");
-      if (!setup_each_json_manifest (self, bwrap, "vulkan/implicit_layer.d",
+      if (!setup_each_json_manifest (self, bwrap, "share/vulkan/implicit_layer.d",
                                      provider_stack->vulkan_imp_layer_details,
                                      vulkan_imp_layer_path, error))
         return FALSE;

@@ -1,3 +1,15 @@
+steam-runtime-tools (0.20230206.0) UNRELEASED; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * pressure-vessel: Reuse the basename of Vulkan drivers.
+    Since Vulkan Loader 1.3.234, it is possible to select which driver to
+    use by listing their names in the environment variable
+    `VK_LOADER_DRIVERS_SELECT`, but this functionality will only work with
+    pressure-vessel if we keep the original JSON manifest name.
+    (steamrt/tasks#223, steam-runtime#558)
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 06 Feb 2023 12:07:49 +0000
+
 steam-runtime-tools (0.20230131.0) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]

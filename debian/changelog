@@ -1,4 +1,4 @@
-steam-runtime-tools (0.20230206.0) UNRELEASED; urgency=medium
+steam-runtime-tools (0.20230206.0) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]
   * pressure-vessel: Reuse the basename of Vulkan drivers.
@@ -8,7 +8,7 @@ steam-runtime-tools (0.20230206.0) UNRELEASED; urgency=medium
     pressure-vessel if we keep the original JSON manifest name.
     (steamrt/tasks#223, steam-runtime#558)
 
- -- Simon McVittie <smcv@collabora.com>  Mon, 06 Feb 2023 12:07:49 +0000
+ -- Simon McVittie <smcv@collabora.com>  Mon, 06 Feb 2023 15:13:34 +0000
 
 steam-runtime-tools (0.20230131.0) steamrt; urgency=medium
 

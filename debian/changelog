@@ -1,3 +1,13 @@
+steam-runtime-tools (0.20230216.0) steamrt; urgency=high
+
+  * check-vulkan: Add new error codes from Vulkan-Loader v1.3.239
+    (steamrt/tasks#228)
+  * pv-wrap: Temporarily provide /run/host/container-runtime.
+    This is a hotfix for a SDL 2.26.x regression that broke controller
+    hotplug (steamrt/tasks#234)
+
+ -- Simon McVittie <smcv@collabora.com>  Thu, 16 Feb 2023 13:58:13 +0000
+
 steam-runtime-tools (0.20230206.0) steamrt; urgency=medium
 
   [ Ludovico de Nittis ]

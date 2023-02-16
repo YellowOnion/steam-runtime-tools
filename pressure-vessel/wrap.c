@@ -2351,6 +2351,12 @@ main (int argc,
                                         error))
         return FALSE;
 
+      /* Work around a SDL bug fixed in
+       * https://github.com/libsdl-org/SDL/commit/bcd97b36 */
+      flatpak_bwrap_add_args (bwrap,
+                              "--symlink", "container-manager",
+                              "/run/host/container-runtime",
+                              NULL);
 
       if (opt_verbose)
         {

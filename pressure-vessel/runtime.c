@@ -6750,6 +6750,35 @@ icd_stack_free (IcdStack *self)
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (IcdStack, icd_stack_free)
 
+/* Log a warning if any colon-delimited entry in @path is not in
+ * ${prefix}/${suffix}. */
+static void
+check_path_entries_all_in_dir (const char *path,
+                               const char *prefix,
+                               const char *suffix)
+{
+  g_autofree char *dir = g_build_filename (prefix, suffix, NULL);
+  g_auto(GStrv) entries = NULL;
+  gsize i;
+
+  if (path == NULL || *path == '\0')
+    return;
+
+  entries = g_strsplit (path, ":", -1);
+
+  if (entries == NULL)
+    return;
+
+  for (i = 0; entries[i] != NULL; i++)
+    {
+      const char *after = _srt_get_path_after (entries[i], dir);
+
+      if (after == NULL
+          || strstr (after, "/") != NULL)
+        g_critical ("%s is not in %s", entries[i], dir);
+    }
+}
+
 static gboolean
 pv_runtime_use_provider_graphics_stack (PvRuntime *self,
                                         FlatpakBwrap *bwrap,
@@ -7325,6 +7354,13 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
 
           xdg_data_dirs = g_environ_getenv (self->original_environ, "XDG_DATA_DIRS");
           override_share = g_build_filename (self->overrides_in_container, "share", NULL);
+
+          /* We are relying here on setup_json_manifest() having generated
+           * all the layers' JSON manifests in the same directory. */
+          check_path_entries_all_in_dir (vulkan_exp_layer_path->str,
+                                         override_share, "vulkan/explicit_layer.d");
+          check_path_entries_all_in_dir (vulkan_imp_layer_path->str,
+                                         override_share, "vulkan/implicit_layer.d");
 
           /* Reference:
            * https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html */

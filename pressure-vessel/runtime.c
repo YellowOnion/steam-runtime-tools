@@ -7241,7 +7241,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             {
               IcdDetails *details = g_ptr_array_index (host_stack->vulkan_exp_layer_details, i);
               SrtVulkanLayer *layer = SRT_VULKAN_LAYER (details->icd);
-              pv_search_path_append (vulkan_path, srt_vulkan_layer_get_json_path (layer));
+              pv_search_path_append (vulkan_exp_layer_path, srt_vulkan_layer_get_json_path (layer));
             }
         }
 
@@ -7257,7 +7257,7 @@ pv_runtime_use_provider_graphics_stack (PvRuntime *self,
             {
               IcdDetails *details = g_ptr_array_index (host_stack->vulkan_imp_layer_details, i);
               SrtVulkanLayer *layer = SRT_VULKAN_LAYER (details->icd);
-              pv_search_path_append (vulkan_path, srt_vulkan_layer_get_json_path (layer));
+              pv_search_path_append (vulkan_imp_layer_path, srt_vulkan_layer_get_json_path (layer));
             }
         }
     }

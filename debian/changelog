@@ -1,3 +1,21 @@
+steam-runtime-tools (0.20230220.0) steamrt; urgency=medium
+
+  * pressure-vessel:
+    - Ensure Vulkan layer manifests are all in the same
+      directory, fixing a regression in 0.20230206.0 for layers like
+      MangoHUD that use $LIB or $PLATFORM in their layer_path
+      (steamrt/tasks#239, steam-runtime#564)
+    - Log critical warnings if layers are not going to work
+    - Don't append layers to VK_DRIVER_FILES under FEX-Emu
+  * steam-runtime-launch-options:
+    - Allow edits to the game's command-line options.
+      As with all settings in steam-runtime-launch-options, these are
+      not saved from one run to the next, so this is a convenient way to
+      make temporary changes like adding -vulkan to Source-engine-based
+      games without affecting the next run of the same game.
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 20 Feb 2023 17:40:42 +0000
+
 steam-runtime-tools (0.20230216.0) steamrt; urgency=high
 
   * check-vulkan: Add new error codes from Vulkan-Loader v1.3.239

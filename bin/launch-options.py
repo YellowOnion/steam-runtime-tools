@@ -869,9 +869,11 @@ class Gui:
         self.grid.attach(label, 0, row, 1, 1)
 
         self.command_entry = Gtk.Entry.new()
-        self.command_entry.props.editable = False
-        self.command_entry.props.has_frame = False
+        self.command_entry.props.editable = True
         self.command_entry.set_text(to_shell(self.app.argv))
+        self.command_entry.connect(
+            'notify::text', self._command_entry_changed_cb,
+        )
         self.grid.attach(self.command_entry, 1, row, 2, 1)
 
         row += 1
@@ -1722,6 +1724,14 @@ class Gui:
         # type: (...) -> None
         with self._pause_changes():
             logger.debug('%s changed', sender)
+
+    def _command_entry_changed_cb(self, entry, param_spec):
+        # type: (typing.Any, typing.Any) -> None
+        with self._pause_changes():
+            logger.debug('Command to run changed to: %s', entry.props.text)
+            argv = shlex.split(entry.props.text)
+            logger.debug('Command parsed to %r', argv)
+            self.app.argv = argv
 
     def run_cb(self, _ignored=None):
         # type: (typing.Any) -> None

@@ -851,6 +851,41 @@ out:
   return issues;
 }
 
+static void
+_srt_add_inspect_library_arguments (GPtrArray *argv,
+                                    const char *requested_name,
+                                    const char *symbols_path,
+                                    const char * const *hidden_deps,
+                                    SrtLibrarySymbolsFormat symbols_format)
+{
+  g_return_if_fail (argv != NULL);
+
+  g_ptr_array_add (argv, g_strdup ("--line-based"));
+
+  switch (symbols_format)
+    {
+      case SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN:
+        g_ptr_array_add (argv, g_strdup (requested_name));
+        g_ptr_array_add (argv, g_strdup (symbols_path));
+        break;
+
+      case SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS:
+        g_ptr_array_add (argv, g_strdup ("--deb-symbols"));
+        g_ptr_array_add (argv, g_strdup (requested_name));
+        g_ptr_array_add (argv, g_strdup (symbols_path));
+        break;
+
+      default:
+        g_return_if_reached ();
+    }
+
+  for (gsize i = 0; hidden_deps != NULL && hidden_deps[i] != NULL; i++)
+    {
+      g_ptr_array_add (argv, g_strdup ("--hidden-dependency"));
+      g_ptr_array_add (argv, g_strdup (hidden_deps[i]));
+    }
+}
+
 SrtLibraryIssues
 _srt_check_library_presence (const char *helpers_path,
                              const char *requested_name,
@@ -893,8 +928,6 @@ _srt_check_library_presence (const char *helpers_path,
       return issues;
     }
 
-  g_ptr_array_add (argv, g_strdup ("--line-based"));
-
   log_args = g_string_new ("");
 
   for (guint i = 0; i < argv->len; ++i)
@@ -909,29 +942,8 @@ _srt_check_library_presence (const char *helpers_path,
   g_debug ("Checking library %s integrity with %s ", requested_name,
            log_args->str);
 
-  switch (symbols_format)
-    {
-      case SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN:
-        g_ptr_array_add (argv, g_strdup (requested_name));
-        g_ptr_array_add (argv, g_strdup (symbols_path));
-        break;
-
-      case SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS:
-        g_ptr_array_add (argv, g_strdup ("--deb-symbols"));
-        g_ptr_array_add (argv, g_strdup (requested_name));
-        g_ptr_array_add (argv, g_strdup (symbols_path));
-        break;
-
-      default:
-        g_return_val_if_reached (SRT_LIBRARY_ISSUES_UNKNOWN);
-    }
-
-  for (gsize i = 0; hidden_deps != NULL && hidden_deps[i] != NULL; i++)
-    {
-      g_ptr_array_add (argv, g_strdup ("--hidden-dependency"));
-      g_ptr_array_add (argv, g_strdup (hidden_deps[i]));
-    }
-
+  _srt_add_inspect_library_arguments (argv, requested_name, symbols_path,
+                                      hidden_deps, symbols_format);
   /* NULL terminate the array */
   g_ptr_array_add (argv, NULL);
 
@@ -940,3 +952,4 @@ _srt_check_library_presence (const char *helpers_path,
   return _srt_inspect_library ((gchar **) argv->pdata, my_environ, requested_name,
                                  multiarch, issues, more_details_out);
 }
+

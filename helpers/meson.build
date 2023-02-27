@@ -47,7 +47,7 @@ executable(
 
 executable(
   multiarch + '-inspect-library',
-  sources : 'inspect-library.c',
+  sources : ['inspect-library.c', 'inspect-library-utils.c'],
   dependencies : [libdl],
   include_directories : project_include_dirs,
   install : true,
@@ -58,7 +58,7 @@ executable(
 
 executable(
   multiarch + '-inspect-library-libelf',
-  sources : 'inspect-library-libelf.c',
+  sources : ['inspect-library-libelf.c', 'inspect-library-utils.c'],
   dependencies : [libdl, libelf],
   include_directories : project_include_dirs,
   install : true,

@@ -44,49 +44,14 @@
 #include <sysexits.h>
 #include <assert.h>
 
+#include <inspect-library-utils.h>
+
 #define BASE "Base"
 
-static void print_json_string_content (const char *s);
 static bool has_symbol (void *handle, const char *symbol);
 static bool has_versioned_symbol (void *handle,
                                   const char *symbol,
                                   const char * version);
-
-static void oom (void) __attribute__((__noreturn__));
-static void
-oom (void)
-{
-  fprintf (stderr, "Out of memory");
-  exit (EX_OSERR);
-}
-
-#define asprintf_or_die(...) \
-do { \
-    if (asprintf (__VA_ARGS__) < 0) \
-      oom (); \
-} while (0)
-
-#define argz_add_or_die(...) \
-do { \
-    if (argz_add (__VA_ARGS__) != 0) \
-      oom (); \
-} while (0)
-
-static inline void *
-steal_pointer (void *pp)
-{
-    typedef void *__attribute__((may_alias)) voidp_alias;
-    voidp_alias *pointer_to_pointer = pp;
-    void *ret = *pointer_to_pointer;
-    *pointer_to_pointer = NULL;
-    return ret;
-}
-
-static void
-clear_with_free (void *pp)
-{
-  free (steal_pointer (pp));
-}
 
 static void
 clear_with_dlclose (void *pp)
@@ -97,18 +62,7 @@ clear_with_dlclose (void *pp)
     dlclose (handle);
 }
 
-static void
-clear_with_fclose (void *pp)
-{
-  FILE *fh = steal_pointer (pp);
-
-  if (fh != NULL)
-    fclose (fh);
-}
-
 #define autodlclose __attribute__((__cleanup__(clear_with_dlclose)))
-#define autofclose __attribute__((__cleanup__(clear_with_fclose)))
-#define autofree __attribute__((__cleanup__(clear_with_free)))
 
 enum
 {
@@ -183,80 +137,6 @@ find_tag_value (const ElfW(Dyn) *dyn,
 
   return (size_t) -1;
 }
-
-/*
- * Print a bytestring to stdout, escaping backslashes and control
- * characters in octal. The result can be parsed with g_strcompress().
- */
-static void
-print_strescape (const char *bytestring)
-{
-  const unsigned char *p;
-
-  for (p = (const unsigned char *) bytestring; *p != '\0'; p++)
-    {
-      if (*p < ' ' || *p >= 0x7f || *p == '\\')
-        printf ("\\%03o", *p);
-      else
-        putc (*p, stdout);
-    }
-}
-
-/*
- * Print an element as either a line based or, if @name_line_based
- * is %NULL, as an entry in a JSON array.
- */
-static void
-print_array_entry (const char *entry,
-                   const char *name_line_based,
-                   bool *first)
-{
-  assert (entry != NULL);
-  assert (first != NULL);
-
-  if (*first)
-    *first = false;
-  else if (name_line_based == NULL)
-    printf (",");
-
-  if (name_line_based == NULL)
-    {
-      printf ("\n      \"");
-      print_json_string_content (entry);
-      printf ("\"");
-    }
-  else
-    {
-      fprintf (stdout, "%s=", name_line_based);
-      print_strescape (entry);
-      putc ('\n', stdout);
-    }
-}
-
-/*
- * Print an array in stdout as either a formatted JSON entry or
- * a line based
- */
-static void
-print_argz (const char *name,
-            const char *argz_values,
-            size_t argz_n,
-            bool line_based)
-{
-  const char *entry = 0;
-  bool first = true;
-
-  if (!line_based)
-    printf (",\n    \"%s\": [", name);
-
-  while ((entry = argz_next (argz_values, argz_n, entry)))
-    print_array_entry (entry, line_based ? name : NULL, &first);
-
-  if (!line_based)
-    printf ("\n    ]");
-}
-
-
 
 int
 main (int argc,
@@ -559,20 +439,6 @@ main (int argc,
     }
 
   return 0;
-}
-
-static void
-print_json_string_content (const char *s)
-{
-  const unsigned char *p;
-
-  for (p = (const unsigned char *) s; *p != '\0'; p++)
-    {
-      if (*p == '"' || *p == '\\' || *p <= 0x1F || *p >= 0x80)
-        printf ("\\u%04x", *p);
-      else
-        printf ("%c", *p);
-    }
 }
 
 static bool

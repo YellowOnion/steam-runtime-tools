@@ -586,7 +586,8 @@ _srt_get_modules_from_path (int sysroot_fd,
                                               dfd_iter.real_iter.fd,
                                               dent->d_name);
           issues = _srt_check_library_presence (helpers_path, driver_proc_path,
-                                                multiarch_tuple, NULL, NULL, envp,
+                                                multiarch_tuple, NULL, NULL,
+                                                SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS, envp,
                                                 SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, NULL);
 
           /* If "${multiarch}-inspect-library" was unable to load the driver, it's safe to assume that
@@ -1264,6 +1265,7 @@ _srt_get_modules_full (const char *sysroot,
                                                 multiarch_tuple,
                                                 NULL,   /* symbols path */
                                                 NULL,   /* hidden dependencies */
+                                                SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS,
                                                 envp,
                                                 SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN,
                                                 &library_details);

@@ -155,3 +155,9 @@ guint my_g_string_replace (GString *string,
                            const gchar *replace,
                            guint limit);
 #endif
+
+#if !GLIB_CHECK_VERSION(2, 60, 0)
+#define g_strv_equal(s1, s2) my_g_strv_equal (s1, s2)
+gboolean my_g_strv_equal (const gchar * const *strv1,
+                          const gchar * const *strv2);
+#endif

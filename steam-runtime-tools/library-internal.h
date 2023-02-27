@@ -28,6 +28,8 @@
 
 #include "steam-runtime-tools/library.h"
 
+#include "steam-runtime-tools/system-info-internal.h"
+
 /*
  * _srt_library_new:
  * @multiarch_tuple: A multiarch tuple like %SRT_ABI_I386,
@@ -106,6 +108,7 @@ SrtLibraryIssues _srt_check_library_presence (const char *helpers_path,
                                               const char *multiarch,
                                               const char *symbols_path,
                                               const char * const *hidden_deps,
+                                              SrtCheckFlags check_flags,
                                               gchar **envp,
                                               SrtLibrarySymbolsFormat symbols_format,
                                               SrtLibrary **more_details_out);

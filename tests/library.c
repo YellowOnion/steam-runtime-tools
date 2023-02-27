@@ -24,7 +24,10 @@
  */
 
 #include <libglnx.h>
+#include <steam-runtime-tools/glib-backports-internal.h>
 
+#include "steam-runtime-tools/utils-internal.h"
+#include "steam-runtime-tools/system-info-internal.h"
 #include <steam-runtime-tools/steam-runtime-tools.h>
 
 #include <string.h>
@@ -265,6 +268,7 @@ typedef struct
   const gchar *missing_versions[5];
   const gchar *misversioned_symbols[5];
   SrtLibraryIssues issues;
+  SrtLibraryIssues issues_extended;
   gboolean is_library_missing;
 } LibraryTest;
 
@@ -304,8 +308,8 @@ static const LibraryTest library_test[] =
                         " some_other_fictitious_symbol@Base 1:2.0\n",
     .missing_symbols =
     {
-      "nope@MISSING",
       "also_nope",
+      "nope@MISSING",
       NULL
     },
     .missing_versions =
@@ -313,7 +317,8 @@ static const LibraryTest library_test[] =
       "MISSING",
       NULL
     },
-    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
+    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS,
+    .issues_extended = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
   },
 
   {
@@ -346,7 +351,8 @@ static const LibraryTest library_test[] =
       "LIBJPEGTURBO_9000",
       NULL
     },
-    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
+    .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS,
+    .issues_extended = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISSING_VERSIONS,
   },
 
   {
@@ -358,6 +364,7 @@ static const LibraryTest library_test[] =
       NULL
     },
     .issues = SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS,
+    .issues_extended = SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS,
   },
 
   {
@@ -373,17 +380,19 @@ static const LibraryTest library_test[] =
     },
     .misversioned_symbols =
     {
-      "inflateBack@MISSING",
       "gzopen@ZLIB_1.2.0",
+      "inflateBack@MISSING",
       NULL
     },
     .issues = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS,
+    .issues_extended = SRT_LIBRARY_ISSUES_MISSING_SYMBOLS | SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS,
   },
 
   {
     .description = "library that is missing",
     .library_name = "libMISSING.so.62",
     .issues = SRT_LIBRARY_ISSUES_CANNOT_LOAD | SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS,
+    .issues_extended = SRT_LIBRARY_ISSUES_CANNOT_LOAD | SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS,
     .is_library_missing = TRUE,
   },
 
@@ -397,7 +406,7 @@ static const LibraryTest library_test[] =
       "VERSION_9000",
       NULL
     },
-    .issues = SRT_LIBRARY_ISSUES_MISSING_VERSIONS | SRT_LIBRARY_ISSUES_UNVERSIONED,
+    .issues_extended = SRT_LIBRARY_ISSUES_MISSING_VERSIONS | SRT_LIBRARY_ISSUES_UNVERSIONED,
   },
 };
 
@@ -446,8 +455,11 @@ test_libraries (Fixture *f,
       const char * const *dependencies;
       gboolean result;
       SrtLibraryIssues issues;
+      SrtLibraryIssues issues_extended;
       gboolean seen_libc = FALSE;
       g_autoptr(SrtLibrary) library = NULL;
+      g_autoptr(SrtLibrary) library_extended = NULL;
+      const char *empty[] = { NULL };
       const gchar *library_name = test->library_name == NULL ? "libz.so.1" : test->library_name;
 
       g_test_message ("%s", test->description);
@@ -459,32 +471,52 @@ test_libraries (Fixture *f,
           g_assert_true (result);
         }
 
-      issues = srt_check_library_presence (library_name,
-                                           multiarch_tuple,
-                                           test->expected_symbols == NULL ? NULL : tmp_file,
-                                           test->format,
-                                           &library);
+      issues = _srt_check_library_presence (NULL, library_name, multiarch_tuple,
+                                            test->expected_symbols == NULL ? NULL : tmp_file,
+                                            NULL, SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS,
+                                            (gchar **) _srt_peek_environ_nonnull (),
+                                            test->format,
+                                            &library);
       g_assert_cmpint (issues, ==, test->issues);
       g_assert_cmpint (srt_library_get_terminating_signal (library), ==, 0);
+
+      issues_extended = srt_check_library_presence (library_name,
+                                                    multiarch_tuple,
+                                                    test->expected_symbols == NULL ? NULL : tmp_file,
+                                                    test->format,
+                                                    &library_extended);
+      g_assert_cmpint (issues_extended, ==, test->issues_extended);
+      g_assert_cmpint (srt_library_get_terminating_signal (library_extended), ==, 0);
 
       if (test->is_library_missing)
         {
           g_assert_cmpint (srt_library_get_exit_status (library), ==, 1);
           g_assert_cmpstr (srt_library_get_absolute_path (library), ==, NULL);
+          g_assert_cmpint (srt_library_get_exit_status (library_extended), ==, 1);
+          g_assert_cmpstr (srt_library_get_absolute_path (library_extended), ==, NULL);
         }
       else
         {
           g_assert_cmpint (srt_library_get_exit_status (library), ==, 0);
+          g_assert_cmpint (srt_library_get_exit_status (library_extended), ==, 0);
           g_debug ("path to %s is %s", library_name, srt_library_get_absolute_path (library));
           g_assert_true (srt_library_get_absolute_path (library)[0] == '/');
           g_assert_true (g_file_test (srt_library_get_absolute_path (library), G_FILE_TEST_EXISTS));
+          g_assert_cmpstr (srt_library_get_absolute_path (library), ==,
+                           srt_library_get_absolute_path (library_extended));
         }
 
       check_list_elements (srt_library_get_missing_symbols (library),
                            test->missing_symbols);
-      check_list_elements (srt_library_get_missing_versions (library),
+      check_list_elements (srt_library_get_missing_symbols (library_extended),
+                           test->missing_symbols);
+      /* The missing versions are checked only when using the extended version */
+      check_list_elements (srt_library_get_missing_versions (library), empty);
+      check_list_elements (srt_library_get_missing_versions (library_extended),
                            test->missing_versions);
       check_list_elements (srt_library_get_misversioned_symbols (library),
+                          test->misversioned_symbols);
+      check_list_elements (srt_library_get_misversioned_symbols (library_extended),
                           test->misversioned_symbols);
 
       dependencies = srt_library_get_dependencies (library);
@@ -506,6 +538,8 @@ test_libraries (Fixture *f,
 
           g_assert_true (seen_libc);
         }
+
+      g_assert_true (g_strv_equal (dependencies, srt_library_get_dependencies (library_extended)));
     }
 
   g_unlink (tmp_file);

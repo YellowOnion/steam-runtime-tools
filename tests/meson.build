@@ -45,7 +45,7 @@ tests = [
   },
   {'name': 'json-utils', 'static': true},
   {'name': 'libdl', 'static': true},
-  {'name': 'library'},
+  {'name': 'library', 'static': true},
   {'name': 'locale'},
   {'name': 'system-info'},
   {'name': 'utils', 'static': true},

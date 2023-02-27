@@ -1,5 +1,5 @@
 /*
- * Copyright © 2019 Collabora Ltd.
+ * Copyright © 2019-2023 Collabora Ltd.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -23,25 +23,45 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <glib.h>
+#include <argz.h>
+#include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <link.h>
 
-int
-main (int argc,
-      char **argv)
+static inline void oom (void) __attribute__((__noreturn__));
+static inline void
+oom (void)
 {
-  g_return_val_if_fail (argc == 2, EXIT_FAILURE);
-
-  gchar **envp = g_get_environ ();
-  gchar *path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib", "x86_64-linux-gnu", argv[1], NULL);
-
-  /* Return as though we found the given soname in a canonical Debian style,
-   * x86_64 lib directory */
-  printf ("requested=%s\n", argv[1]);
-  printf ("path=%s\n", path);
-  g_free (path);
-  g_strfreev (envp);
-  return 0;
+  fprintf (stderr, "Out of memory");
+  exit (EX_OSERR);
 }
+
+#define asprintf_or_die(...) \
+do { \
+    if (asprintf (__VA_ARGS__) < 0) \
+      oom (); \
+} while (0)
+
+#define argz_add_or_die(...) \
+do { \
+    if (argz_add (__VA_ARGS__) != 0) \
+      oom (); \
+} while (0)
+
+void *steal_pointer (void *pp);
+int steal_fd (int *fdp);
+void clear_with_free (void *pp);
+void clear_with_fclose (void *pp);
+
+#define autofclose __attribute__((__cleanup__(clear_with_fclose)))
+#define autofree __attribute__((__cleanup__(clear_with_free)))
+
+void print_strescape (const char *bytestring);
+void print_json_string_content (const char *s);
+void print_array_entry (const char *entry,
+                        const char *name);
+void print_argz (const char *name,
+                 const char *argz_values,
+                 size_t argz_n);

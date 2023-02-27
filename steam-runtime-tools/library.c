@@ -23,11 +23,12 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include "steam-runtime-tools/glib-backports-internal.h"
+
 #include "steam-runtime-tools/library.h"
 
 #include "steam-runtime-tools/architecture.h"
 #include "steam-runtime-tools/enums.h"
-#include "steam-runtime-tools/glib-backports-internal.h"
 #include "steam-runtime-tools/library-internal.h"
 #include "steam-runtime-tools/utils.h"
 #include "steam-runtime-tools/utils-internal.h"
@@ -658,115 +659,99 @@ srt_check_library_presence (const char *requested_name,
                             SrtLibrary **more_details_out)
 {
   return _srt_check_library_presence (NULL, requested_name, multiarch,
-                                      symbols_path, NULL,
+                                      symbols_path, NULL, SRT_CHECK_FLAGS_NONE,
                                       (gchar **) _srt_peek_environ_nonnull (),
                                       symbols_format, more_details_out);
 }
 
-SrtLibraryIssues
-_srt_check_library_presence (const char *helpers_path,
-                             const char *requested_name,
-                             const char *multiarch,
-                             const char *symbols_path,
-                             const char * const *hidden_deps,
-                             gchar **envp,
-                             SrtLibrarySymbolsFormat symbols_format,
-                             SrtLibrary **more_details_out)
+/*
+ * @details_in: (in) (nullable): Library details from a previous execution of
+ *  inspect-library
+ * @more_details_out: (out) (nullable): Used to return the inspected library
+ *  details, joined with @details_in values
+ */
+static SrtLibraryIssues
+_srt_inspect_library (gchar **argv,
+                      gchar **envp,
+                      const char *requested_name,
+                      const char *multiarch,
+                      SrtLibraryIssues issues,
+                      SrtLibrary *details_in,
+                      SrtLibrary **more_details_out)
 {
-  GPtrArray *argv = NULL;
-  gchar *output = NULL;
-  gchar *child_stderr = NULL;
-  gchar *absolute_path = NULL;
-  gchar *real_soname = NULL;
+  g_autofree gchar *output = NULL;
+  g_autofree gchar *child_stderr = NULL;
+  g_autofree gchar *absolute_path = NULL;
+  g_autofree gchar *real_soname = NULL;
+  const gchar *originally_requested_name;
   int wait_status = -1;
   int exit_status = -1;
   int terminating_signal = 0;
-  GError *error = NULL;
-  g_autoptr(GPtrArray) missing_symbols = NULL;
-  g_autoptr(GPtrArray) misversioned_symbols = NULL;
-  g_autoptr(GPtrArray) missing_versions = NULL;
-  g_autoptr(GPtrArray) dependencies = NULL;
-  SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
-  GStrv my_environ = NULL;
-  SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
-  GString *log_args = NULL;
+  g_autoptr(GHashTable) missing_symbols_set = NULL;
+  g_autoptr(GHashTable) misversioned_symbols_set = NULL;
+  g_autoptr(GHashTable) missing_versions_set = NULL;
+  g_autoptr(GHashTable) dependencies_set = NULL;
   gchar *next_line;
-  const char * const *missing_symbols_strv = NULL;
-  const char * const *misversioned_symbols_strv = NULL;
-  const char * const *missing_versions_strv = NULL;
-  const char * const *dependencies_strv = NULL;
+  g_autofree const char **missing_symbols_strv = NULL;
+  g_autofree const char **misversioned_symbols_strv = NULL;
+  g_autofree const char **missing_versions_strv = NULL;
+  g_autofree const char **dependencies_strv = NULL;
+  g_autoptr(GError) error = NULL;
+  gsize i;
+  guint length;
 
-  g_return_val_if_fail (requested_name != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
-  g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
-  g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
+  /* This function should not be called if a previous helper execution already
+   * failed. */
+  g_return_val_if_fail (!(issues & SRT_LIBRARY_ISSUES_CANNOT_LOAD),
                         SRT_LIBRARY_ISSUES_UNKNOWN);
-  g_return_val_if_fail (envp != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
-  g_return_val_if_fail (_srt_check_not_setuid (), SRT_LIBRARY_ISSUES_UNKNOWN);
 
-  if (symbols_path == NULL)
-    issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
+  /* We don't want to hardcode the logic of what each helper provides.
+   * By using hash tables we can easily merge multiple libraries details
+   * together without having to worry about possible duplicated entries. */
+  missing_symbols_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  misversioned_symbols_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  missing_versions_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  dependencies_set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
-  argv = _srt_get_helper (helpers_path, multiarch, "inspect-library",
-                          flags, &error);
-
-  if (argv == NULL)
+  if (details_in != NULL)
     {
-      issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
-      /* Use the error message as though the child had printed it on stderr -
-       * either way, it's a useful diagnostic */
-      child_stderr = g_strdup (error->message);
-      goto out;
+      const char * const *missing_symbols_in;
+      const char * const *misversioned_symbols_in;
+      const char * const *missing_versions_in;
+      const char * const *dependencies_in;
+
+      missing_symbols_in = srt_library_get_missing_symbols (details_in);
+      for (i = 0; missing_symbols_in[i] != NULL; i++)
+        g_hash_table_add (missing_symbols_set, g_strdup (missing_symbols_in[i]));
+
+      misversioned_symbols_in = srt_library_get_misversioned_symbols (details_in);
+      for (i = 0; misversioned_symbols_in[i] != NULL; i++)
+        g_hash_table_add (misversioned_symbols_set, g_strdup (misversioned_symbols_in[i]));
+
+      missing_versions_in = srt_library_get_missing_versions (details_in);
+      for (i = 0; missing_versions_in[i] != NULL; i++)
+        g_hash_table_add (missing_versions_set, g_strdup (missing_versions_in[i]));
+
+      dependencies_in = srt_library_get_dependencies (details_in);
+      for (i = 0; dependencies_in[i] != NULL; i++)
+        g_hash_table_add (dependencies_set, g_strdup (dependencies_in[i]));
+
+      /* Keep the originally requested name. This allows us to issue a second
+       * call to inspect-library while using a different name (e.g. with
+       * its path instead of its SONAME) */
+      originally_requested_name = srt_library_get_requested_name (details_in);
+      /* Do the same for the absolute path too, if we have one. */
+      absolute_path = g_strdup (srt_library_get_absolute_path (details_in));
     }
-
-  g_ptr_array_add (argv, g_strdup ("--line-based"));
-
-  log_args = g_string_new ("");
-
-  for (guint i = 0; i < argv->len; ++i)
+  else
     {
-      if (i > 0)
-        {
-          g_string_append_c (log_args, ' ');
-        }
-      g_string_append (log_args, g_ptr_array_index (argv, i));
+      originally_requested_name = requested_name;
     }
-
-  g_debug ("Checking library %s integrity with %s ", requested_name,
-           log_args->str);
-  g_string_free (log_args, TRUE);
-
-  switch (symbols_format)
-    {
-      case SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN:
-        g_ptr_array_add (argv, g_strdup (requested_name));
-        g_ptr_array_add (argv, g_strdup (symbols_path));
-        break;
-
-      case SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS:
-        g_ptr_array_add (argv, g_strdup ("--deb-symbols"));
-        g_ptr_array_add (argv, g_strdup (requested_name));
-        g_ptr_array_add (argv, g_strdup (symbols_path));
-        break;
-
-      default:
-        g_return_val_if_reached (SRT_LIBRARY_ISSUES_UNKNOWN);
-    }
-
-  for (gsize i = 0; hidden_deps != NULL && hidden_deps[i] != NULL; i++)
-    {
-      g_ptr_array_add (argv, g_strdup ("--hidden-dependency"));
-      g_ptr_array_add (argv, g_strdup (hidden_deps[i]));
-    }
-
-  /* NULL terminate the array */
-  g_ptr_array_add (argv, NULL);
-
-  my_environ = _srt_filter_gameoverlayrenderer_from_envp (envp);
 
   if (!g_spawn_sync (NULL,       /* working directory */
-                     (gchar **) argv->pdata,
-                     my_environ, /* envp */
-                     G_SPAWN_SEARCH_PATH,          /* flags */
+                     argv,
+                     envp,
+                     G_SPAWN_SEARCH_PATH,  /* flags */
                      _srt_child_setup_unblock_signals,
                      NULL,       /* user data */
                      &output,    /* stdout */
@@ -783,20 +768,14 @@ _srt_check_library_presence (const char *helpers_path,
       issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
 
       if (_srt_process_timeout_wait_status (wait_status, &exit_status, &terminating_signal))
-        {
-          issues |= SRT_LIBRARY_ISSUES_TIMEOUT;
-        }
+        issues |= SRT_LIBRARY_ISSUES_TIMEOUT;
+
       goto out;
     }
   else
     {
       exit_status = 0;
     }
-
-  missing_symbols = g_ptr_array_new_with_free_func (g_free);
-  misversioned_symbols = g_ptr_array_new_with_free_func (g_free);
-  missing_versions = g_ptr_array_new_with_free_func (g_free);
-  dependencies = g_ptr_array_new_with_free_func (g_free);
 
   next_line = output;
 
@@ -848,8 +827,11 @@ _srt_check_library_presence (const char *helpers_path,
         {
           if (absolute_path == NULL)
             absolute_path = g_steal_pointer (&decoded);
+          else if (g_str_equal (decoded, absolute_path))
+            g_debug ("We already knew the absolute path was %s", absolute_path);
           else
-            g_warning ("More than one path in inspect-library output");
+            g_warning ("More than one path in inspect-library output. Got \"%s\" and \"%s\"",
+                       absolute_path, decoded);
         }
       else if (g_str_has_prefix (line, "unexpectedly_unversioned="))
         {
@@ -860,19 +842,19 @@ _srt_check_library_presence (const char *helpers_path,
         }
       else if (g_str_has_prefix (line, "missing_symbol="))
         {
-          g_ptr_array_add (missing_symbols, g_steal_pointer (&decoded));
+          g_hash_table_add (missing_symbols_set, g_steal_pointer (&decoded));
         }
       else if (g_str_has_prefix (line, "misversioned_symbol="))
         {
-          g_ptr_array_add (misversioned_symbols, g_steal_pointer (&decoded));
+          g_hash_table_add (misversioned_symbols_set, g_steal_pointer (&decoded));
         }
       else if (g_str_has_prefix (line, "missing_version="))
         {
-          g_ptr_array_add (missing_versions, g_steal_pointer (&decoded));
+          g_hash_table_add (missing_versions_set, g_steal_pointer (&decoded));
         }
       else if (g_str_has_prefix (line, "dependency="))
         {
-          g_ptr_array_add (dependencies, g_steal_pointer (&decoded));
+          g_hash_table_add (dependencies_set, g_steal_pointer (&decoded));
         }
       else
         {
@@ -881,37 +863,42 @@ _srt_check_library_presence (const char *helpers_path,
     }
 
 out:
-  if (missing_symbols != NULL && missing_symbols->len > 0)
+  /* Get the keys from the hash tables and sort them to have consistent lists */
+  if (g_hash_table_size (missing_symbols_set) > 0)
     {
       issues |= SRT_LIBRARY_ISSUES_MISSING_SYMBOLS;
-      g_ptr_array_add (missing_symbols, NULL);
-      missing_symbols_strv = (const char * const *) missing_symbols->pdata;
+      missing_symbols_strv = (const char **) g_hash_table_get_keys_as_array (missing_symbols_set,
+                                                                             &length);
+      qsort (missing_symbols_strv, length, sizeof (char *), _srt_indirect_strcmp0);
     }
 
-  if (misversioned_symbols != NULL && misversioned_symbols->len > 0)
+  if (g_hash_table_size (misversioned_symbols_set) > 0)
     {
       issues |= SRT_LIBRARY_ISSUES_MISVERSIONED_SYMBOLS;
-      g_ptr_array_add (misversioned_symbols, NULL);
-      misversioned_symbols_strv = (const char * const *) misversioned_symbols->pdata;
+      misversioned_symbols_strv = (const char **) g_hash_table_get_keys_as_array (misversioned_symbols_set,
+                                                                                  &length);
+      qsort (misversioned_symbols_strv, length, sizeof (char *), _srt_indirect_strcmp0);
     }
 
-  if (missing_versions != NULL && missing_versions->len > 0)
+  if (g_hash_table_size (missing_versions_set) > 0)
     {
       issues |= SRT_LIBRARY_ISSUES_MISSING_VERSIONS;
-      g_ptr_array_add (missing_versions, NULL);
-      missing_versions_strv = (const char * const *) missing_versions->pdata;
+      missing_versions_strv = (const char **) g_hash_table_get_keys_as_array (missing_versions_set,
+                                                                              &length);
+      qsort (missing_versions_strv, length, sizeof (char *), _srt_indirect_strcmp0);
     }
 
-  if (dependencies != NULL && dependencies->len > 0)
+  if (g_hash_table_size (dependencies_set) > 0)
     {
-      g_ptr_array_add (dependencies, NULL);
-      dependencies_strv = (const char * const *) dependencies->pdata;
+      dependencies_strv = (const char **) g_hash_table_get_keys_as_array (dependencies_set,
+                                                                          &length);
+      qsort (dependencies_strv, length, sizeof (char *), _srt_indirect_strcmp0);
     }
 
   if (more_details_out != NULL)
     *more_details_out = _srt_library_new (multiarch,
                                           absolute_path,
-                                          requested_name,
+                                          originally_requested_name,
                                           issues,
                                           child_stderr,
                                           missing_symbols_strv,
@@ -922,12 +909,171 @@ out:
                                           exit_status,
                                           terminating_signal);
 
-  g_strfreev (my_environ);
-  g_clear_pointer (&argv, g_ptr_array_unref);
-  g_free (absolute_path);
-  g_free (child_stderr);
-  g_free (output);
-  g_free (real_soname);
-  g_clear_error (&error);
+  return issues;
+}
+
+static void
+_srt_add_inspect_library_arguments (GPtrArray *argv,
+                                    const char *requested_name,
+                                    const char *symbols_path,
+                                    const char *soname_for_symbols,
+                                    const char * const *hidden_deps,
+                                    SrtLibrarySymbolsFormat symbols_format)
+{
+  g_return_if_fail (argv != NULL);
+
+  switch (symbols_format)
+    {
+      case SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN:
+        g_ptr_array_add (argv, g_strdup (requested_name));
+        g_ptr_array_add (argv, g_strdup (symbols_path));
+        break;
+
+      case SRT_LIBRARY_SYMBOLS_FORMAT_DEB_SYMBOLS:
+        g_ptr_array_add (argv, g_strdup ("--deb-symbols"));
+        g_ptr_array_add (argv, g_strdup (requested_name));
+        g_ptr_array_add (argv, g_strdup (symbols_path));
+        break;
+
+      default:
+        g_return_if_reached ();
+    }
+
+  for (gsize i = 0; hidden_deps != NULL && hidden_deps[i] != NULL; i++)
+    {
+      g_ptr_array_add (argv, g_strdup ("--hidden-dependency"));
+      g_ptr_array_add (argv, g_strdup (hidden_deps[i]));
+    }
+
+  if (soname_for_symbols)
+    {
+      g_ptr_array_add (argv, g_strdup ("--soname-for-symbols"));
+      g_ptr_array_add (argv, g_strdup (soname_for_symbols));
+    }
+}
+
+SrtLibraryIssues
+_srt_check_library_presence (const char *helpers_path,
+                             const char *requested_name,
+                             const char *multiarch,
+                             const char *symbols_path,
+                             const char * const *hidden_deps,
+                             SrtCheckFlags check_flags,
+                             gchar **envp,
+                             SrtLibrarySymbolsFormat symbols_format,
+                             SrtLibrary **more_details_out)
+{
+  g_autoptr(GPtrArray) argv = NULL;
+  g_autoptr(GPtrArray) argv_libelf = NULL;
+  g_autoptr(GError) error = NULL;
+  SrtLibraryIssues issues = SRT_LIBRARY_ISSUES_NONE;
+  g_auto(GStrv) my_environ = NULL;
+  SrtHelperFlags flags = SRT_HELPER_FLAGS_TIME_OUT;
+  g_autoptr(GString) log_args = NULL;
+  g_autoptr(SrtLibrary) details = NULL;
+  g_autoptr(SrtLibrary) details_libelf = NULL;
+  const gchar *library_absolute_path = NULL;
+
+  g_return_val_if_fail (requested_name != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (multiarch != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (more_details_out == NULL || *more_details_out == NULL,
+                        SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (envp != NULL, SRT_LIBRARY_ISSUES_UNKNOWN);
+  g_return_val_if_fail (_srt_check_not_setuid (), SRT_LIBRARY_ISSUES_UNKNOWN);
+
+  if (symbols_path == NULL)
+    issues |= SRT_LIBRARY_ISSUES_UNKNOWN_EXPECTATIONS;
+
+  argv = _srt_get_helper (helpers_path, multiarch, "inspect-library",
+                          flags, &error);
+
+  if (argv == NULL)
+    {
+      issues |= SRT_LIBRARY_ISSUES_CANNOT_LOAD;
+      /* Use the error message as though the child had printed it on stderr -
+       * either way, it's a useful diagnostic */
+      if (more_details_out != NULL)
+        *more_details_out = _srt_library_new (multiarch, NULL, requested_name, issues,
+                                              error->message, NULL, NULL, NULL,
+                                              NULL, NULL, -1, 0);
+      return issues;
+    }
+
+  log_args = g_string_new ("");
+
+  for (guint i = 0; i < argv->len; ++i)
+    {
+      if (i > 0)
+        {
+          g_string_append_c (log_args, ' ');
+        }
+      g_string_append (log_args, g_ptr_array_index (argv, i));
+    }
+
+  g_debug ("Checking library %s integrity with %s ", requested_name,
+           log_args->str);
+
+  _srt_add_inspect_library_arguments (argv, requested_name, symbols_path, NULL,
+                                      hidden_deps, symbols_format);
+  /* NULL terminate the array */
+  g_ptr_array_add (argv, NULL);
+
+  my_environ = _srt_filter_gameoverlayrenderer_from_envp (envp);
+
+  issues = _srt_inspect_library ((gchar **) argv->pdata, my_environ, requested_name,
+                                 multiarch, issues, NULL, &details);
+
+  if ((check_flags & SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS)
+      || (issues & SRT_LIBRARY_ISSUES_CANNOT_LOAD)
+      || symbols_path == NULL)
+    {
+      if (more_details_out != NULL)
+        *more_details_out = g_steal_pointer (&details);
+      return issues;
+    }
+
+  library_absolute_path = srt_library_get_absolute_path (details);
+
+  argv_libelf = _srt_get_helper (helpers_path, multiarch,
+                                 "inspect-library-libelf",
+                                 flags, &error);
+
+  if (argv_libelf == NULL)
+    {
+      issues |= SRT_LIBRARY_ISSUES_UNKNOWN;
+      /* Use the error message as though the child had printed it on stderr -
+       * either way, it's a useful diagnostic.
+       * For the rest of the library details, keep the results from the previous
+       * successful `inspect-library` execution. */
+      if (more_details_out != NULL)
+        *more_details_out = _srt_library_new (multiarch,
+                                              library_absolute_path,
+                                              requested_name,
+                                              issues,
+                                              error->message,
+                                              srt_library_get_missing_symbols (details),
+                                              srt_library_get_misversioned_symbols (details),
+                                              srt_library_get_missing_versions (details),
+                                              srt_library_get_dependencies (details),
+                                              srt_library_get_real_soname (details),
+                                              -1, 0);
+      return issues;
+    }
+
+  /* This time we call `inspect-library-libelf` with the library absolute
+   * path. The helper is compiled with RPATH and we want to ensure that we
+   * load the correct library as the host system does. */
+  _srt_add_inspect_library_arguments (argv_libelf, library_absolute_path, symbols_path,
+                                      requested_name, NULL, symbols_format);
+  /* NULL terminate the array */
+  g_ptr_array_add (argv_libelf, NULL);
+
+  issues = _srt_inspect_library ((gchar **) argv_libelf->pdata, my_environ,
+                                 library_absolute_path, multiarch, issues, details,
+                                 &details_libelf);
+
+  if (more_details_out != NULL)
+    *more_details_out = g_steal_pointer (&details_libelf);
+
   return issues;
 }

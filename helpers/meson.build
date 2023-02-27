@@ -47,13 +47,25 @@ executable(
 
 executable(
   multiarch + '-inspect-library',
-  'inspect-library.c',
-  dependencies : [libdl, libelf],
+  sources : ['inspect-library.c', 'inspect-library-utils.c'],
+  dependencies : [libdl],
   include_directories : project_include_dirs,
   install : true,
   install_dir : pkglibexecdir,
   # Deliberately no RPATH/RUNPATH here: we want to determine whether
   # a game with no special linking would be able to load a library.
+)
+
+executable(
+  multiarch + '-inspect-library-libelf',
+  sources : ['inspect-library-libelf.c', 'inspect-library-utils.c'],
+  dependencies : [libdl, libelf],
+  include_directories : project_include_dirs,
+  install : true,
+  install_dir : pkglibexecdir,
+  # Use RPATH to pick up libelf that is bundled with pressure-vessel
+  build_rpath : pkglibexec_rpath,
+  install_rpath : pkglibexec_rpath,
 )
 
 executable(

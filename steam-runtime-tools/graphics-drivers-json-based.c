@@ -373,7 +373,7 @@ _get_library_canonical_path (gchar **envp,
 {
   g_autoptr(SrtLibrary) library = NULL;
   _srt_check_library_presence (helpers_path, library_path, multiarch, NULL,
-                               NULL, envp,
+                               NULL, SRT_CHECK_FLAGS_SKIP_SLOW_CHECKS, envp,
                                SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN, &library);
 
   /* Use realpath() because the path might still be a symbolic link or it can

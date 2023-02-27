@@ -156,13 +156,11 @@ main (int argc,
   autofree char *line = NULL;
   size_t len = 0;
   ssize_t chars;
-  bool first;
   bool deb_symbols = false;
   int opt;
   autofree char *hidden_deps = NULL;
   size_t hidden_deps_len = 0;
   const char *hidden_dep;
-  bool line_based = false;
 
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
@@ -181,7 +179,8 @@ main (int argc,
             break;
 
           case OPTION_LINE_BASED:
-            line_based = true;
+            /* Line based is now the default and the only output option available.
+             * This option is deprecated and will be removed in the future. */
             break;
 
           case OPTION_VERSION:
@@ -208,19 +207,9 @@ main (int argc,
 
   soname = argv[optind];
 
-  if (line_based)
-    {
-      fputs ("requested=", stdout);
-      print_strescape (soname);
-      putc ('\n', stdout);
-    }
-  else
-    {
-      printf ("{\n");
-      printf ("  \"");
-      print_json_string_content (soname);
-      printf ("\": {");
-    }
+  fputs ("requested=", stdout);
+  print_strescape (soname);
+  putc ('\n', stdout);
 
   for (hidden_dep = argz_next (hidden_deps, hidden_deps_len, NULL);
        hidden_dep != NULL;
@@ -255,18 +244,9 @@ main (int argc,
   size_t soname_val = find_tag_value (dyn_start, DT_SONAME);
   if (strtab != NULL && soname_val != (size_t) -1)
     {
-      if (line_based)
-        {
-          fputs ("soname=", stdout);
-          print_strescape (&strtab[soname_val]);
-          putc ('\n', stdout);
-        }
-      else
-        {
-          printf ("\n    \"SONAME\": \"");
-          print_json_string_content (&strtab[soname_val]);
-          printf("\",");
-        }
+      fputs ("soname=", stdout);
+      print_strescape (&strtab[soname_val]);
+      putc ('\n', stdout);
     }
   else
     {
@@ -275,18 +255,9 @@ main (int argc,
                soname);
     }
 
-  if (line_based)
-    {
-      fputs ("path=", stdout);
-      print_strescape (the_library->l_name);
-      putc ('\n', stdout);
-    }
-  else
-    {
-      printf ("\n    \"path\": \"");
-      print_json_string_content (the_library->l_name);
-      printf ("\"");
-    }
+  fputs ("path=", stdout);
+  print_strescape (the_library->l_name);
+  putc ('\n', stdout);
 
   if (argc >= optind + 2)
     {
@@ -407,11 +378,9 @@ main (int argc,
                    argv[optind + 1], soname);
         }
 
-      print_argz (line_based ? "missing_symbol" : "missing_symbols",
-                  missing_symbols, missing_n, line_based);
+      print_argz ("missing_symbol", missing_symbols, missing_n);
 
-      print_argz (line_based ? "misversioned_symbol" : "misversioned_symbols",
-                  misversioned_symbols, misversioned_n, line_based);
+      print_argz ("misversioned_symbol", misversioned_symbols, misversioned_n);
     }
   dep_map = the_library;
 
@@ -420,22 +389,12 @@ main (int argc,
   while (dep_map != NULL && dep_map->l_prev != NULL)
     dep_map = dep_map->l_prev;
 
-  if (!line_based)
-    printf (",\n    \"dependencies\": [");
-
-  first = true;
   for (; dep_map != NULL; dep_map = dep_map->l_next)
     {
       if (dep_map == the_library || strcmp (dep_map->l_name, "") == 0)
         continue;
 
-      print_array_entry (dep_map->l_name, line_based ? "dependency" : NULL, &first);
-    }
-
-  if (!line_based)
-    {
-      printf ("\n    ]\n  }");
-      printf ("\n}\n");
+      print_array_entry (dep_map->l_name, "dependency");
     }
 
   return 0;

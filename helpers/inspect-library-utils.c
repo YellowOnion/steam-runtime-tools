@@ -105,55 +105,30 @@ print_json_string_content (const char *s)
 }
 
 /*
- * Print an element as either a line based or, if @name_line_based
- * is %NULL, as an entry in a JSON array.
+ * Print an array element as line based
  */
 void
 print_array_entry (const char *entry,
-                   const char *name_line_based,
-                   bool *first)
+                   const char *name)
 {
   assert (entry != NULL);
-  assert (first != NULL);
+  assert (name != NULL);
 
-  if (*first)
-    *first = false;
-  else if (name_line_based == NULL)
-    printf (",");
-
-  if (name_line_based == NULL)
-    {
-      printf ("\n      \"");
-      print_json_string_content (entry);
-      printf ("\"");
-    }
-  else
-    {
-      fprintf (stdout, "%s=", name_line_based);
-      print_strescape (entry);
-      putc ('\n', stdout);
-    }
+  fprintf (stdout, "%s=", name);
+  print_strescape (entry);
+  putc ('\n', stdout);
 }
 
 /*
- * Print an array in stdout as either a formatted JSON entry or
- * a line based
+ * Print an array in stdout as line based
  */
 void
 print_argz (const char *name,
             const char *argz_values,
-            size_t argz_n,
-            bool line_based)
+            size_t argz_n)
 {
   const char *entry = 0;
-  bool first = true;
-
-  if (!line_based)
-    printf (",\n    \"%s\": [", name);
 
   while ((entry = argz_next (argz_values, argz_n, entry)))
-    print_array_entry (entry, line_based ? name : NULL, &first);
-
-  if (!line_based)
-    printf ("\n    ]");
+    print_array_entry (entry, name);
 }

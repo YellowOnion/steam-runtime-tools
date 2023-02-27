@@ -100,7 +100,6 @@ enum
 {
   OPTION_HELP = 1,
   OPTION_DEB_SYMBOLS,
-  OPTION_LINE_BASED,
   OPTION_VERSION,
   OPTION_SONAME_FOR_SYMBOLS,
 };
@@ -110,7 +109,6 @@ struct option long_options[] =
     { "soname-for-symbols", required_argument, NULL, OPTION_SONAME_FOR_SYMBOLS },
     { "deb-symbols", no_argument, NULL, OPTION_DEB_SYMBOLS },
     { "help", no_argument, NULL, OPTION_HELP },
-    { "line-based", no_argument, NULL, OPTION_LINE_BASED },
     { "version", no_argument, NULL, OPTION_VERSION },
 
     { NULL, 0, NULL, 0 }
@@ -382,10 +380,6 @@ main (int argc,
   size_t versions_count = 0;
   autofreev char **versions = NULL;
   bool unexpectedly_unversioned = false;
-  /* This option is considered to be deprecated and will be removed in the future.
-   * For compatibility reasons with `inspect-library`, we still keep the
-   * `--line-based` option even if it effectively does nothing. */
-  bool line_based = true;
 
   while ((opt = getopt_long (argc, argv, "", long_options, NULL)) != -1)
     {
@@ -401,10 +395,6 @@ main (int argc,
 
           case OPTION_HELP:
             usage (0);
-            break;
-
-          case OPTION_LINE_BASED:
-            line_based = true;
             break;
 
           case OPTION_VERSION:
@@ -560,8 +550,7 @@ main (int argc,
   if (unexpectedly_unversioned)
     printf ("unexpectedly_unversioned=true\n");
 
-  print_argz ("missing_version", missing_versions,
-              missing_versions_n, line_based);
+  print_argz ("missing_version", missing_versions, missing_versions_n);
 
   return 0;
 }

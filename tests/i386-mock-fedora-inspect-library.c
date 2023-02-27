@@ -32,10 +32,9 @@ int
 main (int argc,
       char **argv)
 {
-  g_return_val_if_fail (argc == 3, EXIT_FAILURE);
-  g_return_val_if_fail (strcmp (argv[1], "--line-based") == 0, EXIT_FAILURE);
+  g_return_val_if_fail (argc == 2, EXIT_FAILURE);
 
-  gchar *real_path = realpath (argv[2], NULL);
+  gchar *real_path = realpath (argv[1], NULL);
 
   if (real_path == NULL)
     return EXIT_FAILURE;
@@ -51,7 +50,7 @@ main (int argc,
       g_strstr_len (real_path, -1, "/custom_path32/") != NULL ||
       g_strstr_len (real_path, -1, "/custom_path32_2/") != NULL)
     {
-      printf ("requested=%s\n", argv[2]);
+      printf ("requested=%s\n", argv[1]);
       printf ("path=%s\n", real_path);
       g_free (real_path);
       return EXIT_SUCCESS;

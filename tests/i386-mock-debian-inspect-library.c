@@ -32,15 +32,14 @@ int
 main (int argc,
       char **argv)
 {
-  g_return_val_if_fail (argc == 3, EXIT_FAILURE);
-  g_return_val_if_fail (strcmp (argv[1], "--line-based") == 0, EXIT_FAILURE);
+  g_return_val_if_fail (argc == 2, EXIT_FAILURE);
 
   gchar **envp = g_get_environ ();
-  gchar *path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib", "i386-linux-gnu", argv[2], NULL);
+  gchar *path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib", "i386-linux-gnu", argv[1], NULL);
 
   /* Return as though we found the given soname in a canonical Debian style,
    * i386 lib directory */
-  printf ("requested=%s\n", argv[2]);
+  printf ("requested=%s\n", argv[1]);
   printf ("path=%s\n", path);
   g_free (path);
   g_strfreev (envp);

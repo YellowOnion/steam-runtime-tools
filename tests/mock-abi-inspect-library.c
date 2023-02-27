@@ -32,8 +32,7 @@ int
 main (int argc,
       char **argv)
 {
-  g_return_val_if_fail (argc == 3, EXIT_FAILURE);
-  g_return_val_if_fail (strcmp (argv[1], "--line-based") == 0, EXIT_FAILURE);
+  g_return_val_if_fail (argc == 2, EXIT_FAILURE);
 
 #if defined(MOCK_ARCHITECTURE_x86_64)
   const gchar *multiarch = "x86_64-mock-abi";
@@ -50,21 +49,21 @@ main (int argc,
   gchar *path = NULL;
   gchar **envp = g_get_environ ();
 
-  if (argv[2][0] == '/')
+  if (argv[1][0] == '/')
     {
       /* This is a very naive check to simulate the exit error that occurs
        * when we request a library that is of the wrong ELF class. */
-      if (g_strstr_len (argv[2], -1, wrong_abi) != NULL)
+      if (g_strstr_len (argv[1], -1, wrong_abi) != NULL)
         goto out;
 
       /* If the path is already absolute, just prepend the sysroot */
-      path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), argv[2], NULL);
+      path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), argv[1], NULL);
 
     }
   else
     {
       path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr",
-                               "lib", multiarch, argv[2], NULL);
+                               "lib", multiarch, argv[1], NULL);
     }
 
   /* When loading a library by its absolute or relative path, glib expands
@@ -76,7 +75,7 @@ main (int argc,
   path = g_strjoinv (lib_dir, split);
 
   /* Return as if we found the given soname in a mock-abi lib directory */
-  printf ("requested=%s\n", argv[2]);
+  printf ("requested=%s\n", argv[1]);
   printf ("path=%s\n", path);
 
   ret = EXIT_SUCCESS;

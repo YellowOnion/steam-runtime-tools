@@ -61,9 +61,7 @@ void clear_with_fclose (void *pp);
 void print_strescape (const char *bytestring);
 void print_json_string_content (const char *s);
 void print_array_entry (const char *entry,
-                        const char *name_line_based,
-                        bool *first);
+                        const char *name);
 void print_argz (const char *name,
                  const char *argz_values,
-                 size_t argz_n,
-                 bool line_based);
+                 size_t argz_n);

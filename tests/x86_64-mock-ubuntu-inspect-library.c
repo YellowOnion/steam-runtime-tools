@@ -32,23 +32,22 @@ int
 main (int argc,
       char **argv)
 {
-  g_return_val_if_fail (argc == 3, EXIT_FAILURE);
-  g_return_val_if_fail (strcmp (argv[1], "--line-based") == 0, EXIT_FAILURE);
+  g_return_val_if_fail (argc == 2, EXIT_FAILURE);
 
   gchar **envp = g_get_environ ();
   gchar *path = NULL;
 
   /* If we need to locate "libGL.so.1" we return a canonical Ubuntu 16.04 style 64 bit folder, under
    * the "mesa" subfolder */
-  if (g_strcmp0 (argv[2], "libGL.so.1") == 0)
+  if (g_strcmp0 (argv[1], "libGL.so.1") == 0)
     path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib",
-                             "x86_64-mock-ubuntu", "mesa", argv[2], NULL);
+                             "x86_64-mock-ubuntu", "mesa", argv[1], NULL);
   else
     path = g_build_filename (g_environ_getenv (envp, "SRT_TEST_SYSROOT"), "usr", "lib",
-                             "x86_64-mock-ubuntu", argv[2], NULL);
+                             "x86_64-mock-ubuntu", argv[1], NULL);
 
   /* Return as if we found the given SONAME */
-  printf ("requested=%s\n", argv[2]);
+  printf ("requested=%s\n", argv[1]);
   printf ("path=%s\n", path);
   g_free (path);
   g_strfreev (envp);

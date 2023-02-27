@@ -922,8 +922,6 @@ _srt_add_inspect_library_arguments (GPtrArray *argv,
 {
   g_return_if_fail (argv != NULL);
 
-  g_ptr_array_add (argv, g_strdup ("--line-based"));
-
   switch (symbols_format)
     {
       case SRT_LIBRARY_SYMBOLS_FORMAT_PLAIN:

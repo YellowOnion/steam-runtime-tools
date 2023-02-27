@@ -1,3 +1,19 @@
+steam-runtime-tools (0.20230227.0) steamrt; urgency=medium
+
+  [ Ludovico de Nittis ]
+  * library: Separate the libelf based checks into a separate helper.
+    We can't compile inspect-library with an RPATH because we want to
+    load libraries as the host system does, which means we can't guarantee
+    to be able to find libelf.so.1 if the host system doesn't have it.
+    Avoid this dependency by moving the libelf based checks into a separate
+    helper program, with the right RPATH to find the bundled copy. This
+    also keeps that code out of the critical path for identifying
+    graphics drivers in pressure-vessel.
+    (steamrt/tasks#236, steam-runtime#562)
+  * inspect-library helper: Refactoring
+
+ -- Simon McVittie <smcv@collabora.com>  Mon, 27 Feb 2023 19:10:52 +0000
+
 steam-runtime-tools (0.20230220.0) steamrt; urgency=medium
 
   * pressure-vessel:

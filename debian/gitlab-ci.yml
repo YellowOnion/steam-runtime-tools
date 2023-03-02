@@ -367,7 +367,7 @@ relocatable-install:production:
 
 test:debian-10:
     extends: .test_deb
-    image: debian:buster-slim
+    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/debian:buster-slim
 
 test:ubuntu-18.04:
     extends: .test_deb
@@ -379,7 +379,7 @@ test:ubuntu-20.04:
 
 test:archlinux:
     extends: .test_template
-    image: archlinux:latest
+    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/archlinux:latest
     script:
         - ./ci/prepare-arch.sh
         - |
@@ -495,7 +495,7 @@ deploy:
 
 test-populate-depot:debian-11:
     extends: .test-populate-depot:deb
-    image: debian:bullseye-slim
+    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/debian:bullseye-slim
 
 test-populate-depot:ubuntu-18.04:
     extends: .test-populate-depot:deb
@@ -504,7 +504,7 @@ test-populate-depot:ubuntu-18.04:
 # The same, but for Arch
 test-populate-depot:archlinux:
     extends: .test-populate-depot
-    image: archlinux:latest
+    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/archlinux:latest
     before_script:
         - |
             set -eux
@@ -529,7 +529,7 @@ reuse:
     stage: test
     needs: []
     image:
-        name: fsfe/reuse:latest
+        name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/fsfe/reuse:latest
         entrypoint: [""]
     script:
         - reuse lint

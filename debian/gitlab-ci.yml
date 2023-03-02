@@ -478,23 +478,6 @@ test-populate-depot:debian-11:
     extends: .test-populate-depot
     image: docker.internal.steamos.cloud/steamos/package-builder:bullseye
 
-# Run tests in stretch (this lets us assert that the test script
-# is syntactically valid in Python 3.5). Ignore any pyflakes, shellcheck,
-# etc. warnings because these older versions are probably less good at
-# avoiding false positives.
-test-populate-depot:debian-9:
-    extends: .test-populate-depot
-    image: docker.internal.steamos.cloud/steamos/package-builder:stretch
-    script:
-        - make -C subprojects/container-runtime check TESTS_ONLY=true
-
-# The same, but for brewmaster and Python 3.4
-test-populate-depot:steamos-2:
-    extends: .test-populate-depot
-    image: docker.internal.steamos.cloud/steamos/package-builder:brewmaster
-    script:
-        - make -C subprojects/container-runtime check TESTS_ONLY=true
-
 # The same, but for Ubuntu 18.04
 test-populate-depot:ubuntu-18.04:
     extends: .test-populate-depot

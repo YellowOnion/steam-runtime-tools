@@ -409,10 +409,6 @@ deploy:
         - package:i386
         - relocatable-install:production
     rules:
-        - if: '$DEVEL_DOCKER_REGISTRY == ""'
-          when: never
-        - if: '$DEVEL_DOCKER_IMAGE == ""'
-          when: never
         - if: '$PRESSURE_VESSEL_CI_UPLOAD_HOST == ""'
           when: never
         - if: '$PRESSURE_VESSEL_CI_UPLOAD_HOST_SSH_PUBLIC_KEYS_FILE == ""'
@@ -432,7 +428,7 @@ deploy:
         # To debug changes to this CI step, change this to when: on_success
         # or when: manual, and push to a protected branch
         - when: never
-    image: "${DEVEL_DOCKER_REGISTRY}/${DEVEL_DOCKER_IMAGE}"
+    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/debian:bullseye-slim
     before_script:
         - *common_before_script
         - ./ci/prepare-deb.sh devscripts openssh-client rsync

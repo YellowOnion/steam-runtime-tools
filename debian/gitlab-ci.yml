@@ -497,34 +497,6 @@ test-populate-depot:debian-11:
     extends: .test-populate-depot:deb
     image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/debian:bullseye-slim
 
-test-populate-depot:ubuntu-18.04:
-    extends: .test-populate-depot:deb
-    image: ubuntu:18.04
-
-# The same, but for Arch
-test-populate-depot:archlinux:
-    extends: .test-populate-depot
-    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/archlinux:latest
-    before_script:
-        - |
-            set -eux
-            echo -e "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist" >> /etc/pacman.conf
-            pacman -Syu --needed --noconfirm --noprogressbar \
-            base-devel \
-            git \
-            perl \
-            python \
-            python-chardet \
-            python-six \
-            python-tappy \
-            sudo \
-            ${NULL+}
-            tempdir="$(mktemp -d)"
-            git clone --branch debian/buster https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-debian.git "$tempdir/python-debian"
-            git clone --branch steamrt/soldier https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-vdf.git "$tempdir/python-vdf"
-            export PATH="/usr/bin/core_perl:$PATH"
-            export PYTHONPATH="$tempdir/python-debian/lib:$tempdir/python-vdf"
-
 reuse:
     stage: test
     needs: []

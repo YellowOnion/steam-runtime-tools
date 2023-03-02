@@ -161,12 +161,18 @@ package:sniper:
 
 build:devel:
     stage: build
-    rules:
-        - if: '$DEVEL_DOCKER_REGISTRY != "" && $DEVEL_DOCKER_IMAGE != ""'
-    image: "${DEVEL_DOCKER_REGISTRY}/${DEVEL_DOCKER_IMAGE}"
+    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/debian:testing-slim
     before_script:
         - *common_before_script
-        - ./ci/prepare-deb.sh $BUILD_DEPENDENCIES
+        - |
+            ./ci/prepare-deb.sh \
+            $BUILD_DEPENDENCIES \
+            mypy \
+            pigz \
+            pycodestyle \
+            pyflakes3 \
+            shellcheck \
+            ${NULL+}
     script:
         - |
             set -eux
@@ -191,12 +197,10 @@ build:devel:
 
 build:clang:
     stage: build
-    rules:
-        - if: '$DEVEL_DOCKER_REGISTRY != "" && $DEVEL_DOCKER_IMAGE != ""'
-    image: "${DEVEL_DOCKER_REGISTRY}/${DEVEL_DOCKER_IMAGE}"
+    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/debian:testing-slim
     before_script:
         - *common_before_script
-        - ./ci/prepare-deb.sh $BUILD_DEPENDENCIES clang clang-tools
+        - ./ci/prepare-deb.sh $BUILD_DEPENDENCIES clang clang-tools libclang-rt-dev
     script:
         - |
             set -eux

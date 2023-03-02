@@ -441,6 +441,7 @@ lint_scripts = [
   'mypy.sh',
   'pycodestyle.sh',
   'pyflakes.sh',
+  'reuse.sh',
   'shellcheck.sh',
 ]
 

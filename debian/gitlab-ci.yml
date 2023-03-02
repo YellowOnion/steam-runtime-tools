@@ -171,6 +171,7 @@ build:devel:
             pigz \
             pycodestyle \
             pyflakes3 \
+            reuse \
             shellcheck \
             ${NULL+}
     script:
@@ -492,14 +493,5 @@ deploy:
 test-populate-depot:debian-12:
     extends: .test-populate-depot
     image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/debian:bookworm-slim
-
-reuse:
-    stage: test
-    needs: []
-    image:
-        name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/fsfe/reuse:latest
-        entrypoint: [""]
-    script:
-        - reuse lint
 
 # vim:set sw=4 sts=4 et:

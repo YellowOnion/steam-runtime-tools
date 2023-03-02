@@ -473,8 +473,6 @@ deploy:
         paths:
             - subprojects/container-runtime/depots/*.txt
             - subprojects/container-runtime/depots/*/VERSIONS.txt
-
-.test-populate-depot:deb:
     before_script:
         - |
             set -eux
@@ -487,15 +485,13 @@ deploy:
                 perl \
                 python3 \
                 python3-debian \
+                python3-vdf \
                 xz-utils \
                 ${NULL+}
-            tempdir="$(mktemp -d)"
-            git clone --branch steamrt/soldier https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.steamos.cloud/packaging/python-vdf.git "$tempdir/python-vdf"
-            export PYTHONPATH="$tempdir/python-vdf"
 
-test-populate-depot:debian-11:
-    extends: .test-populate-depot:deb
-    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/debian:bullseye-slim
+test-populate-depot:debian-12:
+    extends: .test-populate-depot
+    image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/debian:bookworm-slim
 
 reuse:
     stage: test

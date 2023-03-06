@@ -85,6 +85,8 @@ variables:
     PRESSURE_VESSEL_CI_UPLOAD_USER: ''
     # Create a File variable with a private key authorized for P_V_CI_UPLOAD_USER
     PRESSURE_VESSEL_CI_UPLOAD_SSH_PRIVATE_KEY_FILE: ''
+    # Create a File variable in netrc format as per apt_auth.conf(5)
+    STEAMRT_CI_APT_AUTH_CONF: ''
 
 default:
     before_script: &common_before_script

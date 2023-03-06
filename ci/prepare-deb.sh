@@ -10,6 +10,25 @@ chmod +x /usr/sbin/policy-rc.d
 echo "Acquire::Languages \"none\";" > /etc/apt/apt.conf.d/90nolanguages
 echo 'force-unsafe-io' > /etc/dpkg/dpkg.cfg.d/autopkgtest
 
+if [ -e "$STEAMRT_CI_APT_AUTH_CONF" ]; then
+    # We can't use /etc/apt/auth.conf.d in scout or heavy, only in >= soldier.
+    # It can be root:root in apt >= 1.5~beta2 (>= soldier) or in
+    # apt << 1.1~exp8 (scout and heavy).
+    chown root:root "$STEAMRT_CI_APT_AUTH_CONF"
+    chmod 0600 "$STEAMRT_CI_APT_AUTH_CONF"
+
+    # shellcheck source=/dev/null
+    case "$(. /usr/lib/os-release; echo "${VERSION_CODENAME-${VERSION}}")" in
+        (*scout*|heavy)
+            ln -fns "$STEAMRT_CI_APT_AUTH_CONF" /etc/apt/auth.conf
+            ;;
+        (*)
+            install -d /etc/apt/auth.conf.d
+            ln -fns "$STEAMRT_CI_APT_AUTH_CONF" /etc/apt/auth.conf.d/ci.conf
+            ;;
+    esac
+fi
+
 # shellcheck source=/dev/null
 case "$(. /usr/lib/os-release; echo "${VERSION_CODENAME-${VERSION}}")" in
     (heavy)
